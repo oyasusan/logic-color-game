@@ -54,6 +54,21 @@
     }
 
     /**
+     * 疎密度(emptyRatio)を直接指定して自動生成問題を取得する。
+     * ENDLESS RESEARCH（src/endless/）のようにブラウザのメインスレッドで
+     * 同期的に生成し、応答性を最優先したい場面向け。
+     * @param {number} size
+     * @param {number} emptyRatio
+     * @param {number|string} [seed]
+     * @param {string} [label] 参考ラベル（stats.requestedDifficultyに記録）
+     */
+    getGeneratedPuzzleWithRatio(size, emptyRatio, seed, label) {
+      const generated = Generator.generatePuzzleWithRatio(size, emptyRatio, seed, label);
+      const usedSeed = seed != null ? seed : Date.now();
+      return this._toRuntimePuzzle(generated, `gen-${usedSeed}`);
+    }
+
+    /**
      * 日付をseedとしたDaily Puzzleを取得する。同じ日付（ローカル日付）なら
      * 誰が何度読み込んでも常に同じ問題になる。
      * @param {Date} [date] 省略時は本日の日付

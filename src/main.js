@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug } = G;
+  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug, EndlessMode } = G;
 
   class App {
     constructor() {
@@ -29,7 +29,7 @@
       this.puzzleManager = new PuzzleManager();
 
       this.game = null;
-      this.mode = null; // 'tutorial' | 'stage' | 'daily'
+      this.mode = null; // 'tutorial' | 'stage' | 'daily' | 'endless'
       this.currentStageId = null;
       this.timerHandle = null;
 
@@ -39,7 +39,7 @@
         onSelectTutorial: () => this.startTutorial(),
         onSelectDaily: () => this.startDailyPuzzle(),
         onSelectStage: stageId => this.startStage(stageId),
-        onBackToStageSelect: () => this.showStageSelect(),
+        onBackToStageSelect: () => this.handleGameBack(),
         onCellTap: (r, c) => this.handleCellTap(r, c),
         onUndo: () => this.handleUndo(),
         onReset: () => this.handleReset(),
@@ -47,6 +47,11 @@
         onNextStageFromClear: () => this.handleNextStageFromClear(),
         onStageSelectFromClear: () => this.showStageSelect()
       });
+
+      // ENDLESS RESEARCH（src/endless/配下）は既存のステージ/チュートリアル/Daily
+      // Puzzleとは独立したコントローラで、GAME画面の盤面操作は this.mode==='endless'
+      // の時だけ下記の各handle*メソッドから委譲される（既存モードの処理は無変更）
+      this.endless = EndlessMode ? new EndlessMode({ ui: this.ui, puzzleManager: this.puzzleManager, app: this }) : null;
 
       // デバッグモード(?debug=true)の時だけ、答え表示トグルを盤面へ反映する
       if (Debug) {
@@ -158,9 +163,22 @@
       if (Debug) Debug.render(puzzle);
     }
 
+    /** GAME画面の「‹ BACK」。ENDLESS RESEARCH中はMODE SELECTへ、それ以外は既存通りSTAGE SELECTへ戻る */
+    handleGameBack() {
+      if (this.mode === 'endless' && this.endless) {
+        this.endless.exitRun();
+        return;
+      }
+      this.showStageSelect();
+    }
+
     /** ---------------- ゲーム内操作 ---------------- */
 
     handleCellTap(r, c) {
+      if (this.mode === 'endless' && this.endless) {
+        this.endless.handleCellTap(r, c);
+        return;
+      }
       if (!this.game || this.game.cleared) return;
       const color = this.game.tapCell(r, c);
       this.ui.updateCell(r, c, color, true);
@@ -173,6 +191,10 @@
     }
 
     handleUndo() {
+      if (this.mode === 'endless' && this.endless) {
+        this.endless.handleUndo();
+        return;
+      }
       if (!this.game) return;
       const undone = this.game.undo();
       if (undone) {
@@ -184,6 +206,10 @@
     }
 
     handleReset() {
+      if (this.mode === 'endless' && this.endless) {
+        this.endless.handleReset();
+        return;
+      }
       if (!this.game) return;
       this.game.reset();
       this.ui.renderAll(this.game);
@@ -191,6 +217,10 @@
     }
 
     handleHint() {
+      if (this.mode === 'endless' && this.endless) {
+        this.endless.handleHint();
+        return;
+      }
       if (!this.game || this.game.cleared) return;
       const result = this.game.hint();
       if (!result) {
@@ -313,7 +343,10 @@
     _startTimerLoop() {
       if (this.timerHandle) clearInterval(this.timerHandle);
       this.timerHandle = setInterval(() => {
-        if (this.game && !this.game.cleared) {
+        // ENDLESS RESEARCH中はendless.js側が独自の（カウントダウン）タイマーを
+        // 持っているため、こちらのカウントアップタイマーは動かさない
+        // （this.gameはendlessモードでは更新されず古い値が残るため、二重更新防止も兼ねる）
+        if (this.mode !== 'endless' && this.game && !this.game.cleared) {
           // MOVES/現在カラー表示は操作時に既に更新済みなので、ここではタイマーのみ更新する
           this.ui.updateTimer(this.game);
         }

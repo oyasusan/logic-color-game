@@ -59,7 +59,20 @@ logic-color-game/
 │ ├ theme.js          NEURAL GRID背景演出（漂うノード+リンク線のcanvasアニメーション、30fpsに間引き）
 │ ├ animation.js      セル/ヒントチップ/クリア画面の演出用CSSクラス制御ヘルパー
 │ ├ sound.js          Web Audio APIによるシンセ効果音(tap/place/complete/clear)
-│ └ debug.js          ?debug=true時のみ有効なデバッグパネル（答え/Seed/難易度/Solver情報表示）
+│ ├ debug.js          ?debug=true時のみ有効なデバッグパネル（答え/Seed/難易度/Solver情報表示）
+│ └ endless/          ENDLESS RESEARCHモード（詳細は後述の専用セクション参照）
+│   ├ map.js            Depth→盤面サイズ/疎密度の決定
+│   ├ endlessSave.js     ベスト記録のLocalStorage管理(logicColor.endless.v1)
+│   ├ upgrades.js        通常アップグレード10種の定義データ(id/name/category/description/effect)
+│   ├ rareUpgrades.js    Rare Upgrade4種の定義データ＋出現率設定(Phase3)
+│   ├ upgradeManager.js  RUN中の所持アップグレード管理（取得・重複スタック・Evolution上限・効果集計）
+│   ├ boss.js            Boss Puzzle(Depth10/25/50)の生成設定(Phase3)
+│   ├ events.js          Event Node5種の定義データ(Phase3)
+│   ├ eventManager.js    Event Nodeの出現判定・ランダム選択(Phase3)
+│   ├ endlessGame.js     1問ごとの生成・制限時間・操作中継・アップグレード/Boss効果の適用
+│   ├ endlessResult.js   RESULT画面の描画
+│   ├ researchLab.js     3択アップグレード選択画面（Depth3ごとに出現、Rare混入対応）
+│   └ endless.js         RUN全体の統括（画面遷移・スコア計算・アップグレード/Event/Boss反映）
 ├ data/
 │ ├ puzzles.json      パズル本体（id, size, rowHints, columnHints, answer, parSeconds,
 │ │                    generatedDifficulty, generatorStats, seed）
@@ -74,7 +87,7 @@ logic-color-game/
 └ README.md
 ```
 
-`index.html` は `<script>` タグを直接並べる方式（ESモジュール不使用）で `src/*.js` を読み込む。理由は `file://` で開いた場合でもESモジュールのCORS制限を受けずに動作させるため。各ファイルは `window.LogicColor` 名前空間にクラス/関数を登録することでファイル間の依存を解決している。読み込み順は `board→solver→difficulty→seed→generator→puzzleManager→score→progress→stage→tutorial→game→theme→animation→sound→debug→ui→main` （依存する側を後に置く）。`theme.js`/`animation.js`/`sound.js`/`debug.js`はゲームロジック側のモジュールに依存しない独立モジュールで、`ui.js`/`main.js`が消費する。
+`index.html` は `<script>` タグを直接並べる方式（ESモジュール不使用）で `src/*.js` を読み込む。理由は `file://` で開いた場合でもESモジュールのCORS制限を受けずに動作させるため。各ファイルは `window.LogicColor` 名前空間にクラス/関数を登録することでファイル間の依存を解決している。読み込み順は `board→solver→difficulty→seed→generator→puzzleManager→score→progress→stage→tutorial→game→theme→animation→sound→debug→endless/map→endless/endlessSave→endless/upgrades→endless/rareUpgrades→endless/upgradeManager→endless/boss→endless/events→endless/eventManager→endless/endlessGame→endless/endlessResult→endless/researchLab→endless/endless→ui→main` （依存する側を後に置く）。`theme.js`/`animation.js`/`sound.js`/`debug.js`はゲームロジック側のモジュールに依存しない独立モジュールで、`ui.js`/`main.js`が消費する。`src/endless/`配下は`board`/`game`/`generator`/`puzzleManager`/`score`（既存モジュール）を利用するが、既存モジュール側からは`src/endless/`への依存は一切無い。
 
 ## ゲームルール仕様
 
@@ -565,3 +578,272 @@ URLに`?debug=true`を付けてアクセスした時だけ、画面左下にデ�
 - 9×9以上へさらに拡張する場合、`DIFFICULTY_EMPTY_RATIO_BY_SIZE`に新しいサイズのエントリを追加する必要がある。疎密度は本セクションと同様に実測しながら「唯一解に数秒〜十数秒で到達できる値」を探る必要がある（機械的に既存の傾き外挿では不十分な可能性が高い）。
 - 現状GRANDMASTER(8×8)が最高難度だが、6×6/7×7/8×8それぞれ2ステージのみ。各サイズでさらにステージ数を増やす場合は`tools/build_puzzles.js`にseedを追加するだけでよい（`minColoredCells`と疎密度テーブルの基盤は既に対応済み）。
 - `difficulty.js`の複雑度スコアはサイズ正規化の性質上、大盤面ではほぼ`easy`〜`normal`にしか分類されない。大盤面向けに「サイズも加味した」難易度スコアへ拡張する余地がある（現状はSTAGE SELECTの表示をサイズラベルに置き換えることで回避している）。
+
+---
+
+# 新ゲームモード「ENDLESS RESEARCH」追加（このセクションは今回の変更点のまとめ）
+
+生成された問題を連続で解き、ライフが尽きるまでどこまで深く（Depth）進めるかに挑戦するエンドレスモードを追加した。**既存のステージ制・問題生成エンジン・Solver・LocalStorage（`logicColor.save.v2`）・UIテーマ・サウンドは一切変更していない。** ENDLESS RESEARCHは`src/endless/`配下の新規モジュール群として実装し、既存コードへの変更は「新しい画面をシステムに登録する」「GAME画面の操作を現在のモードに応じて委譲する」という最小限の接続点のみに留めている。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `map.js` — Depthから盤面サイズ・疎密度を決定する（`EndlessMap.getDifficultyForDepth(depth)`）。Depth1-5:5×5 / 6-10:7×7 / 11+:7×7（疎密度を上げてより密に）。将来のMap分岐・Boss・Eventノード拡張を見据え、ノード生成をここに集約している
+- `endlessSave.js` — ベスト記録（`endlessBestDepth`/`endlessBestScore`/`totalRuns`）を独自のLocalStorageキー`logicColor.endless.v1`に保存する（`progress.js`のセーブ形式とは完全に別領域）
+- `endlessGame.js` — 「今挑戦中の1問」を管理するコントローラ（`EndlessRoundController`）。既存の`Game`クラス・`PuzzleManager`・`UI`の盤面描画メソッドをそのまま呼び出すだけで、それら既存モジュールには一切手を加えていない。問題ごとの制限時間管理、タップ/UNDO/RESET/HINT操作の中継、クリア/タイムアップの通知を担当する
+- `endlessResult.js` — RESULT画面（DEPTH/SCORE/PERFECT COUNT/BEST DEPTH表示、RETRY・TITLEボタン）のDOM描画とイベント配線のみを担当する
+- `endless.js` — ENDLESS RESEARCH全体を統括する`EndlessMode`。画面遷移・RUN状態（depth/score/life/combo/perfectCount）・スコア計算を持ち、上記4ファイルとmain.jsのAppインスタンスを束ねる
+
+**部分修正**:
+- `index.html` — TITLE画面に`ENDLESS RESEARCH`ボタン、新規画面`#screen-modeselect`（MODE SELECT）・`#screen-endlessresult`（RESULT）、GAME画面内の`#endlessHud`（Depth/Life/Score/Combo/残り時間、endlessモード中のみ表示）を追加。ネオンテーマに合わせたCSSを追加し、`src/endless/*.js`の`<script>`タグを追加
+- `src/ui.js` — `showScreen()`が新規2画面も切り替え対象に含むよう、画面登録に2行追加（既存の`title`/`stageSelect`/`game`の切り替えは無変更）。`showScreen()`自体にnullガードを追加（防御的な安全化のみ）
+- `src/main.js` — `App`に`this.endless = new EndlessMode(...)`を追加。GAME画面の盤面操作（タップ/UNDO/RESET/HINT/BACK）は`this.mode === 'endless'`の時だけ`this.endless`へ委譲するよう分岐を追加（既存のtutorial/stage/dailyの処理パスは完全に無変更）。タイマーループにendlessモード時のガードを追加（ENDLESS RESEARCHは独自のカウントダウンタイマーを持つため、既存のカウントアップタイマーとの二重更新を防ぐ）
+- `src/generator.js` — `generatePuzzle()`の内部処理を`generatePuzzleWithRatio(size, emptyRatio, seed, label)`として切り出し、疎密度を直接指定できるようにした（既存の`generatePuzzle()`の外部的な挙動・戻り値は完全に無変更、内部委譲のみ）
+- `src/puzzleManager.js` — 上記に対応する`getGeneratedPuzzleWithRatio()`を追加（既存の`getGeneratedPuzzle()`/`getDailyPuzzle()`は無変更）
+
+## なぜ疎密度を直接指定できるAPIを追加したか（重要な技術的判断）
+
+ENDLESS RESEARCHの問題生成は、ステージ生成（`tools/build_puzzles.js`）と違い**プレイ中にブラウザのメインスレッドで同期的に実行される**。既存の難易度名ベースの生成（`generatePuzzle(size, 'hard', seed)`）は「唯一解への到達」を最優先に較正されており、7×7 normal/hard相当の疎密度ではNode.js上の実測で生成に数秒〜十数秒（一部試行で10秒超）かかることが判明した。プレイ中にこの時間UIが固まるのは致命的なため、ENDLESS RESEARCH専用に「ほぼ確実に1秒未満で完了する」ことを実測確認済みの疎密度（`map.js`の`DEPTH_TIERS`）を使う`generatePuzzleWithRatio()`を新設した。60回の連続生成テストで最大2.8秒・平均261msという結果を得ている（詳細は`map.js`のコメント参照）。
+
+また、疎密度による品質検証（`Generator.validatePuzzle`の`notTrivial`チェック）がごく稀に失敗し例外を投げるケースも実測で確認されたため、`endlessGame.js`側でseedを変えて最大5回まで自動リトライする仕組みを追加し、RUN中に例外でクラッシュしないようにしている。
+
+## ゲームフロー
+
+```
+TITLE
+  │ 「ENDLESS RESEARCH」ボタン
+  ▼
+MODE SELECT（ベストDepth・ベストスコア・累計RUN数を表示）
+  │ 「START RUN」ボタン
+  ▼
+ENDLESS RESEARCH（GAME画面を再利用、上部にENDLESS HUDを表示）
+  │
+  ├─ パズルをクリア → CLEAR報酬を加算 → 0.9秒後に次のDepthへ ─┐
+  │                                                          │
+  ├─ 制限時間切れ（ミス） → ライフ-1・コンボリセット           │
+  │     ├─ ライフが残っていれば → 0.9秒後に次のDepthへ ───────┤
+  │     └─ ライフが0になったら ─────────────────┐            │
+  │                                             ▼            │
+  │                                          RESULT          │
+  │                                    （DEPTH/SCORE/         │
+  │                                     PERFECT COUNT/        │
+  │                                     BEST DEPTH表示、       │
+  │                                     ベスト記録を保存）      │
+  │                                       │         │        │
+  │                          「RETRY」┘         └「TITLE」    │
+  │                    （新しいRUNを開始）    （TITLEへ戻る）   │
+  │                                                          │
+  └─「‹ BACK」→ RUNを記録せず中断してMODE SELECTへ ───────────┘
+```
+
+**Depth進行と難易度**（`map.js`の`DEPTH_TIERS`）:
+
+| Depth | 盤面サイズ | 表示ラベル | 生成疎密度 |
+| --- | --- | --- | --- |
+| 1〜5 | 5×5 | easy | 0.60 |
+| 6〜10 | 7×7 | normal | 0.78 |
+| 11以降 | 7×7 | hard | 0.75 |
+
+**スコア計算**（`endless.js`の`_handleRoundClear`）:
+- CLEAR: +100（固定）
+- PERFECT（そのパズルでHINTを一度も使わなかった場合）: +100
+- SPEED BONUS: 目安クリア時間（`parSeconds`）より速くクリアした場合、`(parSeconds - 実測クリア時間) × 5`
+- コンボボーナス: 連続クリア数 × 20（コンボはミスでリセットされる。3連続クリア中の3問目なら+60）
+
+**制限時間とミスの仕様**: 各問題には制限時間（目安クリア時間`parSeconds`の1.5倍）を設け、時間内にクリアできなければミス扱いとしてライフを1失う。制限時間内であれば何度でもUNDO/RESET/HINTを使ってよい（ただしHINTを使うとその問題はPERFECT対象外になる）。ミスになったパズルはやり直しにはならず、強制的に次のDepthへ進む。
+
+## テスト
+
+以下をjsdom + 実際のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施、全項目PASS確認済み）で検証した:
+
+- [x] TITLE→MODE SELECT→START RUNでENDLESS RESEARCHを開始できる
+- [x] 問題が連続生成される（Depth1〜複数のDepthにわたり生成・クリアを確認）
+- [x] クリアするたびにDepthが増える（0.9秒の演出待ちを含めて確認）
+- [x] 制限時間切れでライフが減り、コンボがリセットされる
+- [x] ライフが0になるとRUNが終了し、RESULT画面が正しい値（DEPTH/SCORE）を表示する
+- [x] ベスト記録（`endlessBestDepth`/`endlessBestScore`/`totalRuns`）がLocalStorageへ保存され、次回のMODE SELECT表示に反映される
+- [x] RETRYで状態（depth/score/life/combo）が正しくリセットされ再挑戦できる
+- [x] GAME画面の「‹ BACK」でRUNを中断し、記録せずMODE SELECTへ戻れる
+- [x] 通常モード（STAGE SELECTの12ステージ）への遷移・表示に回帰が無いことを確認（既存機能への影響が無いことの確認）
+
+`node --check`で`src/endless/*.js`および変更した既存ファイルの構文エラーが無いことも確認済み。
+
+## 今後追加予定
+
+- **Map分岐**: 現在の`map.js`はDepthごとに単一のPuzzleノードを直線的に生成するだけだが、将来的にはノードを分岐させ、プレイヤーが「安全なルート」と「報酬の大きいリスクルート」等を選択できるようにする拡張余地がある（`getNode(depth)`の戻り値に選択肢を持たせる形を想定）。
+- ~~**Upgrade（強化要素）**~~: RESEARCH LAB＋アップグレードシステムとして実装済み（下記の専用セクション参照）。
+- ~~**Boss**~~: `boss.js`として実装済み（Depth10/25/50、下記の専用セクション参照）。
+- ~~**Event**~~: `events.js`/`eventManager.js`として実装済み（下記の専用セクション参照）。
+- 上記はいずれも`map.js`の`getNode(depth)`が返すノードの`type`を分岐点として実装できるよう設計してある（`endlessGame.js`側で`type`に応じた処理を追加する形になる想定）。
+- 疎密度（`map.js`のDEPTH_TIERS）は現状Depth11以降ずっと同じ7×7・疎密度0.75で頭打ちになる。Depthに応じてさらに段階的に疎密度を下げる（＝難しくする）、または8×8以降のサイズへ拡張するには、ステージ拡張時と同様にランタイム生成時間の実測較正が必要になる。
+
+---
+
+# RESEARCH LAB / アップグレードシステム追加（このセクションは今回の変更点のまとめ）
+
+ENDLESS RESEARCHに、毎回異なる攻略になる**ローグライト要素**としてRESEARCH LAB（3択のアップグレード選択画面）を追加した。**既存の問題生成・Endlessモードの基本進行（Depth/制限時間/ミス判定）・Score計算式・Life・LocalStorage（`logicColor.save.v2`/`logicColor.endless.v1`）は一切変更していない。** アップグレードはRUN中のみ有効なメモリ上の状態で、ベスト記録には一切影響しない。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `upgrades.js` — 10種のアップグレード定義（`id`/`name`/`category`/`description`/`effect`）を持つ純粋なデータファイル。効果適用ロジックは持たない
+- `upgradeManager.js` — 現在のRUNで取得したアップグレードの所持数を管理する`UpgradeManager`。重複所持（スタック）を許可し、同じ`effect.type`を持つアップグレードのvalueを所持数分合算する汎用的な`getEffectTotal(type)`/`hasEffectType(type)`を提供する。RUN開始時に`reset()`され、LocalStorageには一切保存しない
+- `researchLab.js` — RESEARCH LAB画面（3択カードの描画・選択イベント）を担当する`ResearchLab`。`shouldTrigger(depth)`でDepth 3ごとの出現判定を持つ
+
+**部分修正**:
+- `index.html` — TITLE直下の`#screen-researchlab`（RESEARCH LAB画面）、GAME画面内の`#endlessUpgradeList`（取得済みアップグレードのバッジ表示）を追加。カテゴリ別（survival=赤/score=金/logic=青）のネオン配色CSSを追加
+- `src/ui.js` — `showScreen()`が新画面も切り替え対象に含むよう、画面登録に1行追加（既存画面の切り替えは無変更）
+- `src/endless/endlessGame.js` — コンストラクタが`upgradeManager`を受け取るようになり、制限時間（Deep Scan）・HINT開示数（Analyzer）・UNDOによる経過時間割引（Undo Core）・残り時間低下時の自動HINT（AI Prediction）の各効果をここで適用する。既存の生成・タイマー・タップ中継ロジック自体は無変更
+- `src/endless/endless.js` — `UpgradeManager`/`ResearchLab`を保持し、Depth 3ごとにLABを挟むフロー（`_afterRoundEnd()`）、アップグレード選択時の即時効果適用（Repair System）、スコア計算式へのOverclock/Perfect Analysis/Combo Coreの反映、ミス時のBackup Memory（コンボ維持）・Recovery Protocol（定期ライフ回復）を追加
+
+## Research Lab
+
+**出現**: Depth 3ごと（Depth3, 6, 9, 12…をクリアまたはミスした直後）。クリア/ミスの演出待ち（0.9秒）の後、次のPuzzleへ進む代わりにRESEARCH LAB画面を表示する。
+
+**画面**: アップグレード全10種からランダムに重複無く3つを選び、カード形式で提示する（カテゴリ・名前・説明・所持中の場合は所持数を表示）。1つを選択すると即座に取得され、GAME画面に戻って次のPuzzleへ進む（スキップは無し、必ず1つ選択する）。
+
+## アップグレードのデータ形式
+
+```js
+{ id, name, category, description, effect: { type, value } }
+```
+`effect.type`は`upgradeManager.js`が解釈する汎用的な識別子で、同じtypeを複数所持すると`value`が所持数分だけ合算される（重複所持でスタックする設計）。
+
+## 初期アップグレード10個
+
+| カテゴリ | 名前 | 効果 |
+| --- | --- | --- |
+| Survival | Repair System | 最大ライフ+1（取得時に現在ライフも+1回復） |
+| Survival | Backup Memory | ミス（タイムアップ）してもコンボがリセットされない |
+| Survival | Recovery Protocol | 一定クリアごとにライフ+1（所持数が多いほど間隔短縮、基準3クリア） |
+| Score | Overclock | 獲得スコア+20%（乗算、スタックで加算的に増加） |
+| Score | Perfect Analysis | PERFECTボーナス+50 |
+| Score | Combo Core | コンボボーナス単価+15（20→35） |
+| Logic | Analyzer | HINT使用時、追加で1マス多く同時に開示（計2マス） |
+| Logic | Deep Scan | 制限時間+20% |
+| Logic | Undo Core | UNDO1回ごとに経過時間から2秒割引（Speed Bonus判定に有利） |
+| Logic | AI Prediction | 残り時間が制限時間の30%を切ると自動でHINTが1回発動する |
+
+## Upgrade管理（取得・効果適用・重複管理）
+
+- **取得**: `researchLab.js`のカード選択→`endless.js`の`_handleUpgradeSelected(def)`→`upgradeManager.acquire(id)`。`maxLifeBonus`効果（Repair System）のみ、取得時に最大ライフ・現在ライフへ即座に反映する（他の効果は次のPuzzle以降に自然に反映される）
+- **効果適用**: スコア計算（`endless.js`の`_handleRoundClear`）・ライフ回復判定（`_tickLifeRegen`）・コンボ維持判定（`_handleRoundTimeout`）は`endless.js`側で、制限時間・HINT開示数・UNDOの経過時間割引・自動HINTは`endlessGame.js`側で、いずれも`upgradeManager.getEffectTotal(type)` / `hasEffectType(type)`を通じて参照する
+- **重複管理**: 同じアップグレードを複数回取得できる（スタック）。3択の候補自体は1回のLAB表示内で重複しない（`researchLab.js`の`_pickChoices`がシャッフルして先頭N件を取る）が、複数回のLAB訪問で同じアップグレードが再度候補に上がることは許容し、選択すると所持数が増えて効果が積み重なる
+
+## 表示追加
+
+GAME画面のENDLESS HUD直下に、現在取得済みのアップグレードをバッジ形式で表示する（`#endlessUpgradeList`、カテゴリ別に配色。複数所持時は「Overclock x2」のように所持数を表示）。何も所持していない間は非表示。
+
+## テスト
+
+jsdom + 実際のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施、全項目PASS確認済み）で以下を検証した:
+
+- [x] Labが表示される（Depth3クリア後に`#screen-researchlab`がアクティブになる、Depth1・2では出現しないことも確認）
+- [x] 3択選択できる（3枚のカードが表示され、内容が重複しないこと、選択後にGAME画面へ戻り次のDepthへ進むことを確認）
+- [x] 効果が反映される（Overclockでスコア加算、重複取得でスタック倍加、Repair Systemで最大/現在ライフが即座に増加、Backup Memoryでミス時のコンボ維持、Analyzerで1回のHINTで2マス開示、をそれぞれ個別に確認）
+- [x] RUN終了でリセットされる（`upgradeManager`の所持リストが空になり、HUDのバッジ表示も消えることを確認）
+- [x] Best記録には影響しない（LocalStorage`logicColor.endless.v1`の保存内容に`endlessBestDepth`/`endlessBestScore`/`totalRuns`以外のキー（アップグレード関連）が含まれないことを確認）
+
+既存のENDLESS RESEARCH基本フロー（連続クリア・タイムアップ・RUN終了・RESULT表示・RETRY・既存12ステージへの無影響）も同じ統合テストの中で併せて回帰確認済み。`node --check`で新規/変更ファイルの構文エラーが無いことも確認済み。
+
+## 今後の拡張余地
+
+- 現状LABの3択には「スキップ」が無い。所持済みアップグレードばかりが候補に並んだ場合の代替候補提示や、スキップして次に進む選択肢は今後の検討余地。
+- `effect.type`の集計は現状すべて「加算」（`getEffectTotal`は所持数×valueの単純合計）。将来的に乗算合成が自然な効果（例: スコア倍率同士の複合）が増えた場合は、`upgradeManager.js`側に集計方式（加算/乗算）をeffectごとに持たせる拡張が考えられる。
+- Boss/Eventノード（前述の「今後追加予定」参照）が実装された際は、そのノード専用の報酬としてアップグレードを追加提示する、といった連携も考えられる。
+
+---
+
+# Phase3機能追加: Event Node / Boss Puzzle / Rare Upgrade / Upgrade Evolution（このセクションは今回の変更点のまとめ）
+
+ENDLESS RESEARCHに、より深く潜るほど攻略の幅が広がるPhase3の要素を追加した。**既存のEndless基本フロー・Map(depth→難易度)・Research Lab（3択画面自体の仕組み）・通常Upgradeの10種と基本効果は維持している。** Phase3の追加はいずれもJSON上に一致するidを持たない新しい定義データ＋その適用ロジックとして加わっており、既存のUpgrade10種の効果・生成した5×5〜8×8の各Puzzleの内容には一切変更が無い。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `events.js` — Event Node 5種（AI Anomaly / Data Recovery / System Error / Memory Fragment / Unknown Upgrade）の定義データ
+- `eventManager.js` — Event Nodeの出現判定（25%）とランダム選択のみを担当。効果適用自体はendless.js側が行う
+- `boss.js` — Boss Puzzle（Depth10/25/50）の生成設定（サイズ・疎密度・制限時間倍率・スコア倍率）
+- `rareUpgrades.js` — Rare Upgrade 4種（Quantum Core / Time Dilation / Phoenix Protocol / Omniscience）の定義データと出現率設定
+
+**部分修正**:
+- `src/endless/upgradeManager.js` — Upgrade Evolution（Lv1〜Lv3上限）を追加。`getLevel(id)`/`isMaxed(id)`を新設し、`getEffectTotal()`は所持数ではなく上限クランプ後の実効レベルで計算するよう変更。Rare Upgrade（`rare:true`）は上限1（進化しない）。Phoenix Protocol用の`hasUnusedRevive()`/`consumeRevive()`も追加
+- `src/endless/researchLab.js` — 候補選定(`_pickChoices`)がRare Upgradeを`RARE_APPEARANCE_RATE`（15%/枠）の確率で混入させ、進化上限に達した通常Upgrade・所持済みRare Upgradeを候補から除外するよう変更。カード表示にRAREバッジ・Lv表示を追加
+- `src/endless/endlessGame.js` — `start(depth)`がまずBoss Puzzle対象かを判定し、対象ならboss.jsの設定（8×8・疎密度0.82・専用の制限時間倍率）で生成するよう変更。`_buildStats()`に`isBoss`/`bossScoreMultiplier`/`bossName`を追加
+- `src/endless/endless.js` — `_afterRoundEnd()`にEvent Nodeの出現判定を追加（Lab対象でない場合のみ）、`_applyEvent()`で5種の効果を適用、`_handleRoundClear()`にBossスコア倍率・撃破カウント、`_handleRoundTimeout()`にPhoenix Protocol復活、`_handleUpgradeSelected()`にAI Anomalyの多重取得を追加。Boss出現時はGAME画面ラベル・ENDLESS HUDの見た目を切り替える
+- `src/endless/endlessSave.js` — `totalBossClear`/`memoryFragments`をセーブデータに追加
+- `index.html` — MODE SELECT画面に「BOSS CLEARS」「FRAGMENTS」表示を追加、Rare Upgradeカード・進化Lv表示・Boss出現中のHUD演出（赤いパルス発光）のCSSを追加
+
+## Event Node
+
+Depth3ごと（Lab対象）ではないDepthをクリア/ミスするたびに25%の確率で発生する。専用の画面は持たず、発生した瞬間にトーストで通知しつつ効果を即座に適用してから次のDepthへ進む。
+
+| 種類 | 効果 |
+| --- | --- |
+| AI Anomaly | 次に取得するアップグレードの効果が2倍になる（Rareは進化上限1のため実質無効） |
+| Data Recovery | ライフを1回復する（上限まで） |
+| System Error | 現在のコンボがリセットされる（唯一のマイナス効果） |
+| Memory Fragment | Memory Fragmentを1〜3個獲得する（生涯累計として保存される） |
+| Unknown Upgrade | 未所持または未進化上限の通常アップグレードを1つ無条件で獲得する |
+
+## Boss Puzzle
+
+**出現**: Depth 10・25・50（固定）。それ以外のDepthでは通常通りMapのdepth→難易度テーブルに従う。
+
+**生成設定（すべて8×8・疎密度0.82で統一）**:
+
+| Depth | 名前 | 制限時間倍率 | スコア倍率 |
+| --- | --- | --- | --- |
+| 10 | BOSS: SYSTEM CORE | ×2.0 | ×3 |
+| 25 | BOSS: DEEP ARCHIVE | ×1.7 | ×4 |
+| 50 | BOSS: SINGULARITY | ×1.4 | ×5 |
+
+**疎密度をあえて上げていない理由**（実測に基づく安全性優先の判断）: 当初、Bossらしい高難度を出すため8×8で疎密度0.78を試したところ、Node.js上の実測でリトライ込み平均6.4秒・最大17.5秒かかることが判明した。1RUNに最大3回とはいえプレイ中の待ち時間として許容できないため、疎密度は通常のENDLESS生成と同じ「実用的に安全な」0.82（リトライ込み実測平均321ms・最大1.1秒、25回試行で確認）に統一し、代わりに制限時間を段階的に厳しくすることで難易度のエスカレーションを表現している。
+
+Boss出現中はGAME画面のヘッダーラベルがBoss名に切り替わり、ENDLESS HUDの枠が赤くパルス発光する。撃破すると`bossClearCount`（RUN内カウント）に加算され、RUN終了時に生涯累計`totalBossClear`へ加算される。ミス（タイムアップ）した場合は通常のPuzzleと同様にライフを1失って次のDepthへ進む（特別なリトライ機構は無い）。
+
+## Rare Upgrade
+
+`rareUpgrades.js`で通常のUpgrade（`upgrades.js`）とは別ファイルに定義し、`upgradeManager.js`内では同じ仕組み（`Map<id,count>`）で統一的に扱うが、`rare:true`フラグにより進化上限が1（Evolutionの対象外、1回のみ取得可能）である点が異なる。
+
+**出現率設定**: RESEARCH LABの3枠それぞれについて`RARE_APPEARANCE_RATE`（15%）の確率で、通常Upgradeの代わりにRare Upgradeを提示する（`rareUpgrades.js`の定数、候補生成ロジックは`researchLab.js`の`_pickChoices`）。
+
+| 名前 | 効果 |
+| --- | --- |
+| Quantum Core | 獲得スコアが+50%される |
+| Time Dilation | 制限時間が+50%される |
+| Phoenix Protocol | ライフが0になっても1度だけライフ1で復活する |
+| Omniscience | HINT使用時、常に3マス同時に開示する |
+
+## Upgrade Evolution
+
+通常Upgrade（`upgrades.js`の10種）は同じものを最大3回まで取得でき、Lv1→Lv2→Lv3と効果が段階的に積み上がる。3を超えて取得しても効果はLv3で頭打ちになり（`upgradeManager.js`の`MAX_LEVEL=3`）、RESEARCH LABの候補にもLv3に達したアップグレードは再度出現しなくなる（`isMaxed(id)`で判定）。Rare Upgradeは前述の通り進化の対象外（上限1）。
+
+## 保存
+
+`logicColor.endless.v1`に以下を追加（既存の`endlessBestDepth`/`endlessBestScore`/`totalRuns`は無変更）:
+- `totalBossClear` — 生涯Boss撃破回数の累計
+- `memoryFragments` — Memory Fragmentイベントで獲得した生涯累計数
+
+**"highestDepth"について**: 要件にあった`highestDepth`は「これまでに到達した最も深いDepth」という意味で、Phase1から存在する`endlessBestDepth`と完全に同じ概念だったため、2つの値が食い違う不整合を避けるべく重複フィールドを新設せず、既存の`endlessBestDepth`をそのままこの要件の実装として扱っている（詳細は`endlessSave.js`のコメント参照）。MODE SELECT画面には「BEST DEPTH」として既に表示済み。
+
+アップグレード（通常・Rare問わず）・イベントで得た`nextUpgradeMultiplier`等のRUN限定状態はいずれもRUN終了時にリセットされ、上記の生涯累計フィールド以外はLocalStorageに保存されない。
+
+## テスト
+
+jsdom + 実際のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施）で以下を検証した:
+
+- [x] Event発生（5種それぞれの効果を個別に適用して検証。発生確率が2000回試行で実測24〜25%前後であることも統計的に確認）
+- [x] Boss出現（Depth10まで実際にプレイを進め、8×8盤面で生成されること、ヘッダー・HUDの見た目が切り替わること、撃破でスコア倍率とbossClearCountが反映されることを確認）
+- [x] Rare Upgrade取得（通常Upgradeとは別に管理され、2回取得しても実効レベルが1のまま＝進化しないこと、効果が正しく加算されることを確認）
+- [x] Upgrade進化（同じ通常Upgradeを4回取得しても実効レベル・効果はLv3で頭打ちになり、`isMaxed()`がtrueを返すことを確認）
+- [x] 保存される（RUN終了時に`totalBossClear`/`memoryFragments`がLocalStorageへ正しく加算され、MODE SELECT画面の表示にも反映されることを確認）
+
+既存のENDLESS基本フロー（Lab出現・3択・連続クリア・タイムアップ・RETRY・RESULT表示）およびSTAGE SELECTへの回帰も、独立した最小構成の検証で問題ないことを確認済み（多数のRUNを1つのテストプロセス内で連続実行した際に一部アサーションが状態汚染で誤って失敗したが、単体の新規セッションで再現しないことを確認しテストスクリプト側の問題と判断した）。`node --check`で新規/変更ファイルの構文エラーが無いことも確認済み。
+
+## 今後の拡張余地
+
+- Boss/Event/Rare Upgradeの各出現条件・確率・倍率は初期バランスであり、実プレイでの調整余地が大きい（特にBoss撃破報酬の倍率、Rare出現率15%が妥当かは要検証）。
+- Event Nodeは専用の画面を持たずトースト通知のみで完結させている。LEVEL UP演出のような専用オーバーレイを設ける拡張が考えられる。
+- Boss Puzzleは疎密度を通常と同じ0.82に統一し、時間倍率のみで難易度差を付けている。将来的にランタイム生成をWeb Worker化できれば、より疎密度の低い（本当に難しい）Boss構成にも安全に対応できる可能性がある。
+- 9×9以上のサイズはまだ実測較正されておらず、Boss Puzzleでも8×8止まりにしている。より大きな盤面をBoss専用に導入する場合は、既存のステージ拡張・Phase1と同様の疎密度実測が必要。

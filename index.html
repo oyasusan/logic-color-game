@@ -728,6 +728,324 @@
     transform: translateX(-50%) translateY(0);
   }
 
+  /* ---------- ENDLESS RESEARCH ---------- */
+
+  #titleEndlessBtn.endless-btn {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 14px rgba(255, 213, 74, 0.25);
+  }
+
+  /* MODE SELECT画面 */
+  .endless-intro {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.7;
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  .endless-intro p { margin: 0 0 6px; }
+
+  .endless-best-stats {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .endless-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 6px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .endless-stat-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .endless-stat-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--gold);
+  }
+
+  #screen-modeselect .primary-btn {
+    align-self: center;
+  }
+
+  /* ENDLESS RESEARCH中のGAME画面HUD */
+  .endless-hud {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--gold);
+    background: var(--panel);
+    box-shadow: 0 0 16px rgba(255, 213, 74, 0.15);
+  }
+
+  .endless-hud-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 48px;
+  }
+
+  .endless-hud-label {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .endless-hud-value {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  .endless-hud-value.endless-time { color: var(--blue); }
+
+  .endless-life { font-size: 13px; letter-spacing: 1px; }
+
+  .endless-heart { color: var(--text-dim); }
+
+  .endless-heart.filled {
+    color: var(--red);
+    text-shadow: 0 0 6px var(--red);
+  }
+
+  .endless-heart.lost { opacity: 0.3; }
+
+  /* RESULT画面 */
+  #screen-endlessresult {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .endless-result-card {
+    width: 100%;
+    max-width: 320px;
+    background: var(--panel);
+    border: 1px solid var(--gold);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(255, 213, 74, 0.2);
+  }
+
+  .endless-result-title {
+    margin: 0 0 8px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--blue));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .endless-new-best {
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-shadow: 0 0 12px rgba(255, 213, 74, 0.5);
+  }
+
+  .endless-result-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 12px 0 20px;
+  }
+
+  .endless-result-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 4px;
+    border-radius: 10px;
+    background: var(--panel-2);
+  }
+
+  .endless-result-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .endless-result-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  .endless-result-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  /* 取得済みアップグレードのバッジ一覧（GAME画面のENDLESS HUD直下） */
+  .endless-upgrade-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .endless-upgrade-list:empty { display: none; }
+
+  .endless-upgrade-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text-dim);
+  }
+
+  .endless-upgrade-badge.cat-survival { border-color: var(--red); color: var(--red); }
+  .endless-upgrade-badge.cat-score    { border-color: var(--gold); color: var(--gold); }
+  .endless-upgrade-badge.cat-logic    { border-color: var(--blue); color: var(--blue); }
+
+  .endless-upgrade-badge.rare {
+    background: rgba(255, 213, 74, 0.12);
+    box-shadow: 0 0 8px rgba(255, 213, 74, 0.35);
+  }
+
+  /* ---------- RESEARCH LAB ---------- */
+  #screen-researchlab {
+    align-items: center;
+    padding-top: calc(var(--safe-top) + 24px);
+  }
+
+  .lab-header { text-align: center; margin-bottom: 6px; }
+
+  .lab-title {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--blue));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .lab-subtitle {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .lab-instruction {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    margin: 0 0 16px;
+  }
+
+  .lab-cards {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .lab-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    text-align: left;
+    color: var(--text);
+  }
+
+  .lab-card:active { transform: scale(0.98); }
+
+  .lab-card-survival { border-color: var(--red); box-shadow: 0 0 14px rgba(255, 63, 107, 0.15); }
+  .lab-card-score    { border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 213, 74, 0.15); }
+  .lab-card-logic    { border-color: var(--blue); box-shadow: 0 0 14px rgba(41, 224, 255, 0.15); }
+
+  .lab-card-category {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
+
+  .lab-card-survival .lab-card-category { color: var(--red); }
+  .lab-card-score .lab-card-category    { color: var(--gold); }
+  .lab-card-logic .lab-card-category    { color: var(--blue); }
+
+  .lab-card-name {
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .lab-card-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-dim);
+  }
+
+  .lab-card-owned {
+    align-self: flex-end;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--gold);
+  }
+
+  /* Rare Upgrade（他カテゴリ色よりも優先して金×虹的なグローを付ける） */
+  .lab-card-rare {
+    border-color: var(--gold);
+    background: linear-gradient(135deg, rgba(255, 213, 74, 0.08), var(--panel));
+    box-shadow: 0 0 20px rgba(255, 213, 74, 0.3);
+  }
+
+  .lab-card-rare .lab-card-category { color: var(--gold); }
+
+  .lab-card-rare-badge {
+    align-self: flex-end;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--gold);
+    text-shadow: 0 0 8px rgba(255, 213, 74, 0.6);
+  }
+
+  /* Boss Puzzle出現中のENDLESS HUD（赤系の警戒表示に切り替える） */
+  .endless-hud.boss-active {
+    border-color: var(--red);
+    box-shadow: 0 0 20px rgba(255, 63, 107, 0.35);
+    animation: bossPulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes bossPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 63, 107, 0.35); }
+    50%      { box-shadow: 0 0 30px rgba(255, 63, 107, 0.6); }
+  }
+
   /* ---------- スマホ最適化: レスポンシブ調整 ---------- */
 
   /* 小型スマホ(iPhone SEなど幅375px前後)向けに余白・タップ領域を詰める */
@@ -772,6 +1090,7 @@
     <h1 class="neon-title">LOGIC COLOR</h1>
     <div id="titleLevelLabel">LOGIC LEVEL Lv.1</div>
     <button type="button" id="titleStartBtn" class="primary-btn">STAGE SELECT</button>
+    <button type="button" id="titleEndlessBtn" class="primary-btn endless-btn">ENDLESS RESEARCH</button>
   </section>
 
   <!-- ============ STAGE SELECT ============ -->
@@ -792,6 +1111,29 @@
     <div id="stageGrid"></div>
   </section>
 
+  <!-- ============ MODE SELECT (ENDLESS RESEARCH入口) ============ -->
+  <section id="screen-modeselect" class="screen">
+    <div class="select-header">
+      <button type="button" id="modeSelectBackBtn" class="ghost-btn">‹ TITLE</button>
+      <h2>ENDLESS RESEARCH</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-intro">
+      <p>生成された問題を連続で解き、どこまで深く進めるかに挑戦するモード。</p>
+      <p>ライフは3。制限時間内にクリアできないとライフが1減り、0になるとRUN終了。</p>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">BEST DEPTH</span><span id="endlessBestDepth" class="endless-stat-value">0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">BEST SCORE</span><span id="endlessBestScore" class="endless-stat-value">0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">TOTAL RUNS</span><span id="endlessTotalRuns" class="endless-stat-value">0</span></div>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">BOSS CLEARS</span><span id="endlessTotalBossClear" class="endless-stat-value">0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">FRAGMENTS</span><span id="endlessMemoryFragments" class="endless-stat-value">0</span></div>
+    </div>
+    <button type="button" id="endlessStartBtn" class="primary-btn">START RUN</button>
+  </section>
+
   <!-- ============ GAME ============ -->
   <section id="screen-game" class="screen">
     <header class="game-header">
@@ -803,6 +1145,31 @@
 
     <main>
       <div id="tutorialBanner" class="hidden"></div>
+      <!-- ENDLESS RESEARCH中のみ表示するHUD（endless.jsがhidden切り替えを管理） -->
+      <div id="endlessHud" class="endless-hud hidden">
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">DEPTH</span>
+          <span id="endlessDepthValue" class="endless-hud-value">0</span>
+        </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">LIFE</span>
+          <span id="endlessLifeValue" class="endless-hud-value endless-life"></span>
+        </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">SCORE</span>
+          <span id="endlessScoreValue" class="endless-hud-value">0</span>
+        </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">COMBO</span>
+          <span id="endlessComboValue" class="endless-hud-value">-</span>
+        </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">TIME</span>
+          <span id="endlessTimeValue" class="endless-hud-value endless-time">00:00</span>
+        </div>
+      </div>
+      <!-- 取得済みアップグレードのバッジ一覧（endless.jsが更新する。無い間は空のまま） -->
+      <div id="endlessUpgradeList" class="endless-upgrade-list"></div>
       <div id="statusBar">
         <span id="moveCount">MOVES: 0</span>
         <span id="timer">TIME: 00:00</span>
@@ -823,6 +1190,46 @@
         <button type="button" id="hintBtn">HINT</button>
       </div>
     </footer>
+  </section>
+
+  <!-- ============ RESEARCH LAB ============ -->
+  <section id="screen-researchlab" class="screen">
+    <div class="lab-header">
+      <h2 class="lab-title">RESEARCH LAB</h2>
+      <div id="researchLabDepth" class="lab-subtitle">DEPTH 3 RESEARCH COMPLETE</div>
+    </div>
+    <p class="lab-instruction">3つの候補から1つのアップグレードを選択してください</p>
+    <div id="researchLabCards" class="lab-cards"></div>
+  </section>
+
+  <!-- ============ ENDLESS RESULT ============ -->
+  <section id="screen-endlessresult" class="screen">
+    <div class="endless-result-card">
+      <h2 class="endless-result-title">ENDLESS RESULT</h2>
+      <div id="endlessResultNewBest" class="endless-new-best hidden">NEW BEST!</div>
+      <div class="endless-result-grid">
+        <div class="endless-result-item">
+          <span class="endless-result-label">DEPTH</span>
+          <span id="endlessResultDepth" class="endless-result-value">0</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">SCORE</span>
+          <span id="endlessResultScore" class="endless-result-value">0</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">PERFECT COUNT</span>
+          <span id="endlessResultPerfect" class="endless-result-value">0</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">BEST DEPTH</span>
+          <span id="endlessResultBest" class="endless-result-value">0</span>
+        </div>
+      </div>
+      <div class="endless-result-buttons">
+        <button type="button" id="endlessResultTitleBtn" class="ghost-btn">TITLE</button>
+        <button type="button" id="endlessRetryBtn" class="primary-btn">RETRY</button>
+      </div>
+    </div>
   </section>
 
   <!-- ============ CLEAR ============ -->
@@ -864,6 +1271,18 @@
   <script src="src/animation.js"></script>
   <script src="src/sound.js"></script>
   <script src="src/debug.js"></script>
+  <script src="src/endless/map.js"></script>
+  <script src="src/endless/endlessSave.js"></script>
+  <script src="src/endless/upgrades.js"></script>
+  <script src="src/endless/rareUpgrades.js"></script>
+  <script src="src/endless/upgradeManager.js"></script>
+  <script src="src/endless/boss.js"></script>
+  <script src="src/endless/events.js"></script>
+  <script src="src/endless/eventManager.js"></script>
+  <script src="src/endless/endlessGame.js"></script>
+  <script src="src/endless/endlessResult.js"></script>
+  <script src="src/endless/researchLab.js"></script>
+  <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>
 </body>

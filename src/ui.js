@@ -41,7 +41,11 @@
         screens: {
           title: document.getElementById('screen-title'),
           stageSelect: document.getElementById('screen-stageselect'),
-          game: document.getElementById('screen-game')
+          game: document.getElementById('screen-game'),
+          // ENDLESS RESEARCH用の画面（src/endless/配下が利用する）
+          modeSelect: document.getElementById('screen-modeselect'),
+          researchLab: document.getElementById('screen-researchlab'),
+          endlessResult: document.getElementById('screen-endlessresult')
         },
 
         // TITLE
@@ -143,7 +147,8 @@
 
     showScreen(name) {
       Object.keys(this.el.screens).forEach(key => {
-        this.el.screens[key].classList.toggle('active', key === name);
+        const el = this.el.screens[key];
+        if (el) el.classList.toggle('active', key === name);
       });
     }
 

@@ -268,6 +268,26 @@
     const ratioTable = getEmptyRatioTable(size);
     const targetDifficulty = ratioTable[difficulty] ? difficulty : 'normal';
     const emptyRatio = ratioTable[targetDifficulty];
+    return generatePuzzleWithRatio(size, emptyRatio, seed, targetDifficulty);
+  }
+
+  /**
+   * 疎密度(emptyRatio)を直接指定して問題を生成する下位関数。generatePuzzle()は
+   * 難易度名からこの疎密度テーブル(DIFFICULTY_EMPTY_RATIO_BY_SIZE、オフラインの
+   * tools/build_puzzles.js向けに「唯一解到達」を最優先し数秒〜数十秒かかることも
+   * 許容して較正した値)を引いて呼び出すが、ENDLESS RESEARCH（src/endless/）の
+   * ようにブラウザのメインスレッドで同期的に生成するユースケースでは、
+   * 生成時間そのものを最優先で短く抑えたい疎密度を使いたいことがあるため、
+   * 外部から直接指定できるようにこの関数を公開している。
+   * @param {number} size 盤面の一辺
+   * @param {number} emptyRatio 目標疎密度（EMPTYになる確率）
+   * @param {number|string} [seed] 同じseedなら常に同じ問題を生成する。省略時は非決定的
+   * @param {string} [requestedLabel] stats.requestedDifficultyに記録する参考ラベル（表示・デバッグ用）
+   * @returns {{size:number, hints:{row:Object[], column:Object[]}, answer:string[][],
+   *            difficulty:string, seed:(number|string), stats:{solutions:number, steps:number,
+   *            guessCount:number, hintCount:number, requestedDifficulty:string}}}
+   */
+  function generatePuzzleWithRatio(size, emptyRatio, seed, requestedLabel) {
     const usedSeed = seed != null ? seed : Math.random();
     const rng = Seed.createRng(usedSeed);
 
@@ -276,7 +296,7 @@
     const found = findUniqueBoard(size, emptyRatio, rng, DEFAULT_MAX_ATTEMPTS, minColoredCells);
     if (!found) {
       throw new Error(
-        `唯一解の問題を生成できませんでした（size=${size}, difficulty=${targetDifficulty}）。seedを変えるか試行回数を増やしてください。`
+        `唯一解の問題を生成できませんでした（size=${size}, emptyRatio=${emptyRatio}）。seedを変えるか試行回数を増やしてください。`
       );
     }
 
@@ -302,7 +322,7 @@
         steps: finalResult.steps,
         guessCount: finalResult.guessCount,
         hintCount,
-        requestedDifficulty: targetDifficulty
+        requestedDifficulty: requestedLabel != null ? requestedLabel : null
       }
     };
 
@@ -310,7 +330,7 @@
     const validation = validatePuzzle(puzzle);
     if (!validation.ok) {
       throw new Error(
-        `生成した問題が品質チェックに失敗しました（size=${size}, difficulty=${targetDifficulty}, seed=${usedSeed}）: ` +
+        `生成した問題が品質チェックに失敗しました（size=${size}, emptyRatio=${emptyRatio}, seed=${usedSeed}）: ` +
         JSON.stringify(validation.checks)
       );
     }
@@ -320,6 +340,7 @@
 
   G.Generator = {
     generatePuzzle,
+    generatePuzzleWithRatio,
     validatePuzzle,
     generateCompleteBoard,
     findUniqueBoard,
