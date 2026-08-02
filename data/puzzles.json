@@ -1,0 +1,628 @@
+{
+  "puzzles": [
+    {
+      "id": "001",
+      "size": 5,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 3,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 3,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "GREEN",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "RED",
+          "RED",
+          "RED",
+          "EMPTY"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 180,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 62,
+        "guessCount": 11,
+        "hintCount": 10,
+        "requestedDifficulty": "easy"
+      }
+    },
+    {
+      "id": "002",
+      "size": 5,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 2,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 3,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "BLUE"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "GREEN",
+          "RED",
+          "BLUE"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE"
+        ]
+      ],
+      "parSeconds": 170,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 94,
+        "guessCount": 28,
+        "hintCount": 10,
+        "requestedDifficulty": "easy"
+      }
+    },
+    {
+      "id": "003",
+      "size": 5,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 3
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "GREEN",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "GREEN",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "GREEN",
+          "GREEN",
+          "GREEN",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 150,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 204,
+        "guessCount": 35,
+        "hintCount": 8,
+        "requestedDifficulty": "normal"
+      }
+    },
+    {
+      "id": "004",
+      "size": 5,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 3,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 2,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 2,
+          "RED": 1,
+          "GREEN": 1
+        }
+      ],
+      "answer": [
+        [
+          "RED",
+          "GREEN",
+          "RED",
+          "EMPTY",
+          "RED"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "GREEN"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "GREEN",
+          "GREEN",
+          "EMPTY",
+          "BLUE"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE"
+        ]
+      ],
+      "parSeconds": 140,
+      "generatedDifficulty": "normal",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 188,
+        "guessCount": 51,
+        "hintCount": 14,
+        "requestedDifficulty": "normal"
+      }
+    },
+    {
+      "id": "005",
+      "size": 5,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 3,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 3,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 2,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 1
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "RED",
+          "RED",
+          "RED",
+          "GREEN"
+        ],
+        [
+          "RED",
+          "BLUE",
+          "GREEN",
+          "BLUE",
+          "BLUE"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 120,
+      "generatedDifficulty": "hard",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 392,
+        "guessCount": 167,
+        "hintCount": 16,
+        "requestedDifficulty": "hard"
+      }
+    },
+    {
+      "id": "006",
+      "size": 5,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 3,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 3,
+          "RED": 0,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 2,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 1
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 3,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 1,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "RED",
+          "RED"
+        ],
+        [
+          "BLUE",
+          "GREEN",
+          "GREEN",
+          "BLUE",
+          "BLUE"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "BLUE",
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "GREEN",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 110,
+      "generatedDifficulty": "normal",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 222,
+        "guessCount": 79,
+        "hintCount": 17,
+        "requestedDifficulty": "hard"
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "stages": [
+    {
+      "id": 1,
+      "name": "BEGINNER 01",
+      "difficulty": "easy",
+      "puzzle": "001",
+      "unlock": false
+    },
+    {
+      "id": 2,
+      "name": "BEGINNER 02",
+      "difficulty": "easy",
+      "puzzle": "002",
+      "unlock": false
+    },
+    {
+      "id": 3,
+      "name": "INTERMEDIATE 01",
+      "difficulty": "normal",
+      "puzzle": "003",
+      "unlock": false
+    },
+    {
+      "id": 4,
+      "name": "INTERMEDIATE 02",
+      "difficulty": "normal",
+      "puzzle": "004",
+      "unlock": false
+    },
+    {
+      "id": 5,
+      "name": "ADVANCED 01",
+      "difficulty": "hard",
+      "puzzle": "005",
+      "unlock": false
+    },
+    {
+      "id": 6,
+      "name": "ADVANCED 02",
+      "difficulty": "hard",
+      "puzzle": "006",
+      "unlock": false
+    }
+  ]
+}

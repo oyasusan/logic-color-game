@@ -1,0 +1,73 @@
+{
+  "tutorials": [
+    {
+      "id": "tutorial-01",
+      "step": 1,
+      "title": "TUTORIAL 1/3",
+      "message": "色ボタンを選んでマスをタップしよう。同じマスをもう一度タップすると消えるよ。",
+      "size": 3,
+      "allowedColors": ["BLUE"],
+      "rowHints": [
+        { "BLUE": 1, "RED": 0, "GREEN": 0 },
+        { "BLUE": 1, "RED": 0, "GREEN": 0 },
+        { "BLUE": 1, "RED": 0, "GREEN": 0 }
+      ],
+      "columnHints": [
+        { "BLUE": 0, "RED": 0, "GREEN": 0 },
+        { "BLUE": 3, "RED": 0, "GREEN": 0 },
+        { "BLUE": 0, "RED": 0, "GREEN": 0 }
+      ],
+      "answer": [
+        ["EMPTY", "BLUE", "EMPTY"],
+        ["EMPTY", "BLUE", "EMPTY"],
+        ["EMPTY", "BLUE", "EMPTY"]
+      ]
+    },
+    {
+      "id": "tutorial-02",
+      "step": 2,
+      "title": "TUTORIAL 2/3",
+      "message": "盤面の左側にある数字は「行ヒント」。その行に置くべきライトの色と数を表しているよ。2段目は全部BLUEが3個だ。",
+      "size": 3,
+      "allowedColors": ["BLUE", "RED"],
+      "rowHints": [
+        { "BLUE": 1, "RED": 2, "GREEN": 0 },
+        { "BLUE": 3, "RED": 0, "GREEN": 0 },
+        { "BLUE": 0, "RED": 0, "GREEN": 0 }
+      ],
+      "columnHints": [
+        { "BLUE": 1, "RED": 1, "GREEN": 0 },
+        { "BLUE": 2, "RED": 0, "GREEN": 0 },
+        { "BLUE": 1, "RED": 1, "GREEN": 0 }
+      ],
+      "answer": [
+        ["RED", "BLUE", "RED"],
+        ["BLUE", "BLUE", "BLUE"],
+        ["EMPTY", "EMPTY", "EMPTY"]
+      ]
+    },
+    {
+      "id": "tutorial-03",
+      "step": 3,
+      "title": "TUTORIAL 3/3",
+      "message": "盤面の上側は「列ヒント」。1列目はBLUEが3個で埋まる列だよ。行と列、両方のヒントを満たすとクリアだ。",
+      "size": 3,
+      "allowedColors": ["BLUE", "GREEN"],
+      "rowHints": [
+        { "BLUE": 1, "RED": 0, "GREEN": 2 },
+        { "BLUE": 1, "RED": 0, "GREEN": 1 },
+        { "BLUE": 1, "RED": 0, "GREEN": 0 }
+      ],
+      "columnHints": [
+        { "BLUE": 3, "RED": 0, "GREEN": 0 },
+        { "BLUE": 0, "RED": 0, "GREEN": 2 },
+        { "BLUE": 0, "RED": 0, "GREEN": 1 }
+      ],
+      "answer": [
+        ["BLUE", "GREEN", "GREEN"],
+        ["BLUE", "GREEN", "EMPTY"],
+        ["BLUE", "EMPTY", "EMPTY"]
+      ]
+    }
+  ]
+}
