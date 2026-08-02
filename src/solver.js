@@ -69,6 +69,8 @@
 
       const r = Math.floor(index / size);
       const c = index % size;
+      // このセルを置いた後、列cにはあと何回配置のチャンスが残るか（行優先で埋めているため）
+      const remainingRowsForCol = size - 1 - r;
 
       // このマスに置ける候補（制約を破らないもの）を先に絞り込む
       const viable = [CellState.EMPTY, ...COLORS].filter(color => {
@@ -89,9 +91,17 @@
         }
         grid[r][c] = color;
 
+        // 先読み枝刈り（forward checking）: 列cの残り配置回数では、
+        // どうやってもcolumnHintsの目標色数に届かない場合は即座に打ち切る。
+        // 従来は列の充足チェックを盤面が全て埋まった時点でしか行っておらず、
+        // 大きな盤面（6×6以上）で無駄な探索が指数的に膨らむ原因になっていた。
+        const colFeasible = COLORS.every(color2 =>
+          colCount[c][color2] + remainingRowsForCol >= columnHints[c][color2]
+        );
+
         // 行の最後のマスまで埋めたら、その時点で行の条件を確定チェック（枝刈り）
         const isRowEnd = c === size - 1;
-        if (!isRowEnd || rowSatisfied(r)) {
+        if (colFeasible && (!isRowEnd || rowSatisfied(r))) {
           dfs(index + 1);
         }
 

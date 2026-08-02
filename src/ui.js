@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { CellState, COLORS, Score } = G;
+  const { CellState, COLORS, Score, Animation, Sound } = G;
 
   class UI {
     /**
@@ -47,6 +47,7 @@
         // TITLE
         titleLevelLabel: document.getElementById('titleLevelLabel'),
         titleStartBtn: document.getElementById('titleStartBtn'),
+        titleSoundToggle: document.getElementById('titleSoundToggle'),
 
         // STAGE SELECT
         backToTitleBtn: document.getElementById('backToTitleBtn'),
@@ -59,11 +60,15 @@
         gameBackBtn: document.getElementById('gameBackBtn'),
         stageLabel: document.getElementById('stageLabel'),
         stageBestStars: document.getElementById('stageBestStars'),
+        gameSoundToggle: document.getElementById('gameSoundToggle'),
 
         // GAME - main
         tutorialBanner: document.getElementById('tutorialBanner'),
         moveCount: document.getElementById('moveCount'),
         timer: document.getElementById('timer'),
+        csBlue: document.getElementById('csBlue'),
+        csRed: document.getElementById('csRed'),
+        csGreen: document.getElementById('csGreen'),
         boardWrapper: document.getElementById('boardWrapper'),
 
         // GAME - footer
@@ -81,14 +86,21 @@
         nextStageFromClearBtn: document.getElementById('nextStageFromClearBtn'),
         stageSelectFromClearBtn: document.getElementById('stageSelectFromClearBtn'),
 
+        // LEVEL UP overlay
+        levelUpOverlay: document.getElementById('levelUpOverlay'),
+        levelUpValue: document.getElementById('levelUpValue'),
+
         toast: document.getElementById('toast')
       };
 
       this.cellEls = []; // [r][c] -> element
       this.rowHintEls = []; // [r][color] -> element
       this.colHintEls = []; // [c][color] -> element
+      this._rowSatisfied = []; // [r] -> boolean (前回描画時点、達成演出の再生判定に使う)
+      this._colSatisfied = []; // [c] -> boolean
 
       this._bindStaticEvents();
+      this._bindSoundToggle();
     }
 
     _bindStaticEvents() {
@@ -109,6 +121,22 @@
         this.hideClear();
         this.cb.onStageSelectFromClear && this.cb.onStageSelectFromClear();
       });
+    }
+
+    /** サウンドON/OFFトグル（TITLE・GAME両方のボタンを同じ状態に同期させる） */
+    _bindSoundToggle() {
+      const buttons = [this.el.titleSoundToggle, this.el.gameSoundToggle].filter(Boolean);
+      const syncIcon = () => {
+        const on = !Sound || Sound.isEnabled();
+        buttons.forEach(btn => { btn.textContent = on ? '🔊' : '🔇'; });
+      };
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (Sound) Sound.toggle();
+          syncIcon();
+        });
+      });
+      syncIcon();
     }
 
     /** ---------------- 画面切り替え ---------------- */
@@ -207,12 +235,18 @@
       const size = game.size;
       const wrapper = this.el.boardWrapper;
       wrapper.innerHTML = '';
-      wrapper.style.gridTemplateColumns = `minmax(40px, 64px) repeat(${size}, 1fr)`;
-      wrapper.style.gridTemplateRows = `minmax(40px, 64px) repeat(${size}, 1fr)`;
+      // ヒント列/行の幅は画面サイズに応じてclamp()で連続的に変化させる
+      // （固定のminmaxだと小型スマホでマス側が圧迫され、タップ領域が狭くなるため）
+      wrapper.style.gridTemplateColumns = `clamp(32px, 14vw, 64px) repeat(${size}, 1fr)`;
+      wrapper.style.gridTemplateRows = `clamp(32px, 14vw, 64px) repeat(${size}, 1fr)`;
+      // 6×6以上の大盤面はマス数が多く、隙間(gap)がその分マスの実サイズを圧迫するため詰める
+      wrapper.style.gap = size >= 8 ? '2px' : size >= 6 ? '3px' : '4px';
 
       this.cellEls = Array.from({ length: size }, () => new Array(size));
       this.rowHintEls = Array.from({ length: size }, () => ({}));
       this.colHintEls = Array.from({ length: size }, () => ({}));
+      this._rowSatisfied = new Array(size).fill(false);
+      this._colSatisfied = new Array(size).fill(false);
 
       // 左上の空コーナー
       const corner = document.createElement('div');
@@ -250,7 +284,11 @@
           cell.style.gridRow = String(r + 2);
           cell.style.gridColumn = String(c + 2);
           cell.setAttribute('aria-label', `row${r + 1} col${c + 1}`);
-          cell.addEventListener('click', () => this.cb.onCellTap && this.cb.onCellTap(r, c));
+          cell.addEventListener('click', () => {
+            if (Sound) Sound.tap();
+            if (Animation) Animation.selectPulse(cell);
+            this.cb.onCellTap && this.cb.onCellTap(r, c);
+          });
           wrapper.appendChild(cell);
           this.cellEls[r][c] = cell;
         }
@@ -297,29 +335,75 @@
         // reflowを挟んでアニメーションを再トリガー
         void el.offsetWidth;
         el.classList.add('flash');
+        if (Animation) Animation.placeLight(el);
+        if (Sound) Sound.place(color);
       }
     }
 
     renderHintStatus(game) {
       for (let r = 0; r < game.size; r++) {
         const status = game.getRowStatus(r);
+        const nowSatisfied = status.every(s => s.satisfied);
         status.forEach(s => {
           const chip = this.rowHintEls[r][s.color];
           if (chip) chip.classList.toggle('satisfied', s.satisfied);
         });
+        if (nowSatisfied && !this._rowSatisfied[r]) this._celebrateLine('row', r, status);
+        this._rowSatisfied[r] = nowSatisfied;
       }
       for (let c = 0; c < game.size; c++) {
         const status = game.getColumnStatus(c);
+        const nowSatisfied = status.every(s => s.satisfied);
         status.forEach(s => {
           const chip = this.colHintEls[c][s.color];
           if (chip) chip.classList.toggle('satisfied', s.satisfied);
         });
+        if (nowSatisfied && !this._colSatisfied[c]) this._celebrateLine('col', c, status);
+        this._colSatisfied[c] = nowSatisfied;
       }
+    }
+
+    /** 行/列が新たに条件達成した瞬間の演出（チップ強調・ライン発光・完了音） */
+    _celebrateLine(axis, index, status) {
+      const hintMap = axis === 'row' ? this.rowHintEls[index] : this.colHintEls[index];
+      status.forEach(s => {
+        if (s.target > 0 && hintMap[s.color] && Animation) Animation.chipBurst(hintMap[s.color]);
+      });
+      const cells = axis === 'row'
+        ? (this.cellEls[index] || [])
+        : this.cellEls.map(row => row[index]);
+      if (Animation) Animation.pulseLine(cells);
+      if (Sound) Sound.complete();
     }
 
     renderStatus(game) {
       this.el.moveCount.textContent = `MOVES: ${game.moveCount}`;
+      this.updateTimer(game);
+      this._renderColorStatus(game);
+    }
+
+    /**
+     * タイマー表示だけを更新する軽量版。MOVES/現在カラー表示は操作が
+     * 発生した時にしか変化しないため、1秒ごとのタイマーTickでは
+     * この関数だけを呼び、不要なDOM書き込みを避ける（パフォーマンス改善）。
+     */
+    updateTimer(game) {
       this.el.timer.textContent = `TIME: ${Score.formatTime(game.elapsedSeconds())}`;
+    }
+
+    /** 現在盤面上にある色ごとのライト数（現在カラー表示）を更新する */
+    _renderColorStatus(game) {
+      if (!this.el.csBlue) return;
+      const counts = { BLUE: 0, RED: 0, GREEN: 0 };
+      for (let r = 0; r < game.size; r++) {
+        for (let c = 0; c < game.size; c++) {
+          const color = game.board.get(r, c);
+          if (counts[color] !== undefined) counts[color]++;
+        }
+      }
+      this.el.csBlue.textContent = String(counts.BLUE);
+      this.el.csRed.textContent = String(counts.RED);
+      this.el.csGreen.textContent = String(counts.GREEN);
     }
 
     /** @param {{label:string, starsText:string}} info */
@@ -373,11 +457,39 @@
         this.el.clearExp.classList.add('hidden');
       }
       this.el.nextStageFromClearBtn.classList.toggle('hidden', !stats.hasNext);
+
+      if (Animation) Animation.syncFlashBoard(this.cellEls);
+      if (Sound) Sound.clear();
       this.el.clearOverlay.classList.remove('hidden');
     }
 
     hideClear() {
       this.el.clearOverlay.classList.add('hidden');
+    }
+
+    /** LEVEL UP演出を一時的に表示する（クリア画面の上に重ねて出し、自動で消える） */
+    showLevelUp(level) {
+      if (Animation) Animation.showLevelUp(this.el.levelUpOverlay, this.el.levelUpValue, level);
+    }
+
+    /** ---------------- デバッグ: 答え表示（?debug=true時のみ呼ばれる） ---------------- */
+
+    showAnswerOverlay(answer) {
+      for (let r = 0; r < answer.length; r++) {
+        for (let c = 0; c < answer[r].length; c++) {
+          const el = this.cellEls[r] && this.cellEls[r][c];
+          if (!el) continue;
+          el.classList.remove('answer-blue', 'answer-red', 'answer-green');
+          const color = answer[r][c];
+          if (color !== CellState.EMPTY) el.classList.add(`answer-${color.toLowerCase()}`);
+        }
+      }
+    }
+
+    hideAnswerOverlay() {
+      this.cellEls.forEach(row => row.forEach(el => {
+        if (el) el.classList.remove('answer-blue', 'answer-red', 'answer-green');
+      }));
     }
 
     flashHintCell(r, c) {

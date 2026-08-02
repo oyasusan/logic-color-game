@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>LOGIC COLOR</title>
+<meta name="description" content="色と数字を使った論理パズルゲーム。行/列のヒントを頼りにライトを配置してクリアを目指す。">
+
+<!-- PWA: ホーム画面追加・スタンドアロン起動 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#070a12">
+
+<!-- iOS Safari: ホーム画面追加時にstandalone起動・ステータスバー・アイコンを適用 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LOGIC COLOR">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="assets/images/favicon.png">
 <style>
   :root {
     --bg: #070a12;
@@ -20,7 +34,11 @@
     --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
 
   html, body {
     height: 100%;
@@ -30,9 +48,70 @@
     font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
     overscroll-behavior: none;
     user-select: none;
+    position: relative;
+    /* iOS Safariのゴムバンドスクロール・Android Chromeのプルリフレッシュを抑止し、
+       盤面タップ中に意図しないスクロール/リロードが起きないようにする */
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+
+  button {
+    touch-action: manipulation;
   }
 
   .hidden { display: none !important; }
+
+  /* ---------- NEURAL GRID / AI SYSTEM 背景演出（theme.js が生成） ---------- */
+  #neuralGridCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.025) 0px,
+      rgba(255, 255, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+  }
+
+  .screen, .overlay, #toast { position: relative; z-index: 2; }
+
+  /* ---------- アイコンボタン（サウンド切替など） ---------- */
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-btn:active { transform: scale(0.94); }
+
+  #titleSoundToggle {
+    position: absolute;
+    top: calc(var(--safe-top) + 12px);
+    right: 14px;
+  }
 
   /* ---------- 画面切り替え ---------- */
   .screen {
@@ -44,6 +123,13 @@
   .screen.active {
     display: flex;
     flex-direction: column;
+    /* bodyはoverflow:hiddenでゴムバンドスクロールを止めているため、高さを
+       ビューポートに固定した上で画面ごとに内部スクロールを許可する
+       （ステージ数が増えて縦に収まらない場合の保険） */
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .neon-title {
@@ -216,6 +302,38 @@
     color: var(--text-dim);
   }
 
+  /* ---------- GAME: 現在カラー表示（盤面上のライト数ライブ表示） ---------- */
+  .color-status {
+    display: flex;
+    gap: 14px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--panel);
+  }
+
+  .color-status-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+  }
+
+  .color-status-item i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .cs-blue i  { background: var(--blue);  box-shadow: 0 0 6px var(--blue); }
+  .cs-red i   { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+  .cs-green i { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  .color-status-item b { color: var(--text); font-size: 13px; }
+
   .board-wrapper {
     display: grid;
     gap: 4px;
@@ -265,6 +383,7 @@
   }
 
   .board-cell {
+    position: relative;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -301,6 +420,113 @@
     0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.9); }
     50%  { box-shadow: 0 0 22px 8px rgba(255,255,255,0.8); }
     100% { box-shadow: 0 0 10px 2px currentColor; }
+  }
+
+  /* タップ選択時の即時フィードバック（配置結果が決まる前の発光リング） */
+  .board-cell.select-pulse {
+    animation: selectPulse 0.28s ease-out;
+  }
+
+  @keyframes selectPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(232, 241, 255, 0.55); }
+    100% { box-shadow: 0 0 0 10px rgba(232, 241, 255, 0); }
+  }
+
+  /* ライト配置時のポップ演出（flashと併用） */
+  .board-cell.place-pop {
+    animation: placePop 0.32s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  @keyframes placePop {
+    0%   { transform: scale(0.72); }
+    60%  { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
+
+  /* 行/列の条件達成時に該当マスへ流すライン発光 */
+  .board-cell.line-clear {
+    animation: lineClear 0.5s ease-out;
+  }
+
+  @keyframes lineClear {
+    0%   { box-shadow: 0 0 4px 1px currentColor; }
+    40%  { box-shadow: 0 0 20px 6px rgba(255,255,255,0.7); }
+    100% { box-shadow: 0 0 4px 1px currentColor; }
+  }
+
+  /* CLEAR時: 全ライト同期発光 */
+  .board-cell.sync-flash {
+    animation: syncFlash 0.6s ease-in-out;
+  }
+
+  @keyframes syncFlash {
+    0%, 100% { box-shadow: 0 0 6px 2px currentColor; filter: brightness(1); }
+    50%      { box-shadow: 0 0 28px 10px rgba(255,255,255,0.9); filter: brightness(1.6); }
+  }
+
+  .hint-chip.chip-burst {
+    animation: chipBurst 0.4s ease-out;
+  }
+
+  @keyframes chipBurst {
+    0%   { transform: scale(1); filter: brightness(1); }
+    40%  { transform: scale(1.5); filter: brightness(1.8); }
+    100% { transform: scale(0.9); filter: brightness(1); }
+  }
+
+  /* ---------- デバッグ: 答え表示オーバーレイ（?debug=true時のみui.jsが付与） ---------- */
+  .board-cell.answer-blue::after,
+  .board-cell.answer-red::after,
+  .board-cell.answer-green::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 2px dashed;
+    border-radius: 6px;
+    pointer-events: none;
+  }
+
+  .board-cell.answer-blue::after  { border-color: var(--blue); }
+  .board-cell.answer-red::after   { border-color: var(--red); }
+  .board-cell.answer-green::after { border-color: var(--green); }
+
+  /* ---------- デバッグパネル（?debug=true時のみdebug.jsがDOMへ追加） ---------- */
+  #debugPanel {
+    position: fixed;
+    left: 8px;
+    bottom: calc(var(--safe-bottom) + 8px);
+    z-index: 30;
+    background: rgba(4, 6, 12, 0.88);
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    max-width: 220px;
+  }
+
+  #debugPanel .debug-row { display: flex; justify-content: space-between; gap: 10px; }
+  #debugPanel .debug-key { color: var(--gold); }
+  #debugPanel #dbgSeed, #debugPanel #dbgDifficulty, #debugPanel #dbgSolver { color: var(--text); }
+
+  #dbgToggleAnswer {
+    margin-top: 6px;
+    width: 100%;
+    padding: 5px 0;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  #dbgToggleAnswer.active {
+    border-color: var(--gold);
+    color: var(--gold);
   }
 
   /* ---------- GAME: 下部 ---------- */
@@ -381,6 +607,45 @@
     text-align: center;
     box-shadow: 0 0 40px rgba(41, 224, 255, 0.25);
     max-width: 320px;
+    animation: clearCardIn 0.4s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  @keyframes clearCardIn {
+    0%   { transform: scale(0.7); opacity: 0; box-shadow: 0 0 0 rgba(41, 224, 255, 0); }
+    60%  { opacity: 1; }
+    100% { transform: scale(1); opacity: 1; box-shadow: 0 0 40px rgba(41, 224, 255, 0.25); }
+  }
+
+  /* ---------- LEVEL UP演出 ---------- */
+  .level-up-overlay { z-index: 12; background: rgba(4, 6, 12, 0.75); }
+
+  .level-up-card {
+    text-align: center;
+    animation: levelUpIn 0.5s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  .level-up-label {
+    font-size: 14px;
+    letter-spacing: 6px;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+
+  .level-up-value {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--blue));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 30px rgba(255, 213, 74, 0.4);
+  }
+
+  @keyframes levelUpIn {
+    0%   { transform: scale(0.4) rotate(-4deg); opacity: 0; }
+    60%  { transform: scale(1.15) rotate(1deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
   }
 
   #clearTitle {
@@ -462,12 +727,48 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+
+  /* ---------- スマホ最適化: レスポンシブ調整 ---------- */
+
+  /* 小型スマホ(iPhone SEなど幅375px前後)向けに余白・タップ領域を詰める */
+  @media (max-width: 380px) {
+    .screen { padding-left: 10px; padding-right: 10px; }
+    .board-wrapper { gap: 3px; }
+    .action-buttons button { padding: 11px 4px; font-size: 12px; }
+    .color-status { gap: 10px; padding: 5px 10px; }
+  }
+
+  /* 横向き・縦幅が低いスマホ: 盤面の可視性を優先し、副次的な情報表示を圧縮/非表示にする */
+  @media (max-height: 480px) and (orientation: landscape) {
+    #screen-game main { gap: 4px; }
+    #screen-game .game-header { margin-bottom: 3px; }
+    #tutorialBanner { padding: 6px 10px; font-size: 11px; margin-bottom: 4px; }
+    #statusBar { display: none; }
+    .color-status { padding: 3px 10px; }
+    .action-buttons button { padding: 8px 4px; }
+    #screen-title { gap: 12px; }
+  }
+
+  /* prefers-reduced-motion: セル/クリア演出のCSSアニメーションも止める（theme.jsのcanvas側は別途対応済み） */
+  @media (prefers-reduced-motion: reduce) {
+    .board-cell.flash,
+    .board-cell.select-pulse,
+    .board-cell.place-pop,
+    .board-cell.line-clear,
+    .board-cell.sync-flash,
+    .hint-chip.chip-burst,
+    .clear-card,
+    .level-up-card {
+      animation: none !important;
+    }
+  }
 </style>
 </head>
 <body>
 
   <!-- ============ TITLE ============ -->
   <section id="screen-title" class="screen active">
+    <button type="button" id="titleSoundToggle" class="icon-btn" aria-label="サウンド切替">🔊</button>
     <h1 class="neon-title">LOGIC COLOR</h1>
     <div id="titleLevelLabel">LOGIC LEVEL Lv.1</div>
     <button type="button" id="titleStartBtn" class="primary-btn">STAGE SELECT</button>
@@ -496,6 +797,7 @@
     <header class="game-header">
       <button type="button" id="gameBackBtn" class="ghost-btn">‹ BACK</button>
       <span id="stageLabel">STAGE</span>
+      <button type="button" id="gameSoundToggle" class="icon-btn" aria-label="サウンド切替">🔊</button>
       <span id="stageBestStars"></span>
     </header>
 
@@ -504,6 +806,11 @@
       <div id="statusBar">
         <span id="moveCount">MOVES: 0</span>
         <span id="timer">TIME: 00:00</span>
+      </div>
+      <div id="colorStatus" class="color-status">
+        <span class="color-status-item cs-blue"><i></i><b id="csBlue">0</b></span>
+        <span class="color-status-item cs-red"><i></i><b id="csRed">0</b></span>
+        <span class="color-status-item cs-green"><i></i><b id="csGreen">0</b></span>
       </div>
       <div id="boardWrapper" class="board-wrapper"></div>
     </main>
@@ -532,6 +839,14 @@
     </div>
   </div>
 
+  <!-- ============ LEVEL UP ============ -->
+  <div id="levelUpOverlay" class="overlay level-up-overlay hidden">
+    <div class="level-up-card">
+      <div class="level-up-label">LEVEL UP</div>
+      <div id="levelUpValue" class="level-up-value">Lv.2</div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script src="src/board.js"></script>
@@ -545,6 +860,10 @@
   <script src="src/stage.js"></script>
   <script src="src/tutorial.js"></script>
   <script src="src/game.js"></script>
+  <script src="src/theme.js"></script>
+  <script src="src/animation.js"></script>
+  <script src="src/sound.js"></script>
+  <script src="src/debug.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>
 </body>

@@ -75,6 +75,7 @@
         columnHints: generated.hints.column,
         answer: generated.answer,
         difficulty: generated.difficulty,
+        seed: generated.seed,
         parSeconds: PuzzleManager.estimateParSeconds(generated),
         stats: generated.stats
       };

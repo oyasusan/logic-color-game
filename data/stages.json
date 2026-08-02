@@ -41,6 +41,48 @@
       "difficulty": "hard",
       "puzzle": "006",
       "unlock": false
+    },
+    {
+      "id": 7,
+      "name": "EXPERT 01",
+      "difficulty": "6×6",
+      "puzzle": "007",
+      "unlock": false
+    },
+    {
+      "id": 8,
+      "name": "EXPERT 02",
+      "difficulty": "6×6",
+      "puzzle": "008",
+      "unlock": false
+    },
+    {
+      "id": 9,
+      "name": "MASTER 01",
+      "difficulty": "7×7",
+      "puzzle": "009",
+      "unlock": false
+    },
+    {
+      "id": 10,
+      "name": "MASTER 02",
+      "difficulty": "7×7",
+      "puzzle": "010",
+      "unlock": false
+    },
+    {
+      "id": 11,
+      "name": "GRANDMASTER 01",
+      "difficulty": "8×8",
+      "puzzle": "011",
+      "unlock": false
+    },
+    {
+      "id": 12,
+      "name": "GRANDMASTER 02",
+      "difficulty": "8×8",
+      "puzzle": "012",
+      "unlock": false
     }
   ]
 }

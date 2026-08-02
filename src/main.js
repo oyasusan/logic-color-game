@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager } = G;
+  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug } = G;
 
   class App {
     constructor() {
@@ -47,9 +47,20 @@
         onNextStageFromClear: () => this.handleNextStageFromClear(),
         onStageSelectFromClear: () => this.showStageSelect()
       });
+
+      // デバッグモード(?debug=true)の時だけ、答え表示トグルを盤面へ反映する
+      if (Debug) {
+        Debug.onToggleAnswer(show => {
+          if (!this.game) return;
+          if (show) this.ui.showAnswerOverlay(this.game.puzzle.answer);
+          else this.ui.hideAnswerOverlay();
+        });
+      }
     }
 
     async init() {
+      if (Theme) Theme.init();
+      this._registerServiceWorker();
       this.progress.load();
       await Promise.all([
         this.stageManager.load(),
@@ -58,6 +69,15 @@
       ]);
       this.showTitle();
       this._startTimerLoop();
+    }
+
+    /** PWA対応: オフライン起動用のService Workerを登録する（file://直開き時は何もしない） */
+    _registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      if (global.location.protocol === 'file:') return;
+      navigator.serviceWorker.register('./service-worker.js').catch(err => {
+        console.warn('Service Workerの登録に失敗しました。', err);
+      });
     }
 
     /** ---------------- 画面遷移 ---------------- */
@@ -135,6 +155,7 @@
       this.ui.renderColorLegend(puzzle.allowedColors);
       this.ui.buildBoard(this.game);
       this.ui.hideClear();
+      if (Debug) Debug.render(puzzle);
     }
 
     /** ---------------- ゲーム内操作 ---------------- */
@@ -259,7 +280,7 @@
       });
 
       if (result.levelUp) {
-        this.ui.showToast(`LEVEL UP! Lv.${result.level}`);
+        this.ui.showLevelUp(result.level);
       }
     }
 
@@ -293,7 +314,8 @@
       if (this.timerHandle) clearInterval(this.timerHandle);
       this.timerHandle = setInterval(() => {
         if (this.game && !this.game.cleared) {
-          this.ui.renderStatus(this.game);
+          // MOVES/現在カラー表示は操作時に既に更新済みなので、ここではタイマーのみ更新する
+          this.ui.updateTimer(this.game);
         }
       }, 1000);
     }

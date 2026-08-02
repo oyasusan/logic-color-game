@@ -98,11 +98,12 @@
       "generatedDifficulty": "easy",
       "generatorStats": {
         "solutions": 1,
-        "steps": 62,
+        "steps": 50,
         "guessCount": 11,
         "hintCount": 10,
         "requestedDifficulty": "easy"
-      }
+      },
+      "seed": "stage-1"
     },
     {
       "id": "002",
@@ -202,11 +203,12 @@
       "generatedDifficulty": "easy",
       "generatorStats": {
         "solutions": 1,
-        "steps": 94,
-        "guessCount": 28,
+        "steps": 61,
+        "guessCount": 18,
         "hintCount": 10,
         "requestedDifficulty": "easy"
-      }
+      },
+      "seed": "stage-2"
     },
     {
       "id": "003",
@@ -306,11 +308,12 @@
       "generatedDifficulty": "easy",
       "generatorStats": {
         "solutions": 1,
-        "steps": 204,
-        "guessCount": 35,
+        "steps": 125,
+        "guessCount": 19,
         "hintCount": 8,
         "requestedDifficulty": "normal"
-      }
+      },
+      "seed": "stage-3"
     },
     {
       "id": "004",
@@ -410,11 +413,12 @@
       "generatedDifficulty": "normal",
       "generatorStats": {
         "solutions": 1,
-        "steps": 188,
-        "guessCount": 51,
+        "steps": 165,
+        "guessCount": 47,
         "hintCount": 14,
         "requestedDifficulty": "normal"
-      }
+      },
+      "seed": "stage-4"
     },
     {
       "id": "005",
@@ -514,11 +518,12 @@
       "generatedDifficulty": "hard",
       "generatorStats": {
         "solutions": 1,
-        "steps": 392,
+        "steps": 389,
         "guessCount": 167,
         "hintCount": 16,
         "requestedDifficulty": "hard"
-      }
+      },
+      "seed": "stage-5"
     },
     {
       "id": "006",
@@ -618,11 +623,934 @@
       "generatedDifficulty": "normal",
       "generatorStats": {
         "solutions": 1,
-        "steps": 222,
-        "guessCount": 79,
+        "steps": 203,
+        "guessCount": 78,
         "hintCount": 17,
         "requestedDifficulty": "hard"
-      }
+      },
+      "seed": "stage-6"
+    },
+    {
+      "id": "007",
+      "size": 6,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 2,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 3,
+          "GREEN": 1
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 2,
+          "RED": 1,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "GREEN",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE"
+        ],
+        [
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "RED",
+          "EMPTY",
+          "RED",
+          "GREEN",
+          "EMPTY",
+          "RED"
+        ]
+      ],
+      "parSeconds": 200,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 246,
+        "guessCount": 47,
+        "hintCount": 13,
+        "requestedDifficulty": "normal"
+      },
+      "seed": "stage-7"
+    },
+    {
+      "id": "008",
+      "size": 6,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 2,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 3,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 1,
+          "RED": 2,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 2
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 3,
+          "RED": 1,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 5,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "GREEN",
+          "EMPTY",
+          "GREEN",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "RED",
+          "BLUE"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "GREEN",
+          "EMPTY"
+        ],
+        [
+          "GREEN",
+          "RED",
+          "RED",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ],
+        [
+          "RED",
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 180,
+      "generatedDifficulty": "normal",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 715,
+        "guessCount": 183,
+        "hintCount": 20,
+        "requestedDifficulty": "hard"
+      },
+      "seed": "stage-8"
+    },
+    {
+      "id": "009",
+      "size": 7,
+      "rowHints": [
+        {
+          "BLUE": 3,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "BLUE",
+          "BLUE",
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 240,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 81,
+        "guessCount": 9,
+        "hintCount": 7,
+        "requestedDifficulty": "easy"
+      },
+      "seed": "stage-9"
+    },
+    {
+      "id": "010",
+      "size": 7,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 3,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "BLUE",
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE"
+        ]
+      ],
+      "parSeconds": 220,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 60,
+        "guessCount": 5,
+        "hintCount": 7,
+        "requestedDifficulty": "normal"
+      },
+      "seed": "stage-10"
+    },
+    {
+      "id": "011",
+      "size": 8,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 2,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 2,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "GREEN",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE",
+          "RED",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 280,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 87,
+        "guessCount": 6,
+        "hintCount": 8,
+        "requestedDifficulty": "easy"
+      },
+      "seed": "stage-11"
+    },
+    {
+      "id": "012",
+      "size": 8,
+      "rowHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 3
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        }
+      ],
+      "columnHints": [
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 1,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 1,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 0
+        },
+        {
+          "BLUE": 0,
+          "RED": 0,
+          "GREEN": 1
+        }
+      ],
+      "answer": [
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "GREEN",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "GREEN",
+          "EMPTY",
+          "GREEN"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "RED",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "BLUE",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ],
+        [
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY",
+          "EMPTY"
+        ]
+      ],
+      "parSeconds": 260,
+      "generatedDifficulty": "easy",
+      "generatorStats": {
+        "solutions": 1,
+        "steps": 90,
+        "guessCount": 9,
+        "hintCount": 8,
+        "requestedDifficulty": "normal"
+      },
+      "seed": "stage-12"
     }
   ]
 }
