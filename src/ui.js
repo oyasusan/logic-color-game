@@ -49,6 +49,7 @@
           protocolArchive: document.getElementById('screen-protocolarchive'),
           environmentDetect: document.getElementById('screen-environmentdetect'),
           environmentArchive: document.getElementById('screen-environmentarchive'),
+          map: document.getElementById('screen-map'),
           researchLab: document.getElementById('screen-researchlab'),
           endlessResult: document.getElementById('screen-endlessresult')
         },
@@ -245,8 +246,17 @@
 
     /** ---------------- GAME: 盤面 ---------------- */
 
-    /** ステージが変わった際に盤面DOMを丸ごと再構築する */
-    buildBoard(game) {
+    /**
+     * ステージが変わった際に盤面DOMを丸ごと再構築する。
+     * @param {Object} game
+     * @param {Object} [options] Puzzle Modifier（puzzleModifier.js）反映用。ENDLESS RESEARCH
+     *   以外（通常ステージ等）からは省略され、その場合は従来通りの表示になる
+     * @param {string} [options.hiddenColor] Hidden Color Modifier: この色のヒント数値を「?」にする
+     * @param {boolean} [options.invertColorOrder] Inverted Signal Modifier: ヒントチップの色順を反転する
+     */
+    buildBoard(game, options) {
+      const opts = options || {};
+      this._hintChipOptions = opts;
       const size = game.size;
       const wrapper = this.el.boardWrapper;
       wrapper.innerHTML = '';
@@ -313,12 +323,18 @@
     }
 
     _renderHintChips(container, hint, storeMap) {
-      COLORS.forEach(color => {
+      const opts = this._hintChipOptions || {};
+      // Inverted Signal Modifier: チップの並び順（DOM挿入順）だけを反転する。
+      // storeMap[color]は色をキーに保持するため、renderHintStatus()側の
+      // 達成判定ロジックには一切影響しない（表示順のみが変わる）
+      const order = opts.invertColorOrder ? COLORS.slice().reverse() : COLORS;
+      order.forEach(color => {
         const count = hint[color] || 0;
         if (count === 0) return; // 0件は表示せずスッキリさせる
         const chip = document.createElement('span');
         chip.className = `hint-chip chip-${color.toLowerCase()}`;
-        chip.textContent = String(count);
+        // Hidden Color Modifier: 該当色だけ数値を伏せて「?」表示にする
+        chip.textContent = (opts.hiddenColor === color) ? '?' : String(count);
         container.appendChild(chip);
         storeMap[color] = chip;
       });

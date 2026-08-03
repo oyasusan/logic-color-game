@@ -36,9 +36,14 @@
       // 要求仕様の「unlockedEnvironment」は複数idを保持する配列のため、
       // unlockedProtocolsと表記を揃えて複数形(unlockedEnvironments)にしている
       unlockedEnvironments: [],   // 一度でも選んでRUNを開始したことがあるEnvironment id一覧（解放条件は無く、選べば発見扱い）
-      discoveredEnvironmentCount: 0 // unlockedEnvironments.lengthのミラー（Archive表示用）
+      discoveredEnvironmentCount: 0, // unlockedEnvironments.lengthのミラー（Archive表示用）
+
+      // ---- Puzzle Evolution System: Puzzle Archive（履歴保存） ----
+      puzzleHistory: [] // 直近PUZZLE_HISTORY_LIMIT件のPuzzle挑戦記録（新しい順ではなく古い順に追加、上限超過分は先頭から破棄）
     };
   }
+
+  const PUZZLE_HISTORY_LIMIT = 100; // 無制限に増え続けないよう、直近100件のみ保持する
 
   class EndlessSaveStore {
     constructor() {
@@ -178,6 +183,27 @@
 
     getDiscoveredEnvironmentCount() {
       return this.data.discoveredEnvironmentCount;
+    }
+
+    /** ---------------- Puzzle Evolution System: Puzzle Archive（履歴保存） ---------------- */
+
+    /**
+     * Puzzle/Elite/Bossへの挑戦を1件記録する（RUN中でも都度即時保存する。
+     * unlockProtocol/unlockEnvironmentと同じ「即時保存」の設計に揃えている）。
+     * @param {{depth:number, size:number, tier:number|null, cleared:boolean,
+     *   isBoss:boolean, isElite:boolean, modifierIds:string[]}} entry
+     */
+    recordPuzzleHistory(entry) {
+      this.data.puzzleHistory.push(Object.assign({ timestamp: Date.now() }, entry));
+      if (this.data.puzzleHistory.length > PUZZLE_HISTORY_LIMIT) {
+        this.data.puzzleHistory.splice(0, this.data.puzzleHistory.length - PUZZLE_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の記録から新しい順（配列末尾が最新のため反転して返す） */
+    getPuzzleHistory() {
+      return this.data.puzzleHistory.slice().reverse();
     }
   }
 

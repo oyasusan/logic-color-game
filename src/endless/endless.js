@@ -2,20 +2,27 @@
  * endless.js
  * ENDLESS RESEARCHモード全体を統括するコントローラ。
  * TITLE→MODE SELECT→PROTOCOL SELECT→ENVIRONMENT DETECTION→RUN Initialize→
- * ENDLESS RESEARCH(GAME)→(3Depthごと)RESEARCH LAB / (5Depthごと)PROTOCOL SIGNAL→
- * RESULT の画面遷移、RUN状態（depth/score/life/maxLife/combo/perfectCount）の管理、
- * スコア計算、アップグレード/Protocol/Environment適用を行い、endlessGame.js
- * （1問ごとの進行）・endlessResult.js（RESULT画面）・researchLab.js（3択画面）・
+ * ENDLESS RESEARCH(GAME)。GAME内は「MAP（分岐するNode候補から1つ選ぶ）→
+ * 選んだNodeの内容（Puzzle/Elite/Event/Research Lab/Recovery/Protocol Signal/
+ * Boss。Unknownは選択時に上記いずれかへ解決される）→MAPへ戻る」の繰り返しで、
+ * 以前のバージョンにあった「Depthごとに自動でPuzzleが始まる一本道」進行は
+ * Map Generation System導入により置き換わった。RUN状態
+ * （depth/score/life/maxLife/combo/perfectCount）の管理、スコア計算、
+ * アップグレード/Protocol/Environment適用を行い、endlessGame.js（1問ごとの進行、
+ * Elite変種の反映）・endlessResult.js（RESULT画面）・researchLab.js（3択画面）・
  * upgradeManager.js（所持アップグレード管理）・protocolManager.js（Active中の
  * Protocol群の管理、Phase Bで単一→最大2個の複数管理に変更）・
- * protocolSignal.js（Depth5ごとのProtocol追加/入替画面）・
+ * protocolSignal.js（Protocol追加/入替画面）・
  * protocolUnlock.js（Protocol解放条件の判定、Phase C）・
  * protocolFragment.js（Protocol Fragment獲得量の定義、Phase C）・
  * protocolArchive.js（発見済み/未発見Protocol一覧画面、Phase C）・
  * environmentManager.js（RUN開始時に選ぶResearch Environmentの状態管理＋
  * Detection画面の描画、Research Environmentシステム）・
  * environmentArchive.js（発見済み/未発見Environment一覧画面、Research Environment
- * システム）・endlessSave.js（ベスト記録の永続化）・map.js（depth→難易度）を束ねる。
+ * システム）・nodeTypes.js（Map Node 8種+Elite変種3種の定義、Map Generation
+ * System）・mapGenerator.js（Node分岐候補の生成、Map Generation System）・
+ * mapUI.js（Map画面の描画、Map Generation System）・
+ * endlessSave.js（ベスト記録の永続化）・map.js（depth→難易度）を束ねる。
  *
  * アップグレード・Protocol・Environmentはいずれも各管理クラス自身のreset()で
  * RUN開始/終了時に必ずクリアされるメモリ上の状態で、LocalStorageには一切保存しない
@@ -40,7 +47,8 @@
     UpgradeManager, ResearchLab, EventManager, Score,
     ProtocolManager, ProtocolSelect, ProtocolSignal, ProtocolArchive,
     ProtocolUnlock, ProtocolFragment,
-    EnvironmentManager, EnvironmentArchive
+    EnvironmentManager, EnvironmentArchive,
+    MapGenerator, MapUI, DifficultyManager
   } = G;
 
   const STARTING_LIFE = 3;
@@ -50,6 +58,9 @@
   const SPEED_BONUS_PER_SECOND = 5;     // parSecondsより1秒速くクリアするごとに加点
   const ADVANCE_DELAY_MS = 900;         // クリア/ミス演出とトーストを見る間を置いてから次の問題へ進む
   const RECOVERY_BASE_INTERVAL = 3;     // Recovery Protocol未所持時は回復しない。所持時の基準クリア間隔
+  const ELITE_SCORE_MULTIPLIER = 1.5;   // Elite Node撃破時の総獲得スコア倍率
+  const ELITE_FRAGMENT_BONUS = 2;       // Elite Node撃破時に追加で獲得するProtocol Fragment数
+  const RECOVERY_NODE_LIFE_AMOUNT = 1;  // Recovery Nodeで回復するライフ量
 
   class EndlessMode {
     /**
@@ -89,6 +100,8 @@
         this.protocolSelect.show();
       };
       this.environmentArchive = new EnvironmentArchive({ ui, save: this.save });
+      this.mapUI = new MapUI({ ui, protocolManager: this.protocolManager });
+      this.mapUI.onSelect = node => this._handleMapNodeSelected(node);
       this.eventManager = new EventManager();
 
       this.depth = 0;
@@ -108,7 +121,7 @@
       this._life1AtDepth20ThisRun = false; // Minimalの解放条件(ライフ1でDepth20到達)を満たしたか
 
       this.round.onClear = stats => this._handleRoundClear(stats);
-      this.round.onTimeout = () => this._handleRoundTimeout();
+      this.round.onTimeout = stats => this._handleRoundTimeout(stats);
       this.round.onTick = (remaining, limit) => this._renderTimer(remaining, limit);
 
       this.el = {
@@ -265,7 +278,7 @@
       this.ui.hideTutorialBanner();
       this.ui.showScreen('game');
 
-      this._advance();
+      this._showMapChoices();
     }
 
     /** ゲーム中HUDに現在のResearch Environmentを表示する（Unstable Systemなら解決先も併記） */
@@ -370,10 +383,23 @@
       this.ui.showScreen('game');
       this._renderProtocolBadge();
       this._renderHud();
-      this._advance();
+      this._showMapChoices();
     }
 
-    _advance() {
+    /** ---------------- MAP GENERATION SYSTEM ---------------- */
+
+    /** 次のDepth（this.depth+1）の分岐候補を生成し、Map画面で提示する */
+    _showMapChoices() {
+      const nextDepth = this.depth + 1;
+      const choices = MapGenerator.generateChoices(nextDepth, this.protocolManager, this.environmentManager);
+      this.mapUI.show(nextDepth, choices);
+    }
+
+    /**
+     * Map画面でのNode選択（mapUI.onSelect経由）。Depthの確定・Fragment/Unlock判定は
+     * ここで行い（旧_advance()相当）、その後選ばれたNodeの種類ごとの実処理へ渡す。
+     */
+    _handleMapNodeSelected(node) {
       this.depth++;
 
       // Phase C: 到達Depthに応じたProtocol Fragment獲得（DEPTH_MILESTONE_INTERVALごと。
@@ -384,8 +410,61 @@
       this._checkProtocolUnlocks();
 
       this._renderHud();
-      this.round.start(this.depth);
-      this._renderBossIndicator();
+      this._enterNode(node);
+    }
+
+    /**
+     * 選ばれたNodeの種類ごとに実処理へ振り分ける。Unknown Nodeは
+     * mapGenerator.js側で事前に決めておいた`resolvedNode`（実際の中身）へ
+     * 差し替えてから再帰的に振り分ける。
+     */
+    _enterNode(node) {
+      if (node.type === 'unknown' && node.resolvedNode) {
+        this.ui.showToast(`UNKNOWN NODE → ${node.resolvedNode.name}`);
+        this._enterNode(node.resolvedNode);
+        return;
+      }
+
+      switch (node.type) {
+        case 'elite':
+        case 'boss':
+        case 'puzzle':
+          this.ui.showScreen('game'); // Map画面から遷移するため、Puzzle開始前に明示的に切り替える
+          this.round.start(this.depth, node);
+          this._renderNodeIndicator();
+          break;
+        case 'event':
+          this.ui.showScreen('game');
+          this._triggerEvent();
+          break;
+        case 'research_lab':
+          this.researchLab.show(this.depth); // 内部でui.showScreen('researchLab')する
+          break;
+        case 'protocol_signal':
+          this.protocolSignal.show(this.depth); // 内部でui.showScreen('protocolSignal')する
+          break;
+        case 'recovery':
+          this.ui.showScreen('game');
+          this._handleRecoveryNode();
+          break;
+        default:
+          // 未知のNode種類が万一渡ってきた場合の安全弁。通常のPuzzleとして扱う
+          this.ui.showScreen('game');
+          this.round.start(this.depth, node);
+          this._renderNodeIndicator();
+      }
+    }
+
+    /** Recovery Node: パズルを介さず即座にライフを回復し、次のMap選択へ進む */
+    _handleRecoveryNode() {
+      const before = this.life;
+      this.life = Math.min(this.maxLife, this.life + RECOVERY_NODE_LIFE_AMOUNT);
+      const recovered = this.life - before;
+      this.ui.showToast(recovered > 0 ? `RECOVERY NODE: ライフ+${recovered}` : 'RECOVERY NODE: ライフは満タン');
+      this._renderHud();
+
+      clearTimeout(this._advanceTimer);
+      this._advanceTimer = setTimeout(() => this._showMapChoices(), ADVANCE_DELAY_MS);
     }
 
     /** Deep Research Environment所持時、Protocol Fragmentの獲得量に倍率をかけて加算する */
@@ -393,41 +472,38 @@
       this.protocolFragmentsThisRun += Math.round(amount * this.environmentManager.getFragmentMultiplier());
     }
 
-    /** Boss Puzzle出現時、GAME画面のラベル・ENDLESS HUDの見た目を切り替える */
-    _renderBossIndicator() {
+    /** Boss/Elite Puzzle出現時、GAME画面のラベル・ENDLESS HUDの見た目を切り替える */
+    _renderNodeIndicator() {
       if (this.round.isBoss) {
         this.ui.renderGameHeader({ label: this.round.bossConfig.name, starsText: '' });
-        if (this.el.endlessHud) this.el.endlessHud.classList.add('boss-active');
+        if (this.el.endlessHud) {
+          this.el.endlessHud.classList.add('boss-active');
+          this.el.endlessHud.classList.remove('elite-active');
+        }
+      } else if (this.round.modifiers && this.round.modifiers.length > 0) {
+        const names = this.round.modifiers.map(m => m.name).join(' + ');
+        const label = this.round.currentNode && this.round.currentNode.type === 'elite'
+          ? `ELITE: ${names}`
+          : `MODIFIER: ${names}`;
+        this.ui.renderGameHeader({ label, starsText: '' });
+        if (this.el.endlessHud) {
+          this.el.endlessHud.classList.add('elite-active');
+          this.el.endlessHud.classList.remove('boss-active');
+        }
       } else {
         this.ui.renderGameHeader({ label: 'ENDLESS RESEARCH', starsText: '' });
-        if (this.el.endlessHud) this.el.endlessHud.classList.remove('boss-active');
+        if (this.el.endlessHud) this.el.endlessHud.classList.remove('boss-active', 'elite-active');
       }
     }
 
     /**
-     * クリア/ミスの演出待ち(ADVANCE_DELAY_MS)後に呼ばれる。RESEARCH LAB（Depth3
-     * ごと）→PROTOCOL SIGNAL（Depth5ごと）→Event Node（どちらも対象でないDepthで
-     * 確率発生）の順に出現判定を行う。いずれかが発生したらそこで打ち切り、次の
-     * 判定へは進まない（Depth15/30等、複数条件を同時に満たすDepthではこの優先順位に
-     * 従い、その回はLabのみ・Signal/Eventは出現しない。既存のLab>Eventの優先順位に
-     * 倣った設計）。どれも該当しなければ通常通り次のDepthへ進む（Boss Puzzleの判定は
-     * round.start()内部で行われるため、ここでは意識する必要がない）。
+     * クリア/ミスの演出待ち(ADVANCE_DELAY_MS)後に呼ばれる。Map Generation System
+     * 導入により、Research Lab/Protocol Signal/Event Nodeの自動判定はここでは
+     * 行わない（それぞれ独立したMap Nodeとしてプレイヤーが選ぶ対象になったため）。
+     * 単純に次のDepthのMap選択画面を表示するだけになった。
      */
     _afterRoundEnd() {
-      if (this.researchLab.shouldTrigger(this.depth)) {
-        this.researchLab.show(this.depth);
-        return;
-      }
-      if (this.protocolSignal.shouldTrigger(this.depth)) {
-        this.protocolSignal.show(this.depth);
-        return;
-      }
-      // Signal Noise Environment所持時、Event Node発生率が補正される
-      if (this.eventManager.shouldTrigger(this.environmentManager.getEventRateMultiplier())) {
-        this._triggerEvent();
-        return;
-      }
-      this._advance();
+      this._showMapChoices();
     }
 
     /** ---------------- Event Node ---------------- */
@@ -446,7 +522,7 @@
       this._renderHud();
 
       clearTimeout(this._advanceTimer);
-      this._advanceTimer = setTimeout(() => this._advance(), ADVANCE_DELAY_MS);
+      this._advanceTimer = setTimeout(() => this._showMapChoices(), ADVANCE_DELAY_MS);
     }
 
     /** @returns {string} トースト表示用の効果結果メッセージ */
@@ -529,7 +605,7 @@
      * Blue Spectrum Environment所持時、直前にクリアした問題のBLUEマス比率に応じた
      * ボーナスを計算する（比率0なら0、比率1（全マスBLUE）ならgetBlueRewardMultiplier()の
      * 上限まるごとが乗る）。this.round.puzzle.answerは既存のendlessGame.js側が
-     * 保持する公開プロパティをそのまま読む（_renderBossIndicator()のthis.round.isBoss参照と
+     * 保持する公開プロパティをそのまま読む（_renderNodeIndicator()のthis.round.isBoss参照と
      * 同じ既存の慣習）。
      */
     _computeBlueBonus(reward) {
@@ -586,6 +662,11 @@
         this.bossClearCount++;
         // Phase C: Boss撃破でProtocol Fragmentを獲得する
         this._gainProtocolFragments(ProtocolFragment.forBossClear());
+      } else if (stats.isElite) {
+        // Map Generation System: Elite Node撃破は高リスクの見返りとして
+        // スコア倍率とProtocol Fragmentのボーナスを得る
+        reward = Math.round(reward * ELITE_SCORE_MULTIPLIER);
+        this._gainProtocolFragments(ELITE_FRAGMENT_BONUS);
       }
 
       this.score += reward;
@@ -595,16 +676,37 @@
 
       let message = stats.isBoss
         ? `${stats.bossName} DEFEATED! +${reward}`
-        : `DEPTH ${this.depth} CLEAR! +${reward}`;
+        : stats.isElite
+          ? `ELITE CLEAR! +${reward}`
+          : `DEPTH ${this.depth} CLEAR! +${reward}`;
       if (perfect) message += ' PERFECT';
       if (speedBonus > 0) message += ` SPEED+${speedBonus}`;
       if (recovered) message += ' ❤+1';
       this.ui.showToast(message);
 
       this._renderHud();
+      this._recordPuzzleHistory(stats, true);
       // クリア演出・トーストを読む間を置いてから次の問題（またはRESEARCH LAB）へ進む
       clearTimeout(this._advanceTimer);
       this._advanceTimer = setTimeout(() => this._afterRoundEnd(), ADVANCE_DELAY_MS);
+    }
+
+    /**
+     * Puzzle Evolution System: 直前のPuzzle/Elite/Boss挑戦をPuzzle Archive
+     * （履歴保存）へ記録する。Event/Research Lab/Protocol Signal/Recoveryは
+     * 対象外（endlessGame.jsの管轄する「1問」ではないため）。
+     */
+    _recordPuzzleHistory(stats, cleared) {
+      const entry = DifficultyManager.buildHistoryEntry({
+        depth: this.depth,
+        size: stats.size,
+        tier: stats.tier,
+        cleared,
+        isBoss: stats.isBoss,
+        isElite: stats.isElite,
+        modifierIds: stats.modifierIds
+      });
+      this.save.recordPuzzleHistory(entry);
     }
 
     /** Recovery Protocolアップグレード: 所持時のみ、一定クリアごとにライフを1回復する */
@@ -620,7 +722,7 @@
     }
 
     /** 制限時間切れ（ミス）時（endlessGame.jsのonTimeout経由） */
-    _handleRoundTimeout() {
+    _handleRoundTimeout(stats) {
       // Critical Logic Environment所持時、ミスで失うライフが倍加する
       const lifeLoss = Math.max(1, Math.round(1 * this.environmentManager.getMissPenaltyMultiplier()));
       this.life -= lifeLoss;
@@ -638,6 +740,7 @@
       }
 
       this._renderHud();
+      this._recordPuzzleHistory(stats, false);
 
       clearTimeout(this._advanceTimer);
       if (this.life <= 0) {
@@ -671,7 +774,7 @@
       this.ui.showToast(times > 1 ? `ACQUIRED: ${def.name} ×${times} (ANOMALY BOOST)` : `ACQUIRED: ${def.name}`);
       this.ui.showScreen('game');
       this._renderHud();
-      this._advance();
+      this._showMapChoices();
     }
 
     /** ---------------- RUN終了 ---------------- */

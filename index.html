@@ -1250,6 +1250,69 @@
     50%      { box-shadow: 0 0 30px rgba(255, 63, 107, 0.6); }
   }
 
+  /* Elite Puzzle出現中のENDLESS HUD（金系の警戒表示に切り替える。Bossより控えめ） */
+  .endless-hud.elite-active {
+    border-color: var(--gold);
+    box-shadow: 0 0 18px rgba(255, 213, 74, 0.35);
+  }
+
+  /* ---------- MAP GENERATION SYSTEM ---------- */
+  #screen-map {
+    align-items: center;
+    padding-top: calc(var(--safe-top) + 24px);
+  }
+
+  .map-node-cards {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .map-node-card {
+    position: relative;
+    padding-top: 34px;
+  }
+
+  .map-node-icon {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    font-size: 18px;
+  }
+
+  .map-node-risk {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+
+  .map-node-reward {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .map-node-risk.risk-none      { color: var(--green); }
+  .map-node-risk.risk-low       { color: var(--blue); }
+  .map-node-risk.risk-medium    { color: var(--gold); }
+  .map-node-risk.risk-high      { color: var(--red); }
+  .map-node-risk.risk-very_high { color: var(--red); text-shadow: 0 0 8px rgba(255, 63, 107, 0.6); }
+  .map-node-risk.risk-unknown   { color: var(--text-dim); }
+
+  .map-node-puzzle          { border-color: var(--blue); }
+  .map-node-event           { border-color: var(--gold); }
+  .map-node-research_lab    { border-color: var(--green); }
+  .map-node-elite           { border-color: var(--red); box-shadow: 0 0 14px rgba(255, 63, 107, 0.15); }
+  .map-node-recovery        { border-color: var(--green); box-shadow: 0 0 14px rgba(67, 255, 160, 0.15); }
+  .map-node-protocol_signal { border-color: var(--green); }
+  .map-node-unknown         { border-color: var(--line); background: repeating-linear-gradient(135deg, var(--panel), var(--panel) 8px, var(--panel-2) 8px, var(--panel-2) 16px); }
+  .map-node-boss {
+    border-color: var(--red);
+    background: linear-gradient(135deg, rgba(255, 63, 107, 0.1), var(--panel));
+    box-shadow: 0 0 20px rgba(255, 63, 107, 0.3);
+  }
+
   /* ---------- スマホ最適化: レスポンシブ調整 ---------- */
 
   /* 小型スマホ(iPhone SEなど幅375px前後)向けに余白・タップ領域を詰める */
@@ -1398,6 +1461,16 @@
     <p class="lab-instruction">新しい研究プロトコルを検知した。組み込む（MERGE）か、入れ替える（REPLACE）か、見送る（IGNORE）か選択する</p>
     <div id="protocolSignalCard" class="lab-cards"></div>
     <div id="protocolSignalActions" class="protocol-signal-actions"></div>
+  </section>
+
+  <!-- ============ MAP (分岐するNode候補から次の1歩を選ぶ) ============ -->
+  <section id="screen-map" class="screen">
+    <div class="lab-header">
+      <h2 class="lab-title">MAP</h2>
+      <div id="mapDepthLabel" class="lab-subtitle">DEPTH 1</div>
+    </div>
+    <p class="lab-instruction">進む先を1つ選択する（Node種類ごとにrisk/rewardが異なる）</p>
+    <div id="mapNodeCards" class="map-node-cards"></div>
   </section>
 
   <!-- ============ GAME ============ -->
@@ -1568,7 +1641,12 @@
   <script src="src/endless/protocolUnlock.js"></script>
   <script src="src/endless/protocolFragment.js"></script>
   <script src="src/endless/environments.js"></script>
+  <script src="src/endless/nodeTypes.js"></script>
+  <script src="src/endless/puzzleTier.js"></script>
+  <script src="src/endless/puzzleModifier.js"></script>
+  <script src="src/endless/difficultyManager.js"></script>
   <script src="src/endless/boss.js"></script>
+  <script src="src/endless/mapGenerator.js"></script>
   <script src="src/endless/events.js"></script>
   <script src="src/endless/eventManager.js"></script>
   <script src="src/endless/endlessGame.js"></script>
@@ -1579,6 +1657,7 @@
   <script src="src/endless/protocolArchive.js"></script>
   <script src="src/endless/environmentManager.js"></script>
   <script src="src/endless/environmentArchive.js"></script>
+  <script src="src/endless/mapUI.js"></script>
   <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>

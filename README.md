@@ -84,7 +84,13 @@ logic-color-game/
 │   ├ environments.js       Research Environment6種の定義データ(id/name/description/effects)
 │   ├ environmentManager.js RUN開始時に選ぶEnvironmentの状態管理＋Detection画面の描画(3ファイル構成の都合上、状態とUIを1ファイルに統合)
 │   ├ environmentArchive.js 発見済み/未発見Environment一覧画面
-│   └ endless.js         RUN全体の統括（画面遷移・スコア計算・アップグレード/Event/Boss/Protocol/Environment反映）
+│   ├ nodeTypes.js       Map Node8種の定義データ(Map Generation System。Elite変種は後述puzzleModifier.jsへ移行)
+│   ├ puzzleTier.js      Depth→盤面サイズ/疎密度の4段階Tier定義(Puzzle Evolution System。map.jsの後継)
+│   ├ puzzleModifier.js  Modifier5種の定義データ(Puzzle Evolution System)
+│   ├ difficultyManager.js Difficulty計算(Depth+Protocol+Environment+Node)の一元化(Puzzle Evolution System)
+│   ├ mapGenerator.js    Depth別Node分岐候補の生成(Protocol/Environment/Modifier連動込み)(Map Generation System→Puzzle Evolution SystemでModifier付与を追加)
+│   ├ mapUI.js           Map画面（分岐候補の描画・Oracle情報表示）(Map Generation System)
+│   └ endless.js         RUN全体の統括（画面遷移・スコア計算・アップグレード/Event/Boss/Protocol/Environment/Map/Puzzle Evolution反映）
 ├ data/
 │ ├ puzzles.json      パズル本体（id, size, rowHints, columnHints, answer, parSeconds,
 │ │                    generatedDifficulty, generatorStats, seed）
@@ -99,7 +105,7 @@ logic-color-game/
 └ README.md
 ```
 
-`index.html` は `<script>` タグを直接並べる方式（ESモジュール不使用）で `src/*.js` を読み込む。理由は `file://` で開いた場合でもESモジュールのCORS制限を受けずに動作させるため。各ファイルは `window.LogicColor` 名前空間にクラス/関数を登録することでファイル間の依存を解決している。読み込み順は `board→solver→difficulty→seed→generator→puzzleManager→score→progress→stage→tutorial→game→theme→animation→sound→debug→endless/map→endless/endlessSave→endless/upgrades→endless/rareUpgrades→endless/upgradeManager→endless/protocols→endless/protocolSignals→endless/protocolSynergy→endless/protocolManager→endless/protocolUnlock→endless/protocolFragment→endless/environments→endless/boss→endless/events→endless/eventManager→endless/endlessGame→endless/endlessResult→endless/researchLab→endless/protocolSelect→endless/protocolSignal→endless/protocolArchive→endless/environmentManager→endless/environmentArchive→endless/endless→ui→main` （依存する側を後に置く）。`theme.js`/`animation.js`/`sound.js`/`debug.js`はゲームロジック側のモジュールに依存しない独立モジュールで、`ui.js`/`main.js`が消費する。`src/endless/`配下は`board`/`game`/`generator`/`puzzleManager`/`score`（既存モジュール）を利用するが、既存モジュール側からは`src/endless/`への依存は一切無い。
+`index.html` は `<script>` タグを直接並べる方式（ESモジュール不使用）で `src/*.js` を読み込む。理由は `file://` で開いた場合でもESモジュールのCORS制限を受けずに動作させるため。各ファイルは `window.LogicColor` 名前空間にクラス/関数を登録することでファイル間の依存を解決している。読み込み順は `board→solver→difficulty→seed→generator→puzzleManager→score→progress→stage→tutorial→game→theme→animation→sound→debug→endless/map→endless/endlessSave→endless/upgrades→endless/rareUpgrades→endless/upgradeManager→endless/protocols→endless/protocolSignals→endless/protocolSynergy→endless/protocolManager→endless/protocolUnlock→endless/protocolFragment→endless/environments→endless/nodeTypes→endless/puzzleTier→endless/puzzleModifier→endless/difficultyManager→endless/boss→endless/mapGenerator→endless/events→endless/eventManager→endless/endlessGame→endless/endlessResult→endless/researchLab→endless/protocolSelect→endless/protocolSignal→endless/protocolArchive→endless/environmentManager→endless/environmentArchive→endless/mapUI→endless/endless→ui→main` （依存する側を後に置く）。`theme.js`/`animation.js`/`sound.js`/`debug.js`はゲームロジック側のモジュールに依存しない独立モジュールで、`ui.js`/`main.js`が消費する。`src/endless/`配下は`board`/`game`/`generator`/`puzzleManager`/`score`（既存モジュール）を利用するが、既存モジュール側からは`src/endless/`への依存は一切無い。
 
 ## ゲームルール仕様
 
@@ -1180,3 +1186,168 @@ jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上�
 - Environment×Protocolのシナジー（特定の組み合わせで追加ボーナス）は今回実装していない。Protocol Synergy（`protocolSynergy.js`）と同じ仕組みを転用しやすい設計にはしてある
 - Blue Spectrumの「BLUEの多い構成に偏る」は、generator.js自体を変更せず既存のリトライ生成から事後選抜する方式で実現した。既存のmaxAttempts=5の枠内で行っているため生成速度への影響は小さいが、より強いバイアスをかけたい場合は候補数を増やす調整の余地がある
 - Unstable Systemが選んだ結果（`resolvedId`）はHUDに表示されるのみで、Environment Archiveでは「Unstable Systemを選んだ」という記録と「実際に解決したEnvironment」の両方がそれぞれ独立に発見済みとして記録される。この挙動は意図的（運が良ければ1回のUnstable選択で2つ発見できる）だが、仕様として明記されていなかったため実装時の判断である旨をここに記載する
+
+---
+
+# Map Generation System Phase1追加（このセクションは今回の変更点のまとめ）
+
+ENDLESS RESEARCHの進行を「Depthごとに自動でPuzzleが始まる一本道」から、「毎回2〜3個のMap Node候補から1つを選んで進む」ローグライト型に変更した。**既存のProtocol Phase A〜C・Research Environment・Upgrade（Research Lab）・Event Nodeの内部ロジック（効果適用・選択UI・解放条件・効果計算式）は一切変更していない。** 変更したのは「いつ・どうやってそれらが呼ばれるか」という進行制御の部分のみで、各サブシステム自体はそのまま新しい入口（Map Node選択）から呼ばれるようになった。
+
+## 追加したファイル
+
+要求仕様の3ファイル構成（`mapGenerator.js`/`nodeTypes.js`/`mapUI.js`）に従い、Protocol Signal/Research Lab等と同じ「データ（nodeTypes.js）＋生成ロジック（mapGenerator.js、状態を持たない）＋画面描画（mapUI.js）」の役割分担にした。
+
+**新規追加**（`src/endless/`）:
+- `nodeTypes.js` — Map Node 8種（Puzzle/Event/Research Lab/Elite/Recovery/Protocol Signal/Unknown/Boss）と、Elite専用の特殊条件3種（Time Pressure/Hidden Signal/Perfect Trial）の定義データ
+- `mapGenerator.js` — 次の1歩の分岐候補（既定でCHOICE_COUNT=3）を生成する。Boss出現Depth（`boss.js`のBOSS_DEPTHS）では分岐せずBoss Nodeのみを返す。Research Lab（3Depthごと）・Protocol Signal（5Depthごと）は既存の出現周期（`researchLab.js`のAPPEAR_EVERY_DEPTH=3・`protocolSignal.js`のSIGNAL_EVERY_DEPTH=5と同じ値をこのファイル内に複製）に合わせて必ず候補の1枠として提示する。残り枠はPuzzle/Event/Elite/Recovery/UnknownをDepth Tier別の重みで抽選し、Protocol（Explorer/Overclock/Chaos）・Environment（Signal Noise）の所持状況に応じて特定Nodeの抽選重みを補正する（後述）
+- `mapUI.js` — Map画面（`#screen-map`）のカード描画。Oracle Protocol所持時、Unknown Nodeの実際の中身・Elite Nodeの変種名を選ぶ前から表示する
+
+**部分修正**:
+- `src/endless/endless.js` — 進行制御を全面的に作り替えた。旧`_advance()`（Depthを進めてPuzzleを直接開始）を`_showMapChoices()`（次のDepthの分岐候補を生成しMap画面を表示）と`_handleMapNodeSelected(node)`（Depth確定＋Fragment/Unlock判定、旧`_advance()`前半相当）＋`_enterNode(node)`（選ばれたNode種類ごとの実処理への振り分け）に分割。`_afterRoundEnd()`から旧来のResearch Lab/Protocol Signal/Event Nodeの自動判定カスケードを削除し、単純に`_showMapChoices()`を呼ぶだけにした（各判定はmapGenerator.jsの重み付き抽選に統合されたため）。Research Lab選択後・Protocol Signal決定後・Event適用後は、いずれも（旧: 次のPuzzleへ直接進んでいたのに対し）次のMap選択画面へ戻るよう統一した
+- `src/endless/endlessGame.js` — `start(depth, eliteVariant)`にElite変種を渡せるよう拡張。Time Pressureは制限時間倍率を縮小、Hidden SignalはHINTボタンを無効化、Perfect TrialはHINT使用時にその場で失敗（タイムアウトと同じ`onTimeout`経路）として扱う。`_buildStats()`に`isElite`/`eliteVariantId`を追加
+- `src/endless/eventManager.js` / `src/endless/endlessSave.js`は変更なし（Event Nodeの効果適用ロジック・保存形式はPhase3のまま）
+
+## Node種類
+
+| Node | risk | reward | 補足 |
+| --- | --- | --- | --- |
+| Puzzle | LOW | スコア | 通常の論理パズル |
+| Event | MEDIUM | 良し悪し不確定 | 既存Event Node5種のいずれかが即座に発生（`events.js`は無変更） |
+| Research Lab | NONE | Upgrade獲得 | 既存の3択Upgrade選択（`researchLab.js`は無変更） |
+| Elite | HIGH | 高スコア+Fragment | 下記3変種のいずれか1つが付与された高難度Puzzle |
+| Recovery | NONE | ライフ回復 | パズルを介さず即座にライフ+1 |
+| Protocol Signal | NONE | Protocol強化 | 既存のMerge/Replace/Ignore（`protocolSignal.js`は無変更、Phase Cの解放済みフィルタも維持） |
+| Unknown | UNKNOWN | ??? | 生成時点で他4種（Puzzle/Event/Elite/Recovery）のいずれかへ既に内部確定済み。選択時に明かされる |
+| Boss | VERY_HIGH | 大量スコア+Fragment | 既存のBoss Puzzle（`boss.js`は無変更）。出現Depthでは唯一の選択肢になる |
+
+各Nodeインスタンスは生成時に`risk`/`reward`/`description`を個別に持つ（要求仕様通り）。
+
+## Elite（特殊Puzzle条件）
+
+| 変種 | 効果 |
+| --- | --- |
+| Time Pressure | 制限時間が半分になる（`timeLimitMultiplierScale: 0.5`） |
+| Hidden Signal | HINTボタンが無効化される |
+| Perfect Trial | HINTを1回でも使うとその場で失敗（タイムアップと同じ扱い） |
+
+Elite撃破時は獲得スコア×1.5・Protocol Fragment+2のボーナスが付く（Boss同様、`_handleRoundClear()`内で処理）。
+
+## Unknown Node
+
+「内容ランダム」を、選択の瞬間ではなく**生成の瞬間**にあらかじめ1つ確定させる設計にした（Puzzle/Event/Elite/Recoveryのいずれか）。これにより、Oracle Protocol所持時にMap画面上で「Unknownの正体」を事前に見せる、という後述のProtocol連動が自然に実現できる。選択されると、内部で確定していた種類として即座に処理される（トーストで「UNKNOWN NODE → ○○」と明かされる）。
+
+## Depth別生成
+
+`mapGenerator.js`のNode抽選重みはDepth 1-5 / 6-15 / 16+の3段階（Tier）で変化し、深くなるほどElite/Unknownの出現比率が上がる（詳細はコード内の`WEIGHT_TIERS`参照）。
+
+## Protocol連動
+
+| Protocol | 効果 |
+| --- | --- |
+| Explorer | Recovery Nodeの抽選重みが2.5倍（安全Node増加） |
+| Overclock | Elite Nodeの抽選重みが2.5倍（Elite増加） |
+| Chaos | Unknown Nodeの抽選重みが2.5倍（Unknown増加） |
+| Oracle | Map画面でUnknownの実際の中身・Eliteの変種名を選ぶ前から表示する（Node情報表示） |
+
+Environment側もSignal Noise（Event発生率+30%）がEvent Nodeの抽選重みに引き継がれている（旧`eventManager.shouldTrigger(rateMultiplier)`が担っていた確率補正を、Node出現しやすさの補正として移植した）。
+
+## UI
+
+Map画面（`#screen-map`）に2〜3枚のNodeカードを縦に並べる。各カードはアイコン・種類名・risk（色分け表示）・reward・descriptionを表示し、タップで即座にそのNodeへ入る（researchLab.js/protocolSelect.jsと同じ「選択式カードUI」パターンを踏襲）。Boss出現Depthではカードが1枚だけになる。
+
+## テスト
+
+jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施。これまでのPhaseと同じフック手法で本番の`EndlessMode`インスタンスを直接検証した）で以下を検証し、mapGenerator.js単体の統計テスト10項目＋統合テスト35項目、全てPASSした:
+
+- [x] 分岐生成（Depth1で3枚の候補が生成されること、Depth10（Boss出現Depth）では候補が1枚だけになり種類がbossであること、Depth3/5/15でResearch Lab/Protocol Signalが必ず候補に含まれることを確認）
+- [x] Node選択（Puzzle/Event/Research Lab/Protocol Signal/Recoveryそれぞれを選んだ際に正しい画面遷移・Depth進行・付随処理（ライフ回復量、Event発生カウント等）が起きることを確認。Research Lab/Protocol Signal選択後は次のMap選択画面へ戻ることも確認）
+- [x] Elite動作（Time Pressureで制限時間が通常より短くなること、Hidden SignalでHINTボタンを押してもHintが発動しないこと、Perfect TrialでHINTを使うとその場でライフを失う（即失敗扱い）ことをそれぞれ実際のround/game経路で確認）
+- [x] Unknown動作（生成時点で確定した`resolvedNode`の種類として実際に処理され、内部カウンタ（例: Event選択時のeventCountThisRun）が正しく反映されることを確認）
+- [x] Protocol効果反映（Oracle所持時にMap画面のカード説明文へElite変種名が表示されること、Explorer所持時にRecovery Nodeの出現回数が有意に増えること（300回試行の統計比較）を確認。Overclock/Chaos/Signal Noiseの重み補正はmapGenerator.js単体の統計テストで個別に確認済み）
+- [x] （追加確認）RUN中断で既存のProtocol/Environment状態のリセットが引き続き正しく動作すること、Endless以外（通常STAGE/TUTORIAL）のフローに影響が無いことも確認済み
+
+## 今後の拡張余地
+
+- Phase1では「次の1歩」を毎回2〜3枚の候補から選ぶ方式に留めた。Slay the Spireのような複数層先まで見える分岐グラフ・ルート可視化は行っていない（`this.depth`という単一のカウンタで進行管理する既存アーキテクチャとの親和性を優先した設計判断）。Phase2でマップ全体の可視化に発展させる場合、`mapGenerator.js`の生成ロジック自体は概ね流用できる設計にしてある
+- Elite/Unknown/RecoveryといったNode種類自体をProtocol Archiveのようにコレクション化・実績化する拡張は今回行っていない
+- Node種類ごとのrisk/reward表示は現状「LOW/MEDIUM/HIGH」等の定性的なラベルのみ。実際の数値（期待スコア等）を事前提示するような、より情報量の多いUIへの拡張余地がある
+- Boss出現Depthでは分岐が発生しない仕様のままにした。将来的に「Boss前に消耗を抑えるルートを選べる」等、Boss到達前の数手を戦略的に選べるようにする拡張も考えられる
+
+---
+
+# Puzzle Evolution System追加（このセクションは今回の変更点のまとめ）
+
+ENDLESS RESEARCHの問題を「Depthに応じて内容そのものが進化し、毎回違う難易度になる」ようにする仕組みを追加した。**既存のENDLESS基本フロー・Protocol Phase A〜C・Research Environment・Map Generation System・Upgrade（Research Lab）・Event Node・Boss Puzzleの内部ロジックは一切変更していない。** 変更したのは「Depthに応じてどんな盤面サイズ・疎密度で問題を生成するか」（旧map.jsの3段階Tier→新puzzleTier.jsの4段階Tier）と、「Elite Node（Map Generation Systemで既存）にどんな特殊条件を付与するか」（旧nodeTypes.jsの単一ELITE_VARIANTS→新puzzleModifier.jsの複数Modifier）の2点。
+
+## 重要な技術的判断: Tier4も11×11ではなく9×9のまま
+
+要求仕様ではTier4（Depth50+）に11×11を想定していたが、実装前にNode.js上で`generatePuzzleWithRatio(11, ratio, ...)`の生成時間を実測したところ、**11×11では安全な疎密度が見つからなかった**（疎にすると品質チェックのnotTrivialに落ちて再生成が必要になり、密にすると唯一解の探索が長時間化し20秒のタイムアウトに達する試行が頻発した。0.90〜0.92は5試行中4〜5敗、0.87〜0.90は20秒でタイムアウト）。8×8で疎密度0.78が「平均6.4秒・最大17.5秒」で不採用になった過去の判断（boss.js）と同じ現象がサイズ増加でさらに悪化した形。ユーザーに実測結果を提示し、**Tier4もTier3と同じ9×9のまま、疎密度をわずかに下げて（密にして）難易度差を表現する**方針の承認を得た（9×9 ratio0.87でTier3、ratio0.865でTier4。どちらも実測で平均400ms未満・最大1.4秒未満と安全）。11×11以上への対応はgenerator.js自体の生成アルゴリズム改良が必要になるため、今後の拡張課題とした。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `puzzleTier.js` — Depth→盤面サイズ/疎密度の4段階Tier定義。Tier1（Depth1-10、5×5/7×7）・Tier2（Depth11-25、7×7 Advanced）はmap.jsの既存DEPTH_TIERSと完全に同じ値を維持し、Tier3（Depth26-50、9×9）・Tier4（Depth50+、9×9・Tier3よりやや密）を新設。tierOffsetによるクランプ方式もmap.jsと同じ設計を踏襲
+- `puzzleModifier.js` — Modifier5種（Mirror Logic/Hidden Color/Inverted Signal/Time Distortion/Noise Data）の定義データ。Elite Nodeは2個（重複無し）、Tier3以降の通常Puzzle Nodeは30%の確率で1個だけ付与される
+- `difficultyManager.js` — 「Difficulty計算: Depth + Protocol + Environment + Node」を一元化。旧endlessGame.js内に直接書かれていたProtocol/Environmentのtier offset合算処理を置き換え、そこに「Node」（Elite Nodeは目標Tierを+1する＝Elite難易度上昇の実現）の項を追加した
+
+**部分修正**:
+- `src/endless/nodeTypes.js` — 旧`ELITE_VARIANTS`（3種、単一付与）を削除。Elite Nodeの特殊条件は`puzzleModifier.js`の5種（複数付与対応）に完全に置き換えた
+- `src/endless/mapGenerator.js` — `buildNode('elite', depth)`がpuzzleModifier.jsから2個のModifierを付与するよう変更。`buildNode('puzzle', depth)`もTier3以降で確率的に1個付与するようになった
+- `src/endless/mapUI.js` — Oracle Protocol所持時の情報表示を、旧`node.eliteVariant`単体から`node.modifiers`配列（複数）に対応させた
+- `src/endless/endlessGame.js` — `start(depth, node)`のシグネチャを「Elite変種」単体から「選ばれたMap Node全体」に変更。盤面サイズ・疎密度の決定を`EndlessMap.getDifficultyForDepth()`から`DifficultyManager.getPuzzleConfig()`へ切り替え。Modifierの効果（後述）を反映する処理を追加
+- `src/ui.js` — `buildBoard(game, options)`に`hiddenColor`/`invertColorOrder`オプションを追加（Hidden Color/Inverted Signal Modifierの表示反映用。省略時は従来と完全に同じ表示になるため、通常ステージ側の呼び出しは無変更のまま動作する）
+- `src/endless/endlessSave.js` — `logicColor.endless.v1`へ`puzzleHistory`（直近100件のPuzzle Archive）を追加
+- `src/endless/endless.js` — `_handleRoundClear()`/`_handleRoundTimeout()`後にPuzzle Archiveへの記録を追加。Elite撃破の高スコア倍率もここに実装（Map Generation System導入時点では未実装だった具体的な数値を、このセクションで確定させた）
+
+## Tier
+
+| Tier | Depth | サイズ | 疎密度 | 備考 |
+| --- | --- | --- | --- | --- |
+| Tier1 | 1-5 / 6-10 | 5×5 / 7×7 | 0.60 / 0.78 | map.jsの既存値そのまま |
+| Tier2 | 11-25 | 7×7 | 0.75 | map.jsの既存値そのまま（Advanced） |
+| Tier3 | 26-50 | 9×9 | 0.87 | 新規（実測: 平均166ms・最大594ms） |
+| Tier4 | 51+ | 9×9 | 0.865 | 新規（11×11は不採用。実測: 平均399ms・最大1362ms） |
+
+## Modifier
+
+| 名前 | 効果 | 実現方法 |
+| --- | --- | --- |
+| Mirror Logic | マスタップの色巡回順が逆になる | `puzzle.allowedColors`を反転するだけ（game.jsが既にこの配列の順序をそのまま使う仕様のため、board.js/game.js自体は無変更） |
+| Hidden Color | ランダムな1色のヒント数値が「?」表示になる | `ui.js`の`_renderHintChips()`にhiddenColorオプションを追加 |
+| Inverted Signal | ヒントチップの色の並び順が反転表示される | 同、invertColorOrderオプション（`storeMap[color]`は色キー保持のためrenderHintStatus()の達成判定には無影響） |
+| Time Distortion | 制限時間が×0.75、残り時間表示の更新が3秒おきに粗くなる | 制限時間倍率への乗算＋`_onTimerTick()`での表示間引き（内部の残り秒数自体は毎秒正しく減る） |
+| Noise Data | UNDOが使用できない | `handleUndo()`の先頭でブロック |
+
+## Elite
+
+Elite Nodeは常にModifier2個（重複無し）を組み合わせて持つ。加えてDifficultyManager経由で目標Tierが常に+1される（例: Depth5でも通常Puzzleなら5×5のところ、EliteなればTier+1で7×7になる）。撃破時はスコア×1.5・Protocol Fragment+2のボーナスも得られる（`ELITE_SCORE_MULTIPLIER`/`ELITE_FRAGMENT_BONUS`）。
+
+## Boss
+
+Depth10/25/50は既存の`boss.js`をそのまま使用（8×8・疎密度0.82固定、Tierシステム対象外）。Puzzle Evolution System導入前後で挙動は一切変わらない。
+
+## Difficulty
+
+`difficultyManager.js`の`computeTierOffset()`が「Depth基準Tier + Protocol（`protocolManager.getDifficultyTierOffset()`） + Environment（`environmentManager.getDifficultyTierOffset()`） + Node（Elite Nodeのみ+1）」を合算し、`puzzleTier.js`の該当Tierへクランプする。全て独立して加算されるため、例えばOverclock Protocol（+1）とDeep Research Environment（+1）とElite Node（+1）を同時に満たせば合計+3される。
+
+## Archive
+
+`endlessSave.js`の`puzzleHistory`に、Puzzle/Elite/Boss挑戦を都度（クリア・タイムアップ問わず）記録する（`{depth, size, tier, cleared, isBoss, isElite, modifierIds, timestamp}`、直近100件、超過分は古い順に破棄）。Phase1時点では専用の閲覧画面は追加していない（データとしての保存のみ。今後の拡張余地参照）。
+
+## テスト
+
+jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施。これまでのPhaseと同じフック手法で本番の`EndlessMode`インスタンスを直接検証した）で、puzzleTier.js/puzzleModifier.js/difficultyManager.js単体の計算テスト7項目＋統合テスト29項目、全てPASSした:
+
+- [x] Tier変化（Depth1/6/26/51それぞれで実際に生成される盤面のマス数が25/49/81/81（Tier3-4はサイズ同一・疎密度差のみ）になること、`endlessGame.js`側の`currentTier`が正しく1/1/3/4になることを確認）
+- [x] Modifier付与（Elite Nodeが常に2個の重複しないModifierを持つこと、Tier1-2の通常Puzzleは0個のままなこと、Tier3のPuzzleが200回試行中一部でModifierを獲得すること（0件でも全件でもないこと）を確認。Mirror Logic/Hidden Color/Inverted Signal/Time Distortion/Noise Dataそれぞれの効果が実際のround/ui経路で反映されることも個別に確認）
+- [x] Elite難易度上昇（同一Depthで通常Puzzle=5×5に対しElite=7×7（Tier+1）になることを確認）
+- [x] Boss動作（Depth10で盤面が引き続き8×8になること、`isBoss`が正しくtrueになること、Bossでは`currentTier`がnull（Tierシステム対象外）のままなことを確認）
+- [x] Protocol連動（Overclock Protocol所持時、Depth1でも7×7になる＝DifficultyManager経由でTier+1が正しく反映されることを確認）
+- [x] （追加確認）Puzzle Archiveへの履歴記録、RUN中断後の通常ステージ/TUTORIALフローへの無影響も確認済み
+
+## 今後の拡張余地
+
+- Puzzle Archiveは保存のみでUI（専用の閲覧画面）を追加していない。Protocol Archive/Environment Archiveと同じパターンで`puzzleArchive.js`的な画面を追加する拡張が考えられる
+- 11×11以上のサイズ対応には、generator.jsの生成アルゴリズム自体の改良（現在の「ランダム完成盤面→掘り出し」方式以外のアプローチ、あるいはWeb Worker化による非同期生成でタイムアウト制約を緩和する等）が必要
+- Tier3以降のPuzzle Modifier付与確率（30%）や、Elite撃破ボーナス（スコア×1.5・Fragment+2）は初期バランスであり、実プレイでの調整余地が大きい
+- Modifier同士の相性・シナジー（Protocol Synergyのような組み合わせボーナス）は今回実装していない
