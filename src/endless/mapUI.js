@@ -32,15 +32,19 @@
      * @param {Object} [deps.identityManager] STEP29: Analyst/ExplorerのUnknown Node解析確率ボーナスに使う（省略可）
      * @param {Object} [deps.environmentModifierManager] STEP30-2: 現在のWorldEnvironmentの
      *   Unknown Node解析確率ボーナス・ENVIRONMENT ANALYSISパネル表示に使う（省略可）
+     * @param {Object} [deps.environmentEventManager] STEP30-6: GRID OPTIMIZATION Eventの
+     *   Unknown Node解析確率ボーナスに使う（省略可）
      */
-    constructor({ ui, protocolManager, metaProgression, identityManager, environmentModifierManager }) {
+    constructor({ ui, protocolManager, metaProgression, identityManager, environmentModifierManager, environmentEventManager }) {
       this.ui = ui;
       this.protocolManager = protocolManager;
       this.metaProgression = metaProgression || null;
       this.identityManager = identityManager || null;
       this.environmentModifierManager = environmentModifierManager || null;
+      this.environmentEventManager = environmentEventManager || null;
       this.onSelect = null; // (node) => {}
       this.choices = [];
+      this._forceReveal = false; // STEP30-6: SYSTEM SCAN Eventによる、次のshow()1回限りの強制Oracle風表示
 
       this.el = {
         depthLabel: document.getElementById('mapDepthLabel'),
@@ -80,12 +84,18 @@
       this.el.envAnalysisPanel.classList.remove('hidden');
     }
 
+    /** STEP30-6: SYSTEM SCAN Eventの「次Node情報表示」。次のshow()1回だけOracle相当の表示を強制する */
+    forceRevealNext() {
+      this._forceReveal = true;
+    }
+
     _render() {
       const container = this.el.cards;
       if (!container) return;
       container.innerHTML = '';
 
-      const oracleActive = !!(this.protocolManager && this.protocolManager.isActive('oracle'));
+      const oracleActive = !!(this.protocolManager && this.protocolManager.isActive('oracle')) || this._forceReveal;
+      this._forceReveal = false;
 
       this.choices.forEach(node => {
         const display = this._displayInfo(node, oracleActive);
@@ -142,7 +152,8 @@
 
       const revealChance = (this.metaProgression ? this.metaProgression.getUnknownRevealChance() : 0)
         + (this.identityManager ? this.identityManager.getUnknownRevealChanceBonus() : 0) // STEP29
-        + (this.environmentModifierManager ? this.environmentModifierManager.getModifierValue('unknownRevealChance') : 0); // STEP30-2
+        + (this.environmentModifierManager ? this.environmentModifierManager.getModifierValue('unknownRevealChance') : 0) // STEP30-2
+        + (this.environmentEventManager ? this.environmentEventManager.getEventUnknownRevealChanceBonus() : 0); // STEP30-6
       const reveal = node.resolvedNode && (oracleActive || Math.random() < revealChance);
       card.innerHTML = `
         <span class="ai-signal-label">DEEP UNKNOWN SIGNAL</span>

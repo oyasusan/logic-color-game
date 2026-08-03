@@ -54,7 +54,9 @@
     IdentityManager, IdentitySelect, ResearchProfile, AIFeedback, Achievements,
     WorldEnvironmentManager, EnvironmentModifierManager,
     EnvironmentScan, TransitionManager, EnvironmentHUD, EnvironmentRenderer, WorldEnvironmentArchive,
-    WorldStabilityManager, WorldMutationManager, MutationRenderer
+    WorldStabilityManager, WorldMutationManager, MutationRenderer,
+    EnvironmentEventManager, EnvironmentEventPanel, EnvironmentEventArchive,
+    HiddenEnvironmentManager, HiddenEnvironmentRenderer, HiddenEnvironmentArchive, HiddenEnvironmentData
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -117,6 +119,20 @@
       this.mutationRenderer = new MutationRenderer({ ui });
       this.consecutiveUnknownAnalysesThisRun = 0; // 追加Trigger「Unknown Node連続解析」判定用
 
+      // ---- STEP30-6: Environment Event System ----
+      this.environmentEventManager = new EnvironmentEventManager({ save: this.save, worldEnvironmentManager: this.worldEnvironmentManager });
+      this.environmentEventPanel = new EnvironmentEventPanel();
+      this.environmentEventArchive = new EnvironmentEventArchive({ ui, save: this.save });
+      this.environmentEventArchive.onBack = () => this.showModeSelect();
+
+      // ---- STEP30-7: Hidden Environment System ----
+      this.hiddenEnvironmentManager = new HiddenEnvironmentManager({ save: this.save });
+      this.hiddenEnvironmentRenderer = new HiddenEnvironmentRenderer();
+      this.hiddenEnvironmentArchive = new HiddenEnvironmentArchive({ ui, save: this.save, hiddenEnvironmentManager: this.hiddenEnvironmentManager });
+      this.hiddenEnvironmentArchive.onBack = () => this.showModeSelect();
+      this.unknownSuccessStreakThisRun = 0; // VOID MEMORYの解放条件（Unknown Node成功5連続）判定用
+      this.researchLabVisitsThisRun = 0;    // GENESIS LABの解放条件（生涯Research Lab到達10回）判定用
+
       // ---- STEP30-3: Environment Visual / HUD Evolution ----
       this.environmentScan = new EnvironmentScan({ ui });
       this.transitionManager = new TransitionManager({ ui });
@@ -138,7 +154,9 @@
         protocolManager: this.protocolManager,
         environmentManager: this.environmentManager,
         environmentModifierManager: this.environmentModifierManager,
-        worldMutationManager: this.worldMutationManager
+        worldMutationManager: this.worldMutationManager,
+        environmentEventManager: this.environmentEventManager,
+        hiddenEnvironmentManager: this.hiddenEnvironmentManager
       });
       this.result = new EndlessResultScreen({
         onRetry: () => this._showNeuralLab(true),
@@ -173,7 +191,8 @@
       this.environmentArchive = new EnvironmentArchive({ ui, save: this.save });
       this.mapUI = new MapUI({
         ui, protocolManager: this.protocolManager, metaProgression: this.metaProgression,
-        identityManager: this.identityManager, environmentModifierManager: this.environmentModifierManager
+        identityManager: this.identityManager, environmentModifierManager: this.environmentModifierManager,
+        environmentEventManager: this.environmentEventManager
       });
       this.mapUI.onSelect = node => this._handleMapNodeSelected(node);
       this.researchMap = new ResearchMapScreen({ ui });
@@ -237,6 +256,8 @@
         researchProfileBtn: document.getElementById('researchProfileModeSelectBtn'),
         identitySelectBackBtn: document.getElementById('identitySelectBackBtn'),
         worldEnvArchiveBtn: document.getElementById('worldEnvArchiveModeSelectBtn'),
+        envEventArchiveBtn: document.getElementById('envEventArchiveModeSelectBtn'),
+        hiddenArchiveBtn: document.getElementById('hiddenArchiveModeSelectBtn'),
         performanceModeBtn: document.getElementById('performanceModeBtn'),
         endlessBestDepth: document.getElementById('endlessBestDepth'),
         endlessBestScore: document.getElementById('endlessBestScore'),
@@ -304,6 +325,12 @@
       }
       if (this.el.worldEnvArchiveBtn) {
         this.el.worldEnvArchiveBtn.addEventListener('click', () => this.worldEnvironmentArchive.show());
+      }
+      if (this.el.envEventArchiveBtn) {
+        this.el.envEventArchiveBtn.addEventListener('click', () => this.environmentEventArchive.show());
+      }
+      if (this.el.hiddenArchiveBtn) {
+        this.el.hiddenArchiveBtn.addEventListener('click', () => this.hiddenEnvironmentArchive.show());
       }
       if (this.el.performanceModeBtn) {
         this.el.performanceModeBtn.addEventListener('click', () => this._cyclePerformanceMode());
@@ -496,6 +523,13 @@
       // STEP30-5: World Mutationも同様にRUN開始時は必ず解除する
       this.worldMutationManager.reset();
       this.consecutiveUnknownAnalysesThisRun = 0;
+      // STEP30-6: Environment Eventも同様にRUN開始時は必ず解除する
+      this.environmentEventManager.reset();
+      // STEP30-7: Hidden Environmentも同様にRUN開始時は必ず解除する
+      this.hiddenEnvironmentManager.reset();
+      this.hiddenEnvironmentRenderer.hideHud();
+      this.unknownSuccessStreakThisRun = 0;
+      this.researchLabVisitsThisRun = 0;
 
       // Research Environment: 選んだ（Unstable Systemなら実際に解決された分も）Environmentを発見済みとして記録する
       if (this.environmentManager.getSelectedId()) {
@@ -631,9 +665,34 @@
       // STEP28: Deep Scan（researchTree.js）の所持レベルに応じて分岐候補数が増える
       // STEP29: ExplorerのMap Scan（primaryBonus/perk）もここに合算される
       const extraChoices = this.metaProgression.getExtraMapChoices() + this.identityManager.getExtraMapChoices();
-      const choices = MapGenerator.generateChoices(
+      let choices = MapGenerator.generateChoices(
         nextDepth, this.protocolManager, this.environmentManager, extraChoices, this.environmentModifierManager, this.worldMutationManager
       );
+      // STEP30-6: ROOT CONNECTION Eventの「Research Lab生成」。次のMap候補に必ず1つ
+      // Research Labを含める（既にBoss単独Nodeや周期出現で含まれている場合は追加しない）
+      if (this._forceLabOnNextMap) {
+        this._forceLabOnNextMap = false;
+        if (!choices.some(n => n.type === 'research_lab') && choices.length > 0 && choices[0].type !== 'boss') {
+          choices = choices.slice();
+          choices[0] = MapGenerator.buildNode('research_lab', nextDepth);
+        }
+      }
+      // STEP30-7: Hidden Environment入場中は対応するNode種類の候補を優先的に押し込む
+      // （例: GENESIS LABの「Research Lab大量生成」、VOID MEMORYのUnknown増加）。
+      // 既存のmapGenerator生成アルゴリズム自体は変更せず、戻り値を事後的に差し替えるだけに留めている
+      const currentHidden = this.hiddenEnvironmentManager.getCurrentHiddenEnvironment();
+      if (currentHidden && choices[0] && choices[0].type !== 'boss') {
+        const boostedType = ['research_lab', 'unknown', 'elite'].find(
+          t => this.hiddenEnvironmentManager.getHiddenNodeWeightMultiplier(t) > 1
+        );
+        if (boostedType) {
+          choices = choices.slice();
+          const slots = boostedType === 'research_lab' ? 2 : 1;
+          for (let i = 0; i < Math.min(slots, choices.length); i++) {
+            if (choices[i].type !== boostedType) choices[i] = MapGenerator.buildNode(boostedType, nextDepth);
+          }
+        }
+      }
       this.mapUI.show(nextDepth, choices);
     }
 
@@ -698,7 +757,249 @@
      */
     _afterLayerEnvironmentReady(node) {
       this.worldMutationManager.tickDuration({ run: this.save.getTotalRuns() + 1, layer: this.depth });
-      this._checkMutationTrigger({}, () => this._enterNode(node));
+      this._checkMutationTrigger({}, () => {
+        // STEP30-6: Environment Event System。Mutation判定が完了した後（要求仕様セクション3の
+        // 「Layer開始時→Environment取得→Event抽選→条件確認→発生」フロー）に、前Layerで
+        // Active化していたEventの持続ターンを消費してからEvent抽選を行う
+        this.environmentEventManager.tickDuration();
+        this._checkEnvironmentEventTrigger(() => {
+          // STEP30-7: Hidden Environment System。Environment Event判定が完了した後に、
+          // 前Layerで入場していたHidden Environmentの持続ターンを消費してから
+          // 出現条件判定→（低確率の）再訪抽選を行う
+          const wasInHidden = !!this.hiddenEnvironmentManager.getCurrentHiddenEnvironment();
+          this.hiddenEnvironmentManager.tickDuration();
+          if (wasInHidden && !this.hiddenEnvironmentManager.getCurrentHiddenEnvironment()) {
+            this.hiddenEnvironmentRenderer.hideHud();
+            this.ui.showToast('SECRET AREA CLOSED');
+          }
+          this._checkHiddenEnvironmentTrigger(() => this._enterNode(node));
+        });
+      });
+    }
+
+    /**
+     * STEP30-6: Environment Event Trigger判定（要求仕様セクション3）。発生率はNormal/
+     * World Mutation中/World Stability Criticalで変化する（environmentEventManager.js参照）。
+     * 何もトリガーされなければ即座に`onDone`を呼ぶ（既存フローを止めない）。
+     * Choice Event（Unknown Signal）はプレイヤーの選択を待ってから`onDone`を呼ぶ。
+     * @param {Function} [onDone]
+     */
+    _checkEnvironmentEventTrigger(onDone) {
+      const def = this.environmentEventManager.checkEventTrigger({
+        mutationActive: !!this.worldMutationManager.getActiveMutation(),
+        stabilityStatus: this.worldStabilityManager.getStatus()
+      });
+      if (!def) { if (onDone) onDone(); return; }
+
+      this.environmentEventManager.triggerEvent(def.id, { run: this.save.getTotalRuns() + 1, layer: this.depth });
+
+      if (def.choices) {
+        this.environmentEventPanel.showChoice(def, {
+          onYes: () => this._resolveEnvironmentEventChoice(def, 'yes', onDone),
+          onNo: () => this._resolveEnvironmentEventChoice(def, 'no', onDone)
+        });
+        return;
+      }
+
+      const message = this._applyEnvironmentEventEffect(def);
+      this._renderHud();
+      this.environmentEventPanel.show(def, message, () => {
+        // Instant系効果を持つEventはここで即座に終了する（Passive Modifier系は
+        // Activeのままにし、_handleRoundClear経由のtickDuration()で自然に終了させる）
+        if (G.EnvironmentEventData.INSTANT_EFFECT_TYPES.some(t => this.environmentEventManager.getInstantEffect(t))) {
+          this.environmentEventManager.resolveEvent();
+        }
+        if (onDone) onDone();
+      });
+    }
+
+    /** @returns {string} Result表示用の効果適用結果メッセージ（Instant系効果のみ即座に適用する） */
+    _applyEnvironmentEventEffect(def) {
+      const reveal = this.environmentEventManager.getInstantEffect('revealNextNode');
+      if (reveal) {
+        this.mapUI.forceRevealNext();
+        return 'Next node data will be revealed on the following scan.';
+      }
+
+      const route = this.environmentEventManager.getInstantEffect('revealRouteHistory');
+      if (route) {
+        const recent = this.visitedNodes.slice(-5).map(n => n.name).join(' → ');
+        return recent ? `Route: ${recent}` : 'No route history yet.';
+      }
+
+      const lab = this.environmentEventManager.getInstantEffect('forceLabSpawn');
+      if (lab) {
+        this._forceLabOnNextMap = true;
+        return 'A Research Lab will appear on the next map.';
+      }
+
+      const life = this.environmentEventManager.getInstantEffect('lifeRecoveryInstant');
+      if (life) {
+        const before = this.life;
+        this.life = Math.min(this.maxLife, this.life + life.value);
+        const recovered = this.life - before;
+        return recovered > 0 ? `Life +${recovered}` : 'Life is already full.';
+      }
+
+      const fragment = this.environmentEventManager.getInstantEffect('protocolFragmentInstant');
+      if (fragment) {
+        this._gainProtocolFragments(fragment.value);
+        return `Protocol Fragment +${fragment.value}`;
+      }
+
+      const data = this.environmentEventManager.getInstantEffect('researchDataInstant');
+      if (data) {
+        this.researchData += data.value;
+        return `Research Data +${data.value}`;
+      }
+
+      // Passive Modifier系（rewardMultiplier/researchDataMultiplier/protocolFragmentMultiplier/
+      // hintRevealBonus/puzzleDifficulty/rewardPredictionAccuracy/rareEventWeightBoost/
+      // unknownRevealChance）は即時適用するものが無く、以後のPuzzle/Node解決時に
+      // 各種getterを通じて自動的に反映される
+      return def.description;
+    }
+
+    /**
+     * STEP30-6: Choice Event（Unknown Signal）の選択確定。
+     * YES: Rare Protocol取得を試行 + Research Data大量獲得 + Stability -10（要求仕様セクション9/13）
+     * NO: 何も起きず安全に終了する
+     */
+    _resolveEnvironmentEventChoice(def, choiceId, onDone) {
+      const choice = def.choices.find(c => c.id === choiceId);
+      let message = 'SIGNAL IGNORED';
+      let rewardValue = 0;
+
+      if (choice && choiceId === 'yes') {
+        const dataEffect = choice.effects.find(e => e.type === 'researchDataInstant');
+        if (dataEffect) {
+          this.researchData += dataEffect.value;
+          rewardValue += dataEffect.value;
+        }
+
+        const rareProtocolMessage = this._grantRareProtocol();
+
+        const stabilityEffect = choice.effects.find(e => e.type === 'stabilityDelta');
+        if (stabilityEffect) {
+          this.worldStabilityManager.decreaseStability(Math.abs(stabilityEffect.value), { layer: this.depth, event: 'Unknown Signal Analyze' });
+          this._renderWorldEnvironmentBadge(this.worldEnvironmentManager.getCurrentEnvironment());
+          // STEP30-5: 追加Trigger「Special Event」（Unknown Signal解析時）。
+          // 発生してもEventの完了自体は待たせず、次のMutation Trigger判定機会（次のLayer移動）で反映される
+          this._checkMutationTrigger({ specialEventTriggered: true });
+        }
+
+        message = `${rareProtocolMessage} / Research Data +${dataEffect ? dataEffect.value : 0}`;
+      }
+
+      this.environmentEventManager.resolveEvent(choiceId, rewardValue);
+      this._renderHud();
+      this._renderProtocolBadge();
+
+      this.environmentEventPanel.show(def, message, onDone);
+    }
+
+    /** @returns {string} 未所持のProtocolをmergeで1つ付与する（Slot枠が無ければFragmentで代替する。要求仕様「Rare Protocol」の実装） */
+    _grantRareProtocol() {
+      const unlockedIds = this.save.getUnlockedProtocols();
+      const activeIds = this.protocolManager.getActiveDefs().map(d => d.id);
+      const candidateIds = unlockedIds.filter(id => activeIds.indexOf(id) === -1);
+      if (candidateIds.length === 0 || this.protocolManager.getActiveDefs().length >= 2) {
+        // 空きSlotが無い、または追加できるProtocolが無い場合はProtocol Fragmentで代替する
+        // （_applyBossShortcutの「代替報酬」と同じ設計判断）
+        this._gainProtocolFragments(8);
+        return 'No Protocol Slot available — Protocol Fragment +8 instead';
+      }
+      const pickedId = candidateIds[Math.floor(Math.random() * candidateIds.length)];
+      this.protocolManager.merge(pickedId);
+      this._recalculateMaxLife();
+      const def = ProtocolUnlock ? ProtocolUnlock.getById(pickedId) : null;
+      return `Rare Protocol acquired: ${def ? def.name : pickedId}`;
+    }
+
+    /** ---------------- STEP30-7: Hidden Environment System ---------------- */
+
+    /**
+     * Hidden Environment出現判定（要求仕様セクション1/3）。まず`checkUnlock()`で
+     * このLayer移動までの生涯/RUN内スナップショットを基に新規解放を確認し、新規解放が
+     * あれば要求仕様セクション13の「条件達成→Hidden抽選」の直接の因果関係を満たすため
+     * その場でそのEnvironmentへの入場を確定させる。新規解放が無ければ、既に解放済みの
+     * Environmentの中から低確率の再訪抽選（`rollHiddenEnvironment()`）を行う。
+     * 何も起きなければ即座に`onDone`を呼ぶ（既存フローを止めない）。
+     * @param {Function} [onDone]
+     */
+    _checkHiddenEnvironmentTrigger(onDone) {
+      const snapshot = {
+        unknownStreak: this.unknownSuccessStreakThisRun,
+        protocolFragmentsTotal: this.save.getProtocolFragments() + this.protocolFragmentsThisRun,
+        researchLabVisitsTotal: this.save.getTotalResearchLabVisits() + this.researchLabVisitsThisRun,
+        bestLayer: Math.max(this.depth, this.save.getBestDepth()),
+        totalRuns: this.save.getTotalRuns(),
+        worldCollapseNoExtract: this.worldStabilityManager.getStatus() === 'COLLAPSE' && !this._extractedThisRun
+      };
+      const newlyUnlocked = this.hiddenEnvironmentManager.checkUnlock(snapshot);
+      const def = newlyUnlocked.length > 0 ? newlyUnlocked[0] : this.hiddenEnvironmentManager.rollHiddenEnvironment();
+      if (!def) { if (onDone) onDone(); return; }
+
+      this.hiddenEnvironmentRenderer.showDiscovery(def, () => {
+        this.hiddenEnvironmentManager.enterHiddenEnvironment(def.id, { run: this.save.getTotalRuns() + 1, layer: this.depth });
+        this.hiddenEnvironmentRenderer.showHud(def);
+        this.ui.showToast(`SECRET AREA: ${def.name}`);
+
+        const exclusiveEvent = HiddenEnvironmentData.getExclusiveEventForEnvironment(def);
+        const exclusiveReward = HiddenEnvironmentData.getExclusiveRewardForEnvironment(def);
+        const messages = [];
+        if (exclusiveEvent) messages.push(this._applyHiddenExclusiveEffect(exclusiveEvent.effect, exclusiveEvent.message));
+        if (exclusiveReward) {
+          messages.push(this._applyHiddenExclusiveEffect(exclusiveReward.effect, `REWARD: ${exclusiveReward.name}`));
+          this.hiddenEnvironmentManager.markRewardUnlocked(def.id, exclusiveReward.id);
+        }
+        this._renderHud();
+
+        if (messages.length === 0) { if (onDone) onDone(); return; }
+        this.ui.showNodeResult({
+          icon: '🌑',
+          title: `${def.name} — SECRET AREA`,
+          message: messages.join(' / '),
+          onContinue: onDone
+        });
+      });
+    }
+
+    /**
+     * Hidden Exclusive Event/Rewardの即時効果を適用する（environmentEventData.js
+     * INSTANT_EFFECT_TYPESと同じ語彙+freeUpgradeInstant/revealLastRunRoute/stabilityDeltaを追加）。
+     * @returns {string} 結果メッセージ
+     */
+    _applyHiddenExclusiveEffect(effect, label) {
+      switch (effect.type) {
+        case 'protocolFragmentInstant':
+          this._gainProtocolFragments(effect.value);
+          return `${label}: Protocol Fragment +${effect.value}`;
+        case 'researchDataInstant':
+          this.researchData += effect.value;
+          return `${label}: Research Data +${effect.value}`;
+        case 'lifeRecoveryInstant': {
+          const before = this.life;
+          this.life = Math.min(this.maxLife, this.life + effect.value);
+          return `${label}: Life +${this.life - before}`;
+        }
+        case 'freeUpgradeInstant': {
+          const candidates = G.Upgrades ? G.Upgrades.ALL.filter(u => !this.upgradeManager.isMaxed(u.id)) : [];
+          if (candidates.length === 0) return `${label}: No Upgrade available`;
+          const picked = candidates[Math.floor(Math.random() * candidates.length)];
+          this.upgradeManager.acquire(picked.id);
+          return `${label}: ${picked.name} acquired for free`;
+        }
+        case 'revealLastRunRoute': {
+          const route = this.save.getLastRunVisitedNodes().slice(-5).map(n => n.name).join(' → ');
+          return `${label}: ${route || 'No previous RUN route recorded'}`;
+        }
+        case 'stabilityDelta':
+          this.worldStabilityManager.decreaseStability(Math.abs(effect.value), { layer: this.depth, event: label });
+          return `${label}: Stability ${effect.value}`;
+        default:
+          return label;
+      }
     }
 
     /**
@@ -807,6 +1108,7 @@
           // STEP30-4: 「Research Lab」+10
           this.worldStabilityManager.increaseStability(STABILITY_DELTA_RESEARCH_LAB, { layer: this.depth, event: 'Research Lab' });
           this._checkMutationTrigger();
+          this.researchLabVisitsThisRun++; // STEP30-7: GENESIS LABの解放条件（生涯Research Lab到達10回）判定用
           this.researchLab.show(this.depth); // 内部でui.showScreen('researchLab')する
           break;
         case 'protocol_signal':
@@ -836,8 +1138,10 @@
       // STEP28: Meta ProgressionのResearch Rankに応じて、Rank解放イベント(Temporal Echo等)も抽選対象になる
       // STEP30-2: QUANTUM NETWORKの「Rare Reward +20%」/NEURAL FORESTの「Unknown Analysis Success +10%」
       // STEP30-5: SIGNAL NOISE Mutationの「Rare Reward +15%」もさらに合算する
+      // STEP30-6: SIGNAL INTERFERENCE Eventの「Rare Reward +50%」もさらに合算する
       const event = UnknownEvents.pickEvent(this.metaProgression.getRankNumber(), {
-        rareBoost: this.environmentModifierManager.getRareEventWeightBoost() + this.worldMutationManager.getRareEventWeightBoost(),
+        rareBoost: this.environmentModifierManager.getRareEventWeightBoost() + this.worldMutationManager.getRareEventWeightBoost()
+          + this.environmentEventManager.getEventRareEventWeightBoost() + this.hiddenEnvironmentManager.getHiddenRareEventWeightBoost(),
         successBoost: this.environmentModifierManager.getUnknownSuccessBoost()
       });
       this.unknownAnalysisCount++;
@@ -848,6 +1152,9 @@
       // STEP30-5: 追加Trigger「Unknown Node連続解析」判定用カウンタ+Mutation Trigger確認
       this.consecutiveUnknownAnalysesThisRun++;
       this._checkMutationTrigger();
+      // STEP30-7: VOID MEMORYの解放条件（Unknown Node成功5連続）判定用カウンタ。
+      // System Corruption(lifeLoss)のみ「失敗」として連続記録をリセットする
+      this.unknownSuccessStreakThisRun = event.effect.type === 'lifeLoss' ? 0 : this.unknownSuccessStreakThisRun + 1;
 
       if (event.effect.type === 'eliteShift') {
         // Elite Signal Shift: 既存のElite Node処理へそのまま合流させる（visitedNodes記録・
@@ -1048,6 +1355,8 @@
           * this.metaProgression.getFragmentGainMultiplier()
           * this.identityManager.getFragmentGainMultiplier()
           * this.worldMutationManager.getProtocolFragmentMultiplier() // STEP30-5: NEURAL INFECTIONの「Protocol Drop +40%」
+          * this.environmentEventManager.getEventProtocolFragmentMultiplier() // STEP30-6: DATA STORM Eventの「Protocol Fragment +20%」
+          * this.hiddenEnvironmentManager.getHiddenProtocolFragmentMultiplier() // STEP30-7: VOID MEMORYの「Protocol Fragment +80%」
       );
       this._grantIdentityExp('fragmentGain'); // STEP29: Protocol EngineerのEXP源
     }
@@ -1276,10 +1585,13 @@
       // STEP27: Risk Chain倍率（高危険Node連続選択のボーナス）を、Boss/Elite固有の倍率とは
       // 独立してさらに乗算する。STEP30-2: FRACTAL COREの「Risk Chain Bonus +20%」もここで合成する。
       // STEP30-5: REALITY BREAK Mutationの「Risk上昇」+Exploit選択の「Risk Increase」もさらに合成する
+      // STEP30-7: PARADOX COREの「RiskとReward逆転」（簡略化しrewardMultiplier/riskChainBonusの
+      // 積み増しとして実装、詳細はhiddenEnvironmentData.jsのコメント参照）もさらに合成する
       reward = Math.round(
         reward * this.riskChain.getMultiplier()
           * this.environmentModifierManager.getRiskChainBonusMultiplier()
           * this.worldMutationManager.getRiskChainBonusMultiplier()
+          * this.hiddenEnvironmentManager.getHiddenRiskChainBonusMultiplier()
       );
       // STEP28: Protocol Evolution（NEURAL RESEARCH LABで進化させたProtocol）による
       // 追加ボーナス。所持中Protocolの進化段階の合計に応じて上乗せされる（未進化なら0）
@@ -1298,13 +1610,24 @@
       const envAdjustedReward = this.environmentModifierManager.applyRewardModifier({ reward, researchData: baseResearchDataGain });
       // STEP30-5: Reward Integration Hook（要求仕様セクション12）。FRACTAL OVERFLOW/
       // REALITY BREAKの「Reward +60%/x2」・Exploit選択のボーナスをさらに独立に適用する
-      reward = Math.round(envAdjustedReward.reward * this.worldMutationManager.getMutationRewardModifier());
+      const rewardBeforeEvent = Math.round(envAdjustedReward.reward * this.worldMutationManager.getMutationRewardModifier());
+      // STEP30-6: Reward System Integration（要求仕様セクション12）。計算順は
+      // Base Reward × Environment Modifier × Mutation Modifier × Event Modifier ×
+      // Risk Chain(既にreward計算の前段で折り込み済み) × Identity Bonus(同前段)。
+      // DATA STORM/FRACTAL SHIFT Eventの「Reward+X%」をここで独立に適用する
+      const rewardBeforeHidden = Math.round(rewardBeforeEvent * this.environmentEventManager.getEventRewardModifier());
+      this.environmentEventManager.addRewardContribution(rewardBeforeHidden - rewardBeforeEvent);
+      // STEP30-7: SIMULATION ZERO/PARADOX CORE等のReward Integrationをさらに独立に適用する
+      reward = Math.round(rewardBeforeHidden * this.hiddenEnvironmentManager.getHiddenRewardModifier());
       const mutationAdjustedResearchData = Math.round(envAdjustedReward.researchData * this.worldMutationManager.getResearchDataMultiplier());
+      const eventAdjustedResearchData = Math.round(mutationAdjustedResearchData * this.environmentEventManager.getEventResearchDataMultiplier());
+      this.environmentEventManager.addRewardContribution(eventAdjustedResearchData - mutationAdjustedResearchData);
+      const hiddenAdjustedResearchData = Math.round(eventAdjustedResearchData * this.hiddenEnvironmentManager.getHiddenResearchDataMultiplier());
 
       this.score += reward;
       // STEP27: Research Data（Extract Systemで使う蓄積リソース）は総獲得スコアの一部として
       // クリアのたびに少量加算される
-      this.researchData += mutationAdjustedResearchData;
+      this.researchData += hiddenAdjustedResearchData;
 
       const recovered = this._tickLifeRegen();
       this._checkProtocolUnlocks();
@@ -1503,7 +1826,9 @@
         protocolFragmentsGained: this.protocolFragmentsThisRun,
         researchDataGained: this.researchData,
         riskChainMultiplierThisRun: finalRiskChainMultiplier,
-        unknownAnalysisCountThisRun: this.unknownAnalysisCount
+        unknownAnalysisCountThisRun: this.unknownAnalysisCount,
+        researchLabVisitsGained: this.researchLabVisitsThisRun, // STEP30-7: GENESIS LABの解放条件判定用
+        lastRunVisitedNodes: this.visitedNodes.slice() // STEP30-7: ECHO NETWORKの「Ghost Route表示」用
       });
 
       // STEP29: Achievement基盤。「生涯」条件はProtocolUnlockと同じく

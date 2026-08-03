@@ -35,8 +35,12 @@
      *   （Puzzle Difficulty=制限時間短縮、Puzzle Hint Effect=HINT開示マス数）に使う
      * @param {Object} [deps.worldMutationManager] STEP30-5: Active中のMutation
      *   （FRACTAL OVERFLOWのPuzzle Difficulty=制限時間短縮）に使う
+     * @param {Object} [deps.environmentEventManager] STEP30-6: Active中のEnvironment Event
+     *   （FRACTAL SHIFTのPuzzle Difficulty=制限時間短縮、GRID OPTIMIZATIONのHINT開示数増加）に使う
+     * @param {Object} [deps.hiddenEnvironmentManager] STEP30-7: 入場中のHidden Environment
+     *   （SIMULATION ZEROのPuzzle Difficulty=制限時間短縮）に使う
      */
-    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager, environmentModifierManager, worldMutationManager }) {
+    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager, environmentModifierManager, worldMutationManager, environmentEventManager, hiddenEnvironmentManager }) {
       this.ui = ui;
       this.puzzleManager = puzzleManager;
       this.upgradeManager = upgradeManager;
@@ -44,6 +48,8 @@
       this.environmentManager = environmentManager || null;
       this.environmentModifierManager = environmentModifierManager || null;
       this.worldMutationManager = worldMutationManager || null;
+      this.environmentEventManager = environmentEventManager || null;
+      this.hiddenEnvironmentManager = hiddenEnvironmentManager || null;
 
       this.game = null;
       this.puzzle = null;
@@ -146,6 +152,14 @@
       // STEP30-5: FRACTAL OVERFLOW Mutationの「Puzzle Difficulty +30%」も同じレバーで適用する
       if (this.worldMutationManager) {
         timeLimitMultiplier *= this.worldMutationManager.getPuzzleTimeLimitMultiplier();
+      }
+      // STEP30-6: FRACTAL SHIFT Eventの「Puzzle Difficulty」も同じレバーで適用する
+      if (this.environmentEventManager) {
+        timeLimitMultiplier *= this.environmentEventManager.getEventPuzzleTimeLimitMultiplier();
+      }
+      // STEP30-7: SIMULATION ZEROの「Puzzle Difficulty +50%」も同じレバーで適用する
+      if (this.hiddenEnvironmentManager) {
+        timeLimitMultiplier *= this.hiddenEnvironmentManager.getHiddenPuzzleTimeLimitMultiplier();
       }
       this.timeLimit = Math.max(10, Math.round(this.puzzle.parSeconds * timeLimitMultiplier));
       this.remaining = this.timeLimit;
@@ -332,7 +346,9 @@
       const envHintBonus = this.environmentModifierManager
         ? this.environmentModifierManager.applyPuzzleModifier({}).hintRevealBonus
         : 0;
-      const revealCount = 1 + this._effectTotal('hintRevealBonus') + envHintBonus;
+      // STEP30-6: GRID OPTIMIZATION Eventの「Puzzle Hint Effect +1」
+      const eventHintBonus = this.environmentEventManager ? this.environmentEventManager.getEventHintRevealBonus() : 0;
+      const revealCount = 1 + this._effectTotal('hintRevealBonus') + envHintBonus + eventHintBonus;
       let revealed = 0;
       for (let i = 0; i < revealCount; i++) {
         const result = this.game.hint();

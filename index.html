@@ -2214,6 +2214,42 @@
   .archive-effects-label { font-size: 11px; color: var(--text-dim); margin-top: 6px; letter-spacing: 1px; }
   .archive-effect-row { font-size: 12px; color: var(--gold); }
 
+  /* ---- STEP30-7: Hidden Environment System（紫・黒・赤の専用テーマ配色） ---- */
+  :root { --hidden-purple: #b968ff; --hidden-red: #ff3f6b; }
+
+  .hidden-discovery-overlay { z-index: 26; background: #030006; }
+  .hidden-discovery-card {
+    max-width: 320px; text-align: center; border-color: var(--hidden-purple);
+    box-shadow: 0 0 30px rgba(185, 104, 255, 0.5);
+    background: linear-gradient(180deg, rgba(20,0,10,0.95), rgba(5,0,8,0.98));
+  }
+  .hidden-discovery-phase.hidden { display: none; }
+  .hidden-discovery-title { font-size: 16px; font-weight: 800; letter-spacing: 3px; color: var(--hidden-purple); }
+  .hidden-glitch-text { animation: envGlitch 0.3s steps(2) infinite; }
+  .hidden-flash-text { animation: hiddenFlash 0.6s ease-in-out 2; color: #fff; }
+  @keyframes hiddenFlash {
+    0%, 100% { color: var(--hidden-red); text-shadow: none; }
+    50% { color: #fff; text-shadow: 0 0 12px #fff, 0 0 24px var(--hidden-red); }
+  }
+  .hidden-progress-fill { background: linear-gradient(90deg, var(--hidden-purple), var(--hidden-red)); }
+  .hidden-found-name { font-size: 22px; font-weight: 800; color: var(--hidden-red); margin: 10px 0 4px; letter-spacing: 2px; }
+  .hidden-found-theme { font-size: 13px; color: var(--text-dim); margin-bottom: 14px; }
+  .hidden-discovery-skip-btn { border-color: var(--hidden-purple); color: var(--hidden-purple); }
+
+  .hidden-hud-panel {
+    position: fixed; top: 8px; left: 8px; z-index: 16;
+    max-width: 170px; padding: 8px 12px; border-radius: 10px;
+    border: 1px solid var(--hidden-red); background: rgba(10, 0, 6, 0.9);
+    box-shadow: 0 0 16px var(--hidden-purple);
+  }
+  .hidden-hud-label { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: var(--hidden-red); }
+  .hidden-hud-name { font-size: 14px; font-weight: 800; color: var(--hidden-purple); }
+  .hidden-hud-danger { font-size: 10px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
+  .hidden-hud-danger-value { color: var(--hidden-red); font-weight: 800; }
+
+  .hidden-archive-btn { border-color: var(--hidden-purple); color: var(--hidden-purple); }
+  .hidden-environment-archive-card.unlocked { border-color: var(--hidden-purple); }
+
   /* Surface Arrival演出 */
   .surface-arrival-card { max-width: 300px; text-align: center; }
   .surface-arrival-title { font-size: 18px; font-weight: 800; letter-spacing: 3px; color: var(--blue); }
@@ -2339,6 +2375,8 @@
     <button type="button" id="protocolArchiveBtn" class="ghost-btn">PROTOCOL ARCHIVE</button>
     <button type="button" id="environmentArchiveBtn" class="ghost-btn">ENVIRONMENT ARCHIVE</button>
     <button type="button" id="worldEnvArchiveModeSelectBtn" class="ghost-btn">🌍 WORLD ENVIRONMENT ARCHIVE</button>
+    <button type="button" id="envEventArchiveModeSelectBtn" class="ghost-btn">✨ ENVIRONMENT EVENT ARCHIVE</button>
+    <button type="button" id="hiddenArchiveModeSelectBtn" class="ghost-btn hidden-archive-btn">🌑 HIDDEN ENVIRONMENT ARCHIVE</button>
     <button type="button" id="performanceModeBtn" class="ghost-btn">PERFORMANCE: NORMAL</button>
   </section>
 
@@ -2421,6 +2459,32 @@
       <div class="endless-stat"><span class="endless-stat-label">DISCOVERED</span><span id="worldEnvArchiveDiscovered" class="endless-stat-value">0 / 0</span></div>
     </div>
     <div id="worldEnvArchiveCards" class="archive-cards"></div>
+  </section>
+
+  <!-- ============ STEP30-6: ENVIRONMENT EVENT ARCHIVE (発見済み/未発見Environment Event一覧) ============ -->
+  <section id="screen-enveventarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="envEventArchiveBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>ENVIRONMENT EVENT ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">DISCOVERED</span><span id="envEventArchiveDiscovered" class="endless-stat-value">0 / 0</span></div>
+    </div>
+    <div id="envEventArchiveCards" class="archive-cards"></div>
+  </section>
+
+  <!-- ============ STEP30-7: HIDDEN ENVIRONMENT ARCHIVE (6種の隠しEnvironment一覧+Discovery Rate) ============ -->
+  <section id="screen-hiddenarchive" class="screen hidden-archive-screen">
+    <div class="select-header">
+      <button type="button" id="hiddenArchiveBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>HIDDEN ENVIRONMENT ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">DISCOVERY RATE</span><span id="hiddenArchiveDiscoveryRate" class="endless-stat-value">0 / 0 (0%)</span></div>
+    </div>
+    <div id="hiddenArchiveCards" class="archive-cards"></div>
   </section>
 
   <!-- ============ PROTOCOL SELECT (RUN開始時、研究方針を1つ選ぶ) ============ -->
@@ -2905,6 +2969,60 @@
     </div>
   </div>
 
+  <!-- ============ STEP30-6: ENVIRONMENT EVENT (通常Event結果表示。続けるボタン必須) ============ -->
+  <div id="environmentEventOverlay" class="overlay hidden">
+    <div class="clear-card node-result-card">
+      <span id="envEventIcon" class="node-result-icon"></span>
+      <div id="envEventName" class="node-result-title"></div>
+      <div id="envEventDesc" class="node-result-message"></div>
+      <div id="envEventLog" class="env-scan-log"></div>
+      <button type="button" id="envEventContinueBtn" class="primary-btn">つづける</button>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-6: ENVIRONMENT EVENT CHOICE (Unknown Signal ANALYZE?選択) ============ -->
+  <div id="environmentEventChoiceOverlay" class="overlay hidden">
+    <div class="clear-card mutation-choice-card">
+      <div class="mutation-choice-title">UNKNOWN SIGNAL DETECTED</div>
+      <div id="envEventChoiceName" class="mutation-choice-subtitle">UNKNOWN SIGNAL</div>
+      <div id="envEventChoiceDesc" class="mutation-choice-subtitle">Analyze?</div>
+      <button type="button" id="envEventChoiceYesBtn" class="lab-card mutation-choice-option">
+        <span class="lab-card-name">YES</span>
+        <span class="lab-card-desc">Rare Protocol / Large Reward / Stability -10</span>
+      </button>
+      <button type="button" id="envEventChoiceNoBtn" class="lab-card mutation-choice-option">
+        <span class="lab-card-name">NO</span>
+        <span class="lab-card-desc">安全終了 / 効果なし</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-7: HIDDEN ENVIRONMENT DISCOVERY SEQUENCE (Unknown Signal→Decrypting→SECRET ENVIRONMENT FOUND) ============ -->
+  <div id="hiddenDiscoveryOverlay" class="overlay hidden-discovery-overlay hidden">
+    <div class="clear-card hidden-discovery-card">
+      <div id="hiddenPhaseSignal" class="hidden-discovery-phase hidden-glitch-text">
+        <div class="hidden-discovery-title">UNKNOWN SIGNAL</div>
+      </div>
+      <div id="hiddenPhaseDecrypting" class="hidden-discovery-phase hidden">
+        <div class="hidden-discovery-title">Decrypting...</div>
+        <div class="env-scan-progress-track"><div id="hiddenDecryptProgressFill" class="env-scan-progress-fill hidden-progress-fill"></div></div>
+      </div>
+      <div id="hiddenPhaseFound" class="hidden-discovery-phase hidden">
+        <div class="hidden-discovery-title hidden-flash-text">SECRET ENVIRONMENT FOUND</div>
+        <div id="hiddenFoundName" class="hidden-found-name">VOID MEMORY</div>
+        <div id="hiddenFoundTheme" class="hidden-found-theme"></div>
+      </div>
+      <button type="button" id="hiddenDiscoverySkipBtn" class="ghost-btn env-scan-skip-btn hidden-discovery-skip-btn">続ける</button>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-7: HIDDEN HUD (SECRET AREA、入場中のみ表示、紫・黒・赤テーマ) ============ -->
+  <div id="hiddenHudPanel" class="hidden-hud-panel hidden">
+    <div class="hidden-hud-label">⚠ SECRET AREA</div>
+    <div id="hiddenHudName" class="hidden-hud-name">VOID MEMORY</div>
+    <div class="hidden-hud-danger">DANGER LEVEL: <span class="hidden-hud-danger-value">UNKNOWN</span></div>
+  </div>
+
   <!-- ============ NODE RESULT (Recovery/Eventなど、盤面を介さず即座に解決するNodeの結果表示) ============ -->
   <div id="nodeResultOverlay" class="overlay hidden">
     <div class="clear-card node-result-card">
@@ -2986,6 +3104,14 @@
   <script src="src/endless/mutationData.js"></script>
   <script src="src/endless/worldMutationManager.js"></script>
   <script src="src/endless/mutationRenderer.js"></script>
+  <script src="src/endless/environmentEventData.js"></script>
+  <script src="src/endless/environmentEventManager.js"></script>
+  <script src="src/endless/environmentEventPanel.js"></script>
+  <script src="src/endless/environmentEventArchive.js"></script>
+  <script src="src/endless/hiddenEnvironmentData.js"></script>
+  <script src="src/endless/hiddenEnvironmentManager.js"></script>
+  <script src="src/endless/hiddenEnvironmentRenderer.js"></script>
+  <script src="src/endless/hiddenEnvironmentArchive.js"></script>
   <script src="src/endless/researchTree.js"></script>
   <script src="src/endless/metaProgression.js"></script>
   <script src="src/endless/upgrades.js"></script>

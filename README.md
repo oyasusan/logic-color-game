@@ -1632,3 +1632,68 @@ World Stabilityの低下によってResearch World自体が変質する「Mutati
 - Extract成功（RUN終了直前のタイミング）はMutation Trigger判定の対象から意図的に外した。RUNが終わる直前に新しいMutationを通知しても、その後すぐRESULT画面へ切り替わってしまい実際の効果を体験する機会が無く、要求仕様の意図（プレイを続ける中で世界が変質していく体験）にそぐわないと判断したため
 
 **テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション16の確認フロー（①Run開始→②Stability低下→③Threshold到達→④Mutation発生→⑤Visual表示→⑥HUD更新→⑦Reward Modifier確認→⑧Save/Load確認）を実際のコード経路で通し、6種Mutationの定義完全性・Level別内訳・Trigger閾値（60/30/10）の境界値・追加Trigger4種・`triggerMutation`/`clearMutation`/`tickDuration`（duration到達での自動解除）・各効果getter（researchDataMultiplier/nodeWeightMultiplier/rewardModifier等）の数値計算・NEURAL INFECTIONのRandom Modifierキャッシュ挙動・Environment State/Display Name・実RUNでのStability低下→Mutation Choice Event（Stabilize/Exploitコールバック）→Exploit選択→Visual Sequence（Warning/Complete両フェーズが自動では消えないこと含む）→HUD反映→Reward Modifier反映→Save/Reload後の状態復元・旧形式セーブのマイグレーション・新規RUNでのリセット・既存のSTAGE SELECT等への無影響を含めて計72項目を検証、全項目PASS。
+
+## STEP30-6: Environment Event System
+
+Environment内で発生する一時的なResearch Event（異常/チャンス）を追加する要求仕様（STEP30-6）に基づき実装した。既存4システムとの役割分担は要求仕様どおり: Environment=常時ルール、Environment Modifier=常時補正、**Environment Event=一時的な異常・チャンス（本STEP）**、World Mutation=世界状態変化。Puzzle Generator/Reward System全面変更・Mutation System直接改造は行わず、新規moduleの追加とAdditive（加算/乗算）な効果適用、および結果配列の事後差し替え（Research Lab強制出現）のみで完結させている。
+
+**新規ファイル**:
+- `src/endless/environmentEventData.js`（EnvironmentEventData） — 6 Environment × 2種 + UNKNOWN DIMENSION 1種（Choice Event）の計11種のEvent定義。`{id, name, description, environment, rarity, duration, effects, choices, logMessage}`の静的データ＋`getById`/`getByEnvironment`/`pickForEnvironment`（レア度重み付き抽選）
+- `src/endless/environmentEventManager.js`（EnvironmentEventManager） — 要求仕様セクション1の全API（`checkEventTrigger()`/`triggerEvent(id)`/`getActiveEvent()`/`resolveEvent()`/`getEventHistory()`）に加え、Reward Integration Hook用`getEventRewardModifier()`（要求仕様セクション12、初期値1.0）、各効果getter群（`getEventResearchDataMultiplier`/`getEventProtocolFragmentMultiplier`/`getEventHintRevealBonus`/`getEventPuzzleTimeLimitMultiplier`/`getEventRareEventWeightBoost`/`getEventUnknownRevealChanceBonus`）、Instant系効果を判定する`getInstantEffect(type)`/`isChoiceEvent()`、Archive集計用`addRewardContribution()`を実装
+- `src/endless/environmentEventPanel.js`（EnvironmentEventPanel） — Event結果表示（`show()`）とChoice表示（`showChoice()`）のDOM描画のみを持つ（mutationRenderer.jsと同じ役割分担）。直近のユーザーフィードバック「トーストが消えるのが速すぎて読めない」を踏まえ、いずれも自動では閉じず「続ける」/YES・NOボタンのクリックを待つ設計にした
+- `src/endless/environmentEventArchive.js`（EnvironmentEventArchive） — 要求仕様セクション15のArchive画面。worldEnvironmentArchive.js/protocolArchive.jsと同じ「都度saveを読んで再描画する」設計。要求仕様の推奨module一覧（セクション17）には無いが、既存の全Archive系システム（Protocol/Environment/WorldEnvironment）が同じ構成でArchive画面を持つ一貫性を優先し追加した
+
+**checkEventTrigger()とtriggerEvent()を意図的に分離した設計**: worldMutationManager.jsの`checkMutationTrigger`/`triggerMutation`と同じ設計判断で、前者は副作用無しの確認のみ、後者が実際にEventを「開始」させる副作用を持つ。
+
+**Event発生ルール（要求仕様セクション3）**: Layer開始時（`_afterLayerEnvironmentReady`、Mutation判定完了後）にEnvironment取得→Event抽選→発生、という要求仕様どおりの順序で判定する。発生率は「Normal: 5〜10%」に具体的な単一値の指定が無かったため中央値0.08を採用し、`World Mutation中: 20%`/`World Stability Critical: 15%`は該当条件下でその値まで引き上げる（複数条件が同時に該当する場合は最大値を採用、要求仕様に合成方法の指定が無かったための設計）。
+
+**duration設計（要求仕様に数値指定が無かった箇所）**: 全11種のEventはduration=1で統一した。「一時的」という性質（World Mutationの複数Layer持続とは対照的）を反映した設計判断で、次のLayer移動の`tickDuration()`で自動終了する。Instant系効果（forceLabSpawn等）を持つEventはendless.js側が効果適用と同時に`resolveEvent()`を呼ぶため、tickDuration()を待たず即座に終了する。Passive Modifier系効果（rewardMultiplier等）を持つEventはそのLayerのPuzzle/Node解決を跨いでActiveのままにし、`addRewardContribution()`で実際の増分スコアを積算してもらい、tickDuration()による自動終了時にその積算値をArchiveのbestRewardとして記録する。
+
+**11種のEvent（要求仕様セクション4〜9）**:
+- DIGITAL GRID: Grid Optimization（Unknown Node事前解析確率+20%・HINT開示数+1）/ System Scan（次のMap選択でOracle相当の事前表示を1回だけ強制、`mapUI.forceRevealNext()`として実装）
+- QUANTUM NETWORK: Signal Interference（Reward Prediction Accuracy -30%・Rare Reward +50%）/ Quantum Echo（直近5件の訪問履歴を表示するのみの情報系Instant効果）
+- NEURAL FOREST: Root Connection（次のMap選択候補に必ずResearch Labを1つ含める）/ Neural Growth（ライフ+1）
+- DATA OCEAN: Data Storm（Research Data×2・Protocol Fragment+20%）/ Lost Archive（Protocol Fragment+6の即時獲得。「過去のProtocol発見」というフレーバーを、既存のFragment獲得系イベント（unknownEvents.jsのprotocol_fragment等）と同じ実装パターンに落とし込んだ）
+- FRACTAL CORE: Fractal Shift（Puzzle Difficulty+15%を既存の「制限時間短縮」レバーで適用・Reward+50%）/ Recursive Loop（Research Data+150の即時獲得。「同一Puzzle再挑戦可能」は既存アーキテクチャに再挑戦機構が無く、architecture rule「Puzzle Generator全面変更禁止」に抵触するため、フレーバーを保ったまま数値ボーナスへ単純化した設計判断）
+- UNKNOWN DIMENSION: Unknown Signal（Choice Event。YES=Rare Protocol取得試行+Research Data+300+Stability-10、NO=安全終了）。「Rare Protocol」は既存のProtocol Signal（`protocolManager.merge()`）と同じ経路で、未所持かつSlotに空きがあるProtocolを1つ付与する。空きが無い場合はProtocol Fragment+8で代替する（`_applyBossShortcut`の代替報酬と同じ設計判断）
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `activeEnvironmentEvent`/`environmentEventHistory`/`discoveredEnvironmentEvents`/`environmentEventArchive`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `endless.js`: environmentEventManager/environmentEventPanel/environmentEventArchiveの生成・配線。`_afterLayerEnvironmentReady`でMutation判定完了後にEvent持続ターン消費(`tickDuration()`)→Event Trigger判定(`_checkEnvironmentEventTrigger`)を追加。新設した`_applyEnvironmentEventEffect()`（Instant系効果の即時適用）・`_resolveEnvironmentEventChoice()`（Unknown Signalの選択確定）・`_grantRareProtocol()`（Rare Protocol付与）を実装。Reward System Integration（要求仕様セクション12）として`_handleRoundClear()`のreward/researchData計算へ`getEventRewardModifier()`/`getEventResearchDataMultiplier()`を独立に乗算し、実際の増分を`addRewardContribution()`で積算する配線を追加。`_gainProtocolFragments()`/`_resolveUnknownNode()`（rareBoost合算）にも同様に配線
+- `endlessGame.js`（EndlessRoundController）: `environmentEventManager`を受け取り、Fractal ShiftのPuzzle Difficultyを既存の「制限時間短縮」レバーで、Grid OptimizationのHINT開示数ボーナスを既存の`hintRevealBonus`集計へそれぞれ独立に合算
+- `mapUI.js`: `environmentEventManager`を受け取り、Grid OptimizationのUnknown Node事前解析確率ボーナスを既存の集計へ合算。System Scanの「次Node情報表示」用に、次の`show()`1回だけOracle相当の表示を強制する`forceRevealNext()`を新設
+- `mapGenerator.js`: 変更なし（Root Connectionの強制Research Lab出現は、`endless.js`側で`generateChoices()`の戻り値を事後的に1枠差し替えるだけで実現し、生成アルゴリズム自体には手を加えていない）
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（EnvironmentEventData/EnvironmentEventManagerをwindowレルム内で読み込み、mockのsave/worldEnvironmentManagerを注入して直接検証）で、Event定義完全性（Environment別2種+Unknown1種、Choice/非Choiceの区別）・`pickForEnvironment`のEnvironment一致性・`checkEventTrigger`の発生率3パターン（Normal/Mutation中/Stability Critical、`window.Math.random`を固定して境界値を検証）・`triggerEvent`→`getActiveEvent`→`resolveEvent`のライフサイクル・各効果getterの数値計算・`tickDuration`によるduration=1の自動終了・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計51項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、要求仕様セクション18のTest Flow（①Run開始→②Layer移動→③Event抽選→④Event表示→⑤Choice選択→⑥Effect適用→⑦Reward確認→⑧Archive保存→⑨Save/Load確認）を実際のコード経路で通し、Identity/Protocol/Environment Select→RUN初期化→Layer1移動→Transition/Scan演出→強制発生させたRoot Connection Eventの表示・Instant効果適用（Research Lab強制出現の実際の反映）・Passive Modifier系Event（Fractal Shift）の`_handleRoundClear()`実行によるスコア増加とArchive記録・Choice Event（Unknown Signal）のYES選択によるResearch Data/Stability/Rare Protocol効果の実反映・Archive画面表示（11種全件・発見済み/未発見の区別）・MODE SELECTからの導線・別インスタンスでのSave/Reload後の状態復元・既存のSTAGE SELECT/TITLE等への無影響を含め計47項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: Quantum Echo/System Scanの情報表示は簡易な文字列/1回限りのフラグのみで、専用の演出UIは無い。Lost Archive/Recursive Loopの効果は要求仕様のフレーバー（「過去のProtocol発見」「同一Puzzle再挑戦」）を数値ボーナスへ単純化しており、フレーバーどおりの再現ではない。
+
+## STEP30-7: Hidden Environment System
+
+通常のWorldEnvironment（Layerに紐づく常時テーマ）とは別に、特定の達成条件を満たした時だけアクセスできる「隠しEnvironment」6種を追加する要求仕様（STEP30-7）に基づき実装した。「通常プレイでは滅多に見つからない、探索・収集・やり込み要素」という目的どおり、解放（初回発見）と再訪（低確率抽選）を明確に分離する二段構えの設計にした。
+
+**新規ファイル**:
+- `src/endless/hiddenEnvironmentData.js`（HiddenEnvironmentData） — 6種のHidden Environment定義（VOID MEMORY/LOST ARCHIVE/GENESIS LAB/SIMULATION ZERO/ECHO NETWORK/PARADOX CORE）+ Exclusive Event 6種 + Exclusive Reward 6種（要求仕様セクション7の5カテゴリ=Hidden Protocol/Mythic Upgrade/Legend Identity/Archive Entry/Hidden Cosmeticを全て割り当て）の静的データ
+- `src/endless/hiddenEnvironmentManager.js`（HiddenEnvironmentManager） — 要求仕様セクション1の全API（`checkUnlock()`/`rollHiddenEnvironment()`/`enterHiddenEnvironment(id)`/`leaveHiddenEnvironment()`/`getCurrentHiddenEnvironment()`/`getDiscoveryRate()`）に加え、Reward/Puzzle Difficulty/Node Weight等の効果getter群（worldMutationManager.jsと同じ規約）、Archive Completion記録用`markRewardUnlocked()`を実装
+- `src/endless/hiddenEnvironmentRenderer.js`（HiddenEnvironmentRenderer） — Discovery Sequence（UNKNOWN SIGNAL→Decrypting...→SECRET ENVIRONMENT FOUND、要求仕様セクション5）とHidden HUD（SECRET AREA、要求仕様セクション6）のDOM描画。「続ける」ボタンはどの段階でもシーケンス全体を即座に終了できる（＝スキップ可能、environmentScan.jsと同じ設計）が、情報が無い前段2フェーズをスキップするだけで最終フェーズの情報を読み逃すことはない
+- `src/endless/hiddenEnvironmentArchive.js`（HiddenEnvironmentArchive） — 要求仕様セクション9のArchive画面（Environment/First Discovery/Visit Count/Completion/Unlocked Reward）+ セクション10のDiscovery Rate表示（X/6、パーセント）
+
+**checkUnlock()とrollHiddenEnvironment()の二段構え設計（要求仕様セクション1の意図の実現）**: `checkUnlock(snapshot)`は生涯/RUN内スナップショットを基に未解放のHidden Environmentの条件充足を判定し、満たせば即座に`hiddenUnlockFlags`へ永続解放する（worldEnvironmentManager.unlockWorldEnvironmentと同じ「二度と失われない」設計）。この「初回解放の瞬間」は要求仕様セクション13のTest Flow「条件達成→Hidden抽選」を直接の因果関係で満たすため、その場で入場を確定させる。一方、解放済みのEnvironmentへの以降のRUNでの再訪は`rollHiddenEnvironment()`による低確率抽選（`REVISIT_ROLL_RATE=2%`、要求仕様に数値指定が無かったためWorld Mutation/Environment Eventより低い値を意図的に選び「Hidden」の希少性を保った）でしか起こらない。滞在期間は全Environment共通でduration=1Layer（Environment Event/Mutationと同じ`tickDuration()`パターン）。
+
+**6種のHidden Environmentと解放条件（要求仕様セクション3/4）**:
+- VOID MEMORY（Unknown Node成功5連続）: Protocol Fragment+80%・Unknown Node出現+50%・Rare Reward+30%
+- LOST ARCHIVE（生涯Protocol Fragment累計50）: Research Data×2 ※「Protocol50種類取得」は現行実装済みProtocol総数(8種)を大きく超えるため、同じ「Protocol」という語を持つ既存リソース`protocolFragments`の閾値50への到達と読み替えた（要求仕様との規模差に対する設計判断）
+- GENESIS LAB（生涯Research Lab到達10回）: 次のMap選択でResearch Lab候補を最大2枠まで優先表示・入場時に無料Upgrade1つを即時付与（`freeUpgradeInstant`。既存のResearchTree有償強化へ割引を差し込むより侵襲が小さいため採用）
+- SIMULATION ZERO（Layer100到達）: Puzzle Difficulty+50%（制限時間短縮）・Reward×3
+- ECHO NETWORK（生涯RUN数30到達） ※要求仕様セクション4の一覧に解放条件の記載が無かったため、「過去Runの残響」というテーマに沿ってこちらで設計した。Ghost Route表示（直前RUNの訪問経路）は、既存のQuantum Echo Event（STEP30-6）と同じ「訪問履歴を表示するだけの情報系Instant効果」として実装した
+- PARADOX CORE（World Status=COLLAPSEかつExtract未実行）: Reward×2・Risk Chain倍率+50% ※要求仕様の「Modifier反転」「RiskとReward逆転」は、既存Modifier適用パイプラインの符号を汎用的に反転させる仕組みを新設すると影響範囲が広くなりすぎる（architecture rule「既存Environmentを変更しすぎない」に反する）ため、「リスクを受け入れるほど報酬も跳ね上がる」という核心の意図を保ったまま既存のrewardMultiplier/riskChainBonusの積み増しへ単純化した
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `hiddenUnlockFlags`/`hiddenVisitHistory`/`hiddenArchive`/`totalResearchLabVisits`/`lastRunVisitedNodes`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった。`discoveryRate`自体は`hiddenUnlockFlags.length`から都度計算できるため、重複データとして永続化していない（既存の"highestDepth"=endlessBestDepth重複回避と同じ設計判断）。`recordRun()`に`researchLabVisitsGained`/`lastRunVisitedNodes`パラメータを追加
+- `endless.js`: hiddenEnvironmentManager/hiddenEnvironmentRenderer/hiddenEnvironmentArchiveの生成・配線。`_afterLayerEnvironmentReady`でEnvironment Event判定完了後にHidden持続ターン消費(`tickDuration()`)→出現判定(`_checkHiddenEnvironmentTrigger`)を追加。新設した`_checkHiddenEnvironmentTrigger()`（checkUnlock→（新規解放優先で）rollHiddenEnvironment→Discovery Sequence→入場→Exclusive Event/Reward適用→Archive更新の一連の流れを統括）・`_applyHiddenExclusiveEffect()`（Instant系効果の即時適用）を実装。`unknownSuccessStreakThisRun`（`_resolveUnknownNode`でSystem Corruption以外は+1・System Corruptionで0にリセット）・`researchLabVisitsThisRun`（Research Lab Node入場のたびに+1、RUN終了時に生涯累計へ加算）をRUNスコープの新規カウンタとして追加。Reward/Research Data/Protocol Fragment/Risk Chain/Rare Event Weightの各既存計算式へHidden Environmentの効果を追加で乗算。`_showMapChoices()`にGENESIS LAB/VOID MEMORY等のNode重み偏重を、既存のmapGenerator生成アルゴリズムを変更せず戻り値の事後差し替えで反映
+- `endlessGame.js`（EndlessRoundController）: `hiddenEnvironmentManager`を受け取り、SIMULATION ZEROのPuzzle Difficultyを既存の「制限時間短縮」レバーで合算
+- `mapGenerator.js`: 変更なし（Node重み偏重は`endless.js`側での事後差し替えのみで実現）
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（HiddenEnvironmentData/HiddenEnvironmentManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、6種の定義完全性・Exclusive Event/Reward各6種の網羅性（5カテゴリ全て存在）・`checkUnlock`の条件充足判定と永続化・複数条件同時達成・`rollHiddenEnvironment`の確率境界値（`window.Math.random`固定）・`enterHiddenEnvironment`→`getCurrentHiddenEnvironment`→`tickDuration`（duration=1自動退場）→Archive記録のライフサイクル・`getDiscoveryRate`の計算・各効果getterの数値・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計61項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、要求仕様セクション13のTest Flow（①Run開始→②条件達成→③Hidden抽選→④演出→⑤Environment遷移→⑥限定Event→⑦限定Reward→⑧Archive更新→⑨Save→⑩Load確認）を実際のコード経路で通し、Identity/Protocol/Environment Select→RUN初期化→強制解放させたVOID MEMORYのDiscovery Sequence表示（スキップボタンでの即時完了）→入場後のHidden HUD表示→Exclusive Event(Lost Signal)/Exclusive Reward(Hidden Protocol Echo)の実際の効果反映（Research Data/Protocol Fragment増加）→Archive記録（Visit Count/Completion/Reward ID）→次Map選択へのNode重み反映（Unknown強制出現）→1Layer後の自動退場(tickDuration)とHUD非表示・トースト表示→SIMULATION ZEROの`_handleRoundClear()`実行による実際のスコア増加→本番`checkUnlock()`（スタブ無し）でのGENESIS LAB実解放→Archive画面（Discovery Rate 3/6表示・6件全カード・発見済み3件）→MODE SELECTからの導線→別インスタンスでのSave/Reload後の状態復元→既存のSTEP30-3/30-6等既存画面への無影響を含め計43項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: Hidden Reward（Hidden Protocol/Mythic Upgrade/Legend Identity/Hidden Cosmetic）は、既存のProtocol Slot/Upgrade Lv/Research Identityの各システムへ本格的に組み込む（新規Protocol種別の追加やIdentity5種目の新設等）と影響範囲が既存システム全体に及ぶため、Archiveに記録される「収集要素」+実際のゲームプレイ資源（Protocol Fragment/Research Data等）への即時変換という軽量な実装に留めている。PARADOX COREの「Modifier反転」も上記のとおりreward/riskChainBonusの積み増しへ単純化しており、文字どおりの符号反転ではない。

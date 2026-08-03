@@ -58,7 +58,11 @@
           identitySelect: document.getElementById('screen-identityselect'),
           researchProfile: document.getElementById('screen-researchprofile'),
           // STEP30-3: World Environment Archive
-          worldEnvArchive: document.getElementById('screen-worldenvarchive')
+          worldEnvArchive: document.getElementById('screen-worldenvarchive'),
+          // STEP30-6: Environment Event Archive
+          envEventArchive: document.getElementById('screen-enveventarchive'),
+          // STEP30-7: Hidden Environment Archive
+          hiddenArchive: document.getElementById('screen-hiddenarchive')
         },
 
         // TITLE

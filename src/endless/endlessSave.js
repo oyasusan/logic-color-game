@@ -89,7 +89,22 @@
       // ---- STEP30-5: World Mutation Trigger System ----
       activeMutation: null,     // 現在Active中のMutation id（無ければnull）
       mutationLevel: 0,         // 0(Normal)〜3(Collapse)。activeMutationが無ければ常に0
-      mutationHistory: []       // { run, layer, mutation, level, result, timestamp } 直近MUTATION_HISTORY_LIMIT件（Archive Integration用、古い順に追加）
+      mutationHistory: [],      // { run, layer, mutation, level, result, timestamp } 直近MUTATION_HISTORY_LIMIT件（Archive Integration用、古い順に追加）
+
+      // ---- STEP30-6: Environment Event System ----
+      activeEnvironmentEvent: null,   // 現在Active中のEnvironment Event id（無ければnull）
+      environmentEventHistory: [],    // { run, layer, eventId, name, environment, result, timestamp } 直近ENVIRONMENT_EVENT_HISTORY_LIMIT件（古い順に追加）
+      discoveredEnvironmentEvents: [], // 一度でも発生したことがあるEvent id一覧（Archive表示用）
+      environmentEventArchive: {},    // { [eventId]: { environment, count, bestReward } } Archive Integration（要求仕様セクション15）
+
+      // ---- STEP30-7: Hidden Environment System ----
+      hiddenUnlockFlags: [],       // 一度でも解放条件を満たしたHidden Environment id一覧（永続、二度と失われない）
+      hiddenVisitHistory: [],      // { id, run, layer, timestamp } 直近HIDDEN_VISIT_HISTORY_LIMIT件の入場履歴（古い順に追加）
+      hiddenArchive: {},           // { [id]: { firstDiscoveryRun, firstDiscoveryLayer, visitCount, rewardUnlocked, rewardId } } Archive Integration（要求仕様セクション9）
+      // discoveryRate（要求仕様セクション11）は、hiddenUnlockFlags.length/HiddenEnvironmentData.ALL.lengthから
+      // 都度計算できるため、重複データを持たず永続化しない（既存の"highestDepth"=endlessBestDepth重複回避と同じ設計判断）
+      totalResearchLabVisits: 0,   // GENESIS LABの解放条件判定用、生涯Research Lab到達回数
+      lastRunVisitedNodes: []      // ECHO NETWORKの「Ghost Route表示」用、直前RUNのvisitedNodesスナップショット
     };
   }
 
@@ -98,6 +113,8 @@
   const ENVIRONMENT_VISIT_HISTORY_LIMIT = 100; // STEP30-3: Environment訪問履歴の保持件数上限
   const WORLD_HISTORY_LIMIT = 100; // STEP30-4: World Stability変化履歴の保持件数上限
   const MUTATION_HISTORY_LIMIT = 100; // STEP30-5: World Mutation履歴の保持件数上限
+  const ENVIRONMENT_EVENT_HISTORY_LIMIT = 100; // STEP30-6: Environment Event履歴の保持件数上限
+  const HIDDEN_VISIT_HISTORY_LIMIT = 100; // STEP30-7: Hidden Environment入場履歴の保持件数上限
 
   class EndlessSaveStore {
     constructor() {
@@ -162,6 +179,10 @@
         this.data.maxRiskChainMultiplierEver = riskChainMultiplierThisRun;
       }
       this.data.totalUnknownAnalysisCount += unknownAnalysisCountThisRun;
+
+      // ---- STEP30-7: Hidden Environment System ----
+      this.data.totalResearchLabVisits += result.researchLabVisitsGained || 0;
+      if (result.lastRunVisitedNodes) this.data.lastRunVisitedNodes = result.lastRunVisitedNodes;
 
       this.data.researchHistory.push({
         depth: result.depth,
@@ -635,6 +656,114 @@
     /** @returns {Array<Object>} 直近の履歴から新しい順 */
     getMutationHistory() {
       return this.data.mutationHistory.slice().reverse();
+    }
+
+    /** ---------------- STEP30-6: Environment Event System ---------------- */
+
+    getActiveEnvironmentEventId() {
+      return this.data.activeEnvironmentEvent;
+    }
+
+    setActiveEnvironmentEventId(id) {
+      this.data.activeEnvironmentEvent = id;
+      this.save();
+    }
+
+    /** @param {{run:number, layer:number, eventId:string, name:string, environment:string, result:string}} entry */
+    recordEnvironmentEventHistory(entry) {
+      this.data.environmentEventHistory.push(Object.assign({ timestamp: Date.now() }, entry));
+      if (this.data.environmentEventHistory.length > ENVIRONMENT_EVENT_HISTORY_LIMIT) {
+        this.data.environmentEventHistory.splice(0, this.data.environmentEventHistory.length - ENVIRONMENT_EVENT_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の履歴から新しい順 */
+    getEnvironmentEventHistory() {
+      return this.data.environmentEventHistory.slice().reverse();
+    }
+
+    getDiscoveredEnvironmentEvents() {
+      return this.data.discoveredEnvironmentEvents.slice();
+    }
+
+    /** @returns {boolean} 新規発見ならtrue（既に発見済みならfalse） */
+    recordDiscoveredEnvironmentEvent(id) {
+      if (this.data.discoveredEnvironmentEvents.indexOf(id) !== -1) return false;
+      this.data.discoveredEnvironmentEvents.push(id);
+      this.save();
+      return true;
+    }
+
+    /** Archive Integration（要求仕様セクション15）。count加算・bestReward更新をまとめて行う */
+    recordEnvironmentEventArchive(eventId, environment, rewardValue) {
+      const existing = this.data.environmentEventArchive[eventId];
+      const count = (existing ? existing.count : 0) + 1;
+      const bestReward = Math.max(existing ? existing.bestReward : 0, rewardValue || 0);
+      this.data.environmentEventArchive[eventId] = { environment, count, bestReward };
+      this.save();
+    }
+
+    /** @returns {{environment:string, count:number, bestReward:number}|null} */
+    getEnvironmentEventArchiveRecord(eventId) {
+      return this.data.environmentEventArchive[eventId] || null;
+    }
+
+    /** ---------------- STEP30-7: Hidden Environment System ---------------- */
+
+    getHiddenUnlockFlags() {
+      return this.data.hiddenUnlockFlags.slice();
+    }
+
+    isHiddenEnvironmentUnlocked(id) {
+      return this.data.hiddenUnlockFlags.indexOf(id) !== -1;
+    }
+
+    /** @returns {boolean} 新規解放ならtrue（既に解放済みならfalse） */
+    unlockHiddenEnvironment(id) {
+      if (this.isHiddenEnvironmentUnlocked(id)) return false;
+      this.data.hiddenUnlockFlags.push(id);
+      this.save();
+      return true;
+    }
+
+    /** 入場のたびに呼ぶ。履歴記録・Archive(First Discovery/Visit Count)更新をまとめて行う */
+    recordHiddenVisit(id, run, layer) {
+      this.data.hiddenVisitHistory.push({ id, run, layer, timestamp: Date.now() });
+      if (this.data.hiddenVisitHistory.length > HIDDEN_VISIT_HISTORY_LIMIT) {
+        this.data.hiddenVisitHistory.splice(0, this.data.hiddenVisitHistory.length - HIDDEN_VISIT_HISTORY_LIMIT);
+      }
+      const existing = this.data.hiddenArchive[id];
+      this.data.hiddenArchive[id] = existing
+        ? Object.assign({}, existing, { visitCount: existing.visitCount + 1 })
+        : { firstDiscoveryRun: run, firstDiscoveryLayer: layer, visitCount: 1, rewardUnlocked: false, rewardId: null };
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の入場履歴から新しい順 */
+    getHiddenVisitHistory() {
+      return this.data.hiddenVisitHistory.slice().reverse();
+    }
+
+    /** @returns {{firstDiscoveryRun:number, firstDiscoveryLayer:number, visitCount:number, rewardUnlocked:boolean, rewardId:string|null}|null} */
+    getHiddenArchiveRecord(id) {
+      return this.data.hiddenArchive[id] || null;
+    }
+
+    /** 限定Reward付与時に呼ぶ。Archive上のCompletionフラグを立てる */
+    recordHiddenReward(id, rewardId) {
+      const existing = this.data.hiddenArchive[id];
+      if (!existing) return;
+      this.data.hiddenArchive[id] = Object.assign({}, existing, { rewardUnlocked: true, rewardId });
+      this.save();
+    }
+
+    getTotalResearchLabVisits() {
+      return this.data.totalResearchLabVisits;
+    }
+
+    getLastRunVisitedNodes() {
+      return this.data.lastRunVisitedNodes.slice();
     }
   }
 
