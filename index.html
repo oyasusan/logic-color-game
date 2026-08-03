@@ -1288,6 +1288,15 @@
   #screen-map {
     align-items: center;
     padding-top: calc(var(--safe-top) + 24px);
+    /* Deep Scan等で候補カードが増えると縦に収まりきらないため、ヘッダー/説明文は
+       固定したまま.map-node-cardsだけを内部スクロールさせる（overflow:hiddenで
+       画面自体のスクロールは止め、下のflex:1要素へスクロールを委譲する） */
+    overflow: hidden;
+  }
+
+  #screen-map .lab-header,
+  #screen-map .lab-instruction {
+    flex-shrink: 0;
   }
 
   .map-node-cards {
@@ -1296,6 +1305,11 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(var(--safe-bottom) + 16px);
   }
 
   .map-node-card {
@@ -1342,28 +1356,44 @@
   }
 
   /* ---------- RESEARCH MAP (進行状況の俯瞰画面) ---------- */
-  #screen-map .lab-header { position: relative; }
+  /* MAPアイコン/EXITアイコンはabsolute配置だと画面幅次第でタイトルと重なる事故が
+     起きうるため、flexboxの3分割レイアウト（左ボタン/中央タイトル/右ボタン）に
+     変更し、重なりが原理的に起きないようにした */
+  .map-screen-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 
-  .map-overview-btn {
-    position: absolute;
-    left: 0;
-    top: -2px;
-    width: 54px;
-    height: 46px;
+  .map-header-titles { flex: 1; min-width: 0; }
+
+  .map-overview-btn, .map-extract-btn {
     flex-direction: column;
     gap: 1px;
-    border-color: var(--blue);
-    box-shadow: 0 0 10px rgba(41, 224, 255, 0.3);
+    flex-shrink: 0;
+    width: 54px;
+    height: 46px;
   }
 
-  .map-overview-btn .map-overview-icon { font-size: 22px; line-height: 1; }
+  .map-overview-btn { border-color: var(--blue); box-shadow: 0 0 10px rgba(41, 224, 255, 0.3); }
+  .map-overview-btn .map-overview-label { color: var(--blue); }
 
-  .map-overview-btn .map-overview-label {
-    font-size: 8px;
+  .map-overview-btn .map-overview-icon,
+  .map-extract-btn .map-overview-icon { font-size: 22px; line-height: 1; }
+
+  .map-overview-btn .map-overview-label,
+  .map-extract-btn .map-overview-label {
+    font-size: 9px;
     font-weight: 800;
     letter-spacing: 0.5px;
-    color: var(--blue);
   }
+
+  /* MAP選択画面のフィードバックにより、画面内の文字サイズを全体的に少し拡大 */
+  #screen-map .lab-title { font-size: 22px; }
+  #screen-map .lab-subtitle { font-size: 12px; }
+  #screen-map .lab-instruction { font-size: 13px; }
+  #screen-map .lab-card-name { font-size: 17px; }
+  #screen-map .lab-card-desc { font-size: 13px; }
 
   .research-map-screen { padding-bottom: calc(var(--safe-bottom) + 14px); }
 
@@ -1657,32 +1687,18 @@
   /* ---------- STEP27: AI Analysis Risk/Reward System ---------- */
 
   .map-extract-btn {
-    position: absolute;
-    right: 0;
-    top: -2px;
-    width: 54px;
-    height: 46px;
-    flex-direction: column;
-    gap: 1px;
     border-color: var(--red);
     box-shadow: 0 0 10px rgba(255, 63, 107, 0.3);
   }
 
-  .map-extract-btn .map-overview-icon { font-size: 22px; line-height: 1; }
-
-  .map-extract-btn .map-overview-label {
-    font-size: 8px;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    color: var(--red);
-  }
+  .map-extract-btn .map-overview-label { color: var(--red); }
 
   /* AI Analysis Panel（Node選択カード内のSIGNAL DETECTED表示） */
   .ai-panel { padding-top: 30px; text-align: left; }
 
   .ai-signal-label {
     display: block;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 800;
     letter-spacing: 2px;
     color: var(--blue);
@@ -1702,8 +1718,8 @@
   }
 
   .ai-analysis-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .ai-analysis-key { font-size: 10px; color: var(--text-dim); letter-spacing: 0.5px; }
-  .ai-analysis-value { font-size: 12px; font-weight: 800; }
+  .ai-analysis-key { font-size: 11px; color: var(--text-dim); letter-spacing: 0.5px; }
+  .ai-analysis-value { font-size: 13px; font-weight: 800; }
 
   .ai-analysis-value.threat-0, .ai-analysis-value.threat-1 { color: var(--green); }
   .ai-analysis-value.threat-2                                { color: var(--blue); }
@@ -1718,7 +1734,7 @@
   .ai-analysis-value.confidence-low    { color: var(--text-dim); }
 
   .ai-recommendation {
-    font-size: 11px;
+    font-size: 12px;
     font-style: italic;
     color: var(--blue);
     margin-bottom: 6px;
@@ -1740,7 +1756,7 @@
     padding: 10px 4px;
     border-radius: 10px;
     font-weight: 800;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
   }
 
@@ -2167,13 +2183,15 @@
 
   <!-- ============ MAP (分岐するNode候補から次の1歩を選ぶ) ============ -->
   <section id="screen-map" class="screen">
-    <div class="lab-header">
+    <div class="lab-header map-screen-header">
       <button type="button" id="mapOverviewBtn" class="icon-btn map-overview-btn" aria-label="リサーチマップ">
         <span class="map-overview-icon">🗺️</span>
         <span class="map-overview-label">MAP</span>
       </button>
-      <h2 class="lab-title">MAP</h2>
-      <div id="mapDepthLabel" class="lab-subtitle">DEPTH 1</div>
+      <div class="map-header-titles">
+        <h2 class="lab-title">MAP</h2>
+        <div id="mapDepthLabel" class="lab-subtitle">DEPTH 1</div>
+      </div>
       <button type="button" id="mapExtractBtn" class="icon-btn map-extract-btn" aria-label="EXTRACT">
         <span class="map-overview-icon">🚀</span>
         <span class="map-overview-label">EXIT</span>
