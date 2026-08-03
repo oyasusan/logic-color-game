@@ -30,13 +30,20 @@
      * @param {Object} [deps.protocolManager] RUN開始時に選択したProtocolの効果を参照する（Difficulty Tierへの反映用）
      * @param {Object} [deps.environmentManager] RUN開始時に選択したResearch Environmentの効果を参照する
      *   （Difficulty Tier加算・Blue Spectrumの生成バイアスへの反映用）
+     * @param {Object} [deps.environmentModifierManager] STEP30-2: 現在のWorldEnvironment
+     *   （Research Layerに紐づく見た目テーマ）が持つPuzzle向けModifier
+     *   （Puzzle Difficulty=制限時間短縮、Puzzle Hint Effect=HINT開示マス数）に使う
+     * @param {Object} [deps.worldMutationManager] STEP30-5: Active中のMutation
+     *   （FRACTAL OVERFLOWのPuzzle Difficulty=制限時間短縮）に使う
      */
-    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager }) {
+    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager, environmentModifierManager, worldMutationManager }) {
       this.ui = ui;
       this.puzzleManager = puzzleManager;
       this.upgradeManager = upgradeManager;
       this.protocolManager = protocolManager || null;
       this.environmentManager = environmentManager || null;
+      this.environmentModifierManager = environmentModifierManager || null;
+      this.worldMutationManager = worldMutationManager || null;
 
       this.game = null;
       this.puzzle = null;
@@ -63,6 +70,7 @@
       this.onClear = null;   // (stats) => {}
       this.onTimeout = null; // (stats) => {}
       this.onTick = null;    // (remainingSeconds, timeLimitSeconds) => {}
+      this.onHintUsed = null; // () => {} HINTが実際に1マス以上開示した瞬間に呼ばれる（手動・AI Prediction自動発動どちらも対象）
     }
 
     /**
@@ -131,6 +139,14 @@
       this.modifiers.forEach(m => {
         if (m.effect.timeLimitMultiplierScale) timeLimitMultiplier *= m.effect.timeLimitMultiplierScale;
       });
+      // STEP30-2: FRACTAL COREの「Puzzle Difficulty +25%」を制限時間短縮として適用する
+      if (this.environmentModifierManager) {
+        timeLimitMultiplier = this.environmentModifierManager.applyPuzzleModifier({ timeLimitMultiplier }).timeLimitMultiplier;
+      }
+      // STEP30-5: FRACTAL OVERFLOW Mutationの「Puzzle Difficulty +30%」も同じレバーで適用する
+      if (this.worldMutationManager) {
+        timeLimitMultiplier *= this.worldMutationManager.getPuzzleTimeLimitMultiplier();
+      }
       this.timeLimit = Math.max(10, Math.round(this.puzzle.parSeconds * timeLimitMultiplier));
       this.remaining = this.timeLimit;
 
@@ -311,8 +327,12 @@
     handleHint() {
       if (this.locked || !this.game || this.game.cleared) return;
 
-      // Analyzerアップグレード: 1回のHINTで追加のマスも同時に開示する
-      const revealCount = 1 + this._effectTotal('hintRevealBonus');
+      // Analyzerアップグレード・STEP30-2 DIGITAL GRIDの「Puzzle Hint Effect +1」:
+      // 1回のHINTで追加のマスも同時に開示する
+      const envHintBonus = this.environmentModifierManager
+        ? this.environmentModifierManager.applyPuzzleModifier({}).hintRevealBonus
+        : 0;
+      const revealCount = 1 + this._effectTotal('hintRevealBonus') + envHintBonus;
       let revealed = 0;
       for (let i = 0; i < revealCount; i++) {
         const result = this.game.hint();
@@ -330,6 +350,9 @@
 
       this.ui.renderHintStatus(this.game);
       this.ui.renderStatus(this.game);
+      // ライフを消費するのは実際に1マス以上開示できた時のみ（開示するマスが無かった空振りは対象外）。
+      // 開示マス数（revealCount）に関わらず、このhandleHint()呼び出し1回につき常に1回分として通知する
+      if (this.onHintUsed) this.onHintUsed();
       if (this.game.cleared) this._handleClear();
     }
 

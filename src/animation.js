@@ -85,6 +85,31 @@
       this._discoveryTimer = setTimeout(() => {
         overlayEl.classList.add('hidden');
       }, duration || 1800);
+    },
+
+    /**
+     * STEP29: Identity Level Up / Perk Unlock演出。showDiscoveryと同じ構造だが、
+     * ラベル文言自体も呼び出し側から差し替えられるようにした汎用版
+     * （"PROTOCOL DISCOVERED"固定のshowDiscoveryに対し、こちらは
+     * "IDENTITY LEVEL UP"/"PERK UNLOCKED"のどちらでも使う）。
+     * @param {HTMLElement} overlayEl
+     * @param {HTMLElement} labelEl
+     * @param {HTMLElement} nameEl
+     * @param {HTMLElement} subEl
+     * @param {{label:string, name:string, sub:string}} info
+     * @param {number} [duration=1800]
+     */
+    showIdentityEvent(overlayEl, labelEl, nameEl, subEl, info, duration) {
+      if (!overlayEl || !nameEl || !info) return;
+      if (labelEl) labelEl.textContent = info.label || '';
+      nameEl.textContent = info.name || '';
+      if (subEl) subEl.textContent = info.sub || '';
+      overlayEl.classList.remove('hidden');
+      retrigger(overlayEl.firstElementChild, 'level-up-card');
+      clearTimeout(this._identityEventTimer);
+      this._identityEventTimer = setTimeout(() => {
+        overlayEl.classList.add('hidden');
+      }, duration || 1800);
     }
   };
 

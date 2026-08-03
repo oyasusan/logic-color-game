@@ -50,8 +50,23 @@
     EnvironmentManager, EnvironmentArchive,
     MapGenerator, MapUI, DifficultyManager, ResearchMapScreen,
     AIAnalysis, RiskChain, UnknownEvents, RewardChoice, ExtractManager,
-    MetaProgression, NeuralLab
+    MetaProgression, NeuralLab,
+    IdentityManager, IdentitySelect, ResearchProfile, AIFeedback, Achievements,
+    WorldEnvironmentManager, EnvironmentModifierManager,
+    EnvironmentScan, TransitionManager, EnvironmentHUD, EnvironmentRenderer, WorldEnvironmentArchive,
+    WorldStabilityManager, WorldMutationManager, MutationRenderer
   } = G;
+
+  // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
+  const STABILITY_DELTA_UNKNOWN_NODE_ANALYZE = 5;   // Unknown Node解析 -5
+  const STABILITY_DELTA_UNKNOWN_DIMENSION_ENTER = 15; // Unknown Dimension進入 -15
+  const STABILITY_DELTA_RISK_CHAIN_CONTINUE = 2;    // Risk Chain継続 -2
+  const STABILITY_DELTA_RESEARCH_LAB = 10;          // Research Lab +10
+  const STABILITY_DELTA_SAFE_NODE = 3;              // Safe Node（Recovery Node） +3
+  const STABILITY_DELTA_EXTRACT_SUCCESS = 5;        // Extract成功 +5
+  // Mutation Event用予約 -10（要求仕様どおり値だけ定義。World Mutation自体はSTEP30-5以降の
+  // 実装対象のため、今回はまだこの定数を使う呼び出し箇所が存在しない）
+  const STABILITY_DELTA_MUTATION_EVENT_RESERVED = 10;
 
   const STARTING_LIFE = 3;
   const CLEAR_REWARD = 100;
@@ -59,7 +74,6 @@
   const COMBO_REWARD_PER_STACK = 20;    // コンボ数×この値を加点（2連続なら+40、3連続なら+60…）
   const SPEED_BONUS_PER_SECOND = 5;     // parSecondsより1秒速くクリアするごとに加点
   const ADVANCE_DELAY_MS = 900;         // クリア/ミス演出とトーストを見る間を置いてから次の問題へ進む
-  const NODE_RESULT_AUTO_ADVANCE_MS = 2200; // Recovery/Event結果オーバーレイの自動送り時間（「つづける」タップでも即座に進める）
   const RECOVERY_BASE_INTERVAL = 3;     // Recovery Protocol未所持時は回復しない。所持時の基準クリア間隔
   const ELITE_SCORE_MULTIPLIER = 1.5;   // Elite Node撃破時の総獲得スコア倍率
   const ELITE_FRAGMENT_BONUS = 2;       // Elite Node撃破時に追加で獲得するProtocol Fragment数
@@ -81,25 +95,68 @@
       this.upgradeManager = new UpgradeManager();
       this.protocolManager = new ProtocolManager();
 
+      // ---- STEP29: Research Identity System ----
+      // metaProgressionより先に作る（Protocol EngineerのEvolution Cost Down Perkを
+      // metaProgression.getEvolutionCost()から参照させるため）
+      this.identityManager = new IdentityManager({ save: this.save });
+
+      // ---- STEP30-1: Environment Framework（Research LayerのVisual Theme。
+      // 既存の「Research Environment」（environmentManager）とは別概念） ----
+      this.worldEnvironmentManager = new WorldEnvironmentManager({ save: this.save });
+      // STEP30-2: Environment Modifier System。worldEnvironmentManagerの現在Environmentを
+      // 参照し、Puzzle/Reward/Protocol/Map/Unknown/Riskへの影響を一元管理する
+      this.environmentModifierManager = new EnvironmentModifierManager({ worldEnvironmentManager: this.worldEnvironmentManager });
+
+      // ---- STEP30-4: World Stability System ----
+      this.worldStabilityManager = new WorldStabilityManager({ save: this.save });
+
+      // ---- STEP30-5: World Mutation Trigger System ----
+      this.worldMutationManager = new WorldMutationManager({
+        save: this.save, worldStabilityManager: this.worldStabilityManager, worldEnvironmentManager: this.worldEnvironmentManager
+      });
+      this.mutationRenderer = new MutationRenderer({ ui });
+      this.consecutiveUnknownAnalysesThisRun = 0; // 追加Trigger「Unknown Node連続解析」判定用
+
+      // ---- STEP30-3: Environment Visual / HUD Evolution ----
+      this.environmentScan = new EnvironmentScan({ ui });
+      this.transitionManager = new TransitionManager({ ui });
+      this.environmentHud = new EnvironmentHUD();
+      this.environmentRenderer = new EnvironmentRenderer({ save: this.save });
+      this.worldEnvironmentArchive = new WorldEnvironmentArchive({ ui, save: this.save });
+      this.worldEnvironmentArchive.onBack = () => this.showModeSelect();
+      this._previousWorldEnvDef = null; // RUN内で直前に確定していたEnvironment（Transition表示用、RUN開始時にnullへリセット）
+
       // ---- STEP28: Meta Progression / Permanent Research System ----
       // environmentManager/mapUIより先に作る（Rank解放Environmentのフィルタ・
       // Advanced Analysisの解析確率に参照させるため）
-      this.metaProgression = new MetaProgression({ save: this.save });
+      this.metaProgression = new MetaProgression({ save: this.save, identityManager: this.identityManager });
 
       this.environmentManager = new EnvironmentManager({ ui, metaProgression: this.metaProgression });
       this.round = new EndlessRoundController({
         ui, puzzleManager,
         upgradeManager: this.upgradeManager,
         protocolManager: this.protocolManager,
-        environmentManager: this.environmentManager
+        environmentManager: this.environmentManager,
+        environmentModifierManager: this.environmentModifierManager,
+        worldMutationManager: this.worldMutationManager
       });
       this.result = new EndlessResultScreen({
         onRetry: () => this._showNeuralLab(true),
         onTitle: () => this._exitToTitle()
       });
-      this.neuralLab = new NeuralLab({ ui, save: this.save, metaProgression: this.metaProgression });
+      this.neuralLab = new NeuralLab({ ui, save: this.save, metaProgression: this.metaProgression, identityManager: this.identityManager });
       this.neuralLab.onStartRun = () => this.startRun();
       this.neuralLab.onExit = () => this.showModeSelect();
+
+      // ---- STEP29: Research Identity System ----
+      this.identitySelect = new IdentitySelect({ ui });
+      this.identitySelect.onSelect = def => {
+        this.identityManager.select(def.id);
+        this.protocolSelect.show();
+      };
+      this.researchProfile = new ResearchProfile({ ui, save: this.save, identityManager: this.identityManager });
+      this.researchProfile.onBack = () => this.showModeSelect();
+
       this.researchLab = new ResearchLab({ ui, upgradeManager: this.upgradeManager });
       this.researchLab.onSelect = def => this._handleUpgradeSelected(def);
       this.protocolSelect = new ProtocolSelect({ ui });
@@ -114,7 +171,10 @@
         this.protocolSelect.show();
       };
       this.environmentArchive = new EnvironmentArchive({ ui, save: this.save });
-      this.mapUI = new MapUI({ ui, protocolManager: this.protocolManager, metaProgression: this.metaProgression });
+      this.mapUI = new MapUI({
+        ui, protocolManager: this.protocolManager, metaProgression: this.metaProgression,
+        identityManager: this.identityManager, environmentModifierManager: this.environmentModifierManager
+      });
       this.mapUI.onSelect = node => this._handleMapNodeSelected(node);
       this.researchMap = new ResearchMapScreen({ ui });
       this.researchMap.onResume = () => this.ui.showScreen('map');
@@ -155,9 +215,14 @@
       this.protocolFragmentsThisRun = 0; // このRUNで獲得したProtocol Fragment数（RUN終了時に生涯累計へ加算）
       this._life1AtDepth20ThisRun = false; // Minimalの解放条件(ライフ1でDepth20到達)を満たしたか
 
+      // ---- STEP29: Research Identity System（AI Feedback集計用のRUN内カウンタ） ----
+      this.clearsThisRun = 0;      // このRUNでクリアしたPuzzle/Elite/Boss総数（perfectRatio算出用）
+      this._extractedThisRun = false; // Extract Systemで自主的にRUNを終えたか
+
       this.round.onClear = stats => this._handleRoundClear(stats);
       this.round.onTimeout = stats => this._handleRoundTimeout(stats);
       this.round.onTick = (remaining, limit) => this._renderTimer(remaining, limit);
+      this.round.onHintUsed = () => this._handleHintUsed();
 
       this.el = {
         titleEndlessBtn: document.getElementById('titleEndlessBtn'),
@@ -169,6 +234,10 @@
         environmentArchiveBtn: document.getElementById('environmentArchiveBtn'),
         environmentArchiveBackBtn: document.getElementById('environmentArchiveBackBtn'),
         neuralLabBtn: document.getElementById('neuralLabModeSelectBtn'),
+        researchProfileBtn: document.getElementById('researchProfileModeSelectBtn'),
+        identitySelectBackBtn: document.getElementById('identitySelectBackBtn'),
+        worldEnvArchiveBtn: document.getElementById('worldEnvArchiveModeSelectBtn'),
+        performanceModeBtn: document.getElementById('performanceModeBtn'),
         endlessBestDepth: document.getElementById('endlessBestDepth'),
         endlessBestScore: document.getElementById('endlessBestScore'),
         endlessTotalRuns: document.getElementById('endlessTotalRuns'),
@@ -189,7 +258,11 @@
         endlessTimeValue: document.getElementById('endlessTimeValue'),
         endlessUpgradeList: document.getElementById('endlessUpgradeList'),
         endlessResearchDataValue: document.getElementById('endlessResearchDataValue'),
-        endlessRiskChainBadge: document.getElementById('endlessRiskChainBadge')
+        endlessRiskChainBadge: document.getElementById('endlessRiskChainBadge'),
+
+        // STEP30-1: Environment Framework
+        endlessWorldEnvValue: document.getElementById('endlessWorldEnvValue'),
+        mapWorldEnvLabel: document.getElementById('mapWorldEnvLabel')
       };
 
       this._bindEvents();
@@ -223,6 +296,19 @@
       if (this.el.neuralLabBtn) {
         this.el.neuralLabBtn.addEventListener('click', () => this._showNeuralLab(false));
       }
+      if (this.el.researchProfileBtn) {
+        this.el.researchProfileBtn.addEventListener('click', () => this.researchProfile.show());
+      }
+      if (this.el.identitySelectBackBtn) {
+        this.el.identitySelectBackBtn.addEventListener('click', () => this.showModeSelect());
+      }
+      if (this.el.worldEnvArchiveBtn) {
+        this.el.worldEnvArchiveBtn.addEventListener('click', () => this.worldEnvironmentArchive.show());
+      }
+      if (this.el.performanceModeBtn) {
+        this.el.performanceModeBtn.addEventListener('click', () => this._cyclePerformanceMode());
+        this._renderPerformanceModeBtn();
+      }
       if (this.el.mapOverviewBtn) {
         this.el.mapOverviewBtn.addEventListener('click', () => this._showResearchMap());
       }
@@ -244,6 +330,9 @@
     /** Extract確認画面で「RETURN TO SURFACE」を選んだ時。ボーナスを加算してRUNを正常終了させる */
     _handleExtractReturn(bonus) {
       this.researchData += bonus;
+      this._extractedThisRun = true; // STEP29: AI Feedback Systemの分析材料
+      // STEP30-4: 「Extract成功」+5
+      this.worldStabilityManager.increaseStability(STABILITY_DELTA_EXTRACT_SUCCESS, { layer: this.depth, event: 'Extract成功' });
       this._endRun();
     }
 
@@ -268,7 +357,8 @@
         ownedUpgrades: this.upgradeManager.getOwnedList(),
         activeProtocols: this.protocolManager.getActiveDefs(),
         activeSynergies: this.protocolManager.getActiveSynergies(),
-        puzzleHistory: this.save.getPuzzleHistory()
+        puzzleHistory: this.save.getPuzzleHistory(),
+        mutationHistory: this.worldMutationManager.getMutationHistory() // STEP30-5: Archive Integration
       });
     }
 
@@ -281,7 +371,24 @@
       if (this.el.endlessTotalRuns) this.el.endlessTotalRuns.textContent = String(this.save.getTotalRuns());
       if (this.el.endlessTotalBossClear) this.el.endlessTotalBossClear.textContent = String(this.save.getTotalBossClear());
       if (this.el.endlessMemoryFragments) this.el.endlessMemoryFragments.textContent = String(this.save.getMemoryFragments());
+      this._renderPerformanceModeBtn();
       this.ui.showScreen('modeSelect');
+    }
+
+    /** STEP30-3: Performance Control。high→normal→low→highの順に巡回させる */
+    _cyclePerformanceMode() {
+      const order = ['high', 'normal', 'low'];
+      const current = this.environmentRenderer.getPerformanceMode();
+      const next = order[(order.indexOf(current) + 1) % order.length];
+      this.environmentRenderer.setPerformanceMode(next);
+      this._renderPerformanceModeBtn();
+      // 表示中のTheme Animationへ即座に反映する
+      this.environmentRenderer.render(this.worldEnvironmentManager.getCurrentEnvironment());
+    }
+
+    _renderPerformanceModeBtn() {
+      if (!this.el.performanceModeBtn) return;
+      this.el.performanceModeBtn.textContent = `PERFORMANCE: ${this.environmentRenderer.getPerformanceMode().toUpperCase()}`;
     }
 
     _exitToTitle() {
@@ -316,11 +423,20 @@
 
     /** ---------------- RUN開始・進行 ---------------- */
 
-    /** MODE SELECTの「START RUN」から呼ばれる。RUN本体の初期化はProtocol Select→Environment Detection完了後（_initializeRun）に行う */
+    /**
+     * MODE SELECTの「START RUN」から呼ばれる。RUN本体の初期化はProtocol Select→
+     * Environment Detection完了後（_initializeRun）に行う。
+     * STEP29: まだResearch Identityを選択したことが無い場合のみ、Protocol Selectより
+     * 先にIdentity Select（新規プレイ開始時の一度きりの選択）を挟む。
+     */
     startRun() {
       clearTimeout(this._advanceTimer);
       this.protocolManager.reset();
       this.environmentManager.reset();
+      if (!this.identityManager.isSelected()) {
+        this.identitySelect.show();
+        return;
+      }
       this.protocolSelect.show();
     }
 
@@ -352,8 +468,9 @@
       this._renderRiskChainBadge();
       this.depth = 0;
       this.score = 0;
-      // Explorer Protocol所持時、開始時の最大ライフに反映する（Environment側にライフ効果は無い）
-      this.maxLife = STARTING_LIFE + this.protocolManager.getLifeBonus();
+      // Explorer Protocol所持時、開始時の最大ライフに反映する（Environment側にライフ効果は無い）。
+      // STEP29: SurvivalistのStarting Life/Life IncreaseもここでSTARTING_LIFEへ加算する
+      this.maxLife = STARTING_LIFE + this.protocolManager.getLifeBonus() + this.identityManager.getLifeBonus();
       this.life = this.maxLife;
       this.combo = 0;
       this.perfectCount = 0;
@@ -362,8 +479,23 @@
       this.memoryFragmentsThisRun = 0;
       this.nextUpgradeMultiplier = 1;
       this.eventCountThisRun = 0;
-      this.protocolFragmentsThisRun = 0;
+      // STEP29: Protocol EngineerのStarting Fragment（secondaryBonus）をRUN開始時に加算する
+      this.protocolFragmentsThisRun = this.identityManager.getStartingFragmentBonus();
       this._life1AtDepth20ThisRun = false;
+      this.clearsThisRun = 0;
+      this._extractedThisRun = false;
+      // STEP30-1: 実際のEnvironment確定は最初のLayer移動（_handleMapNodeSelected）任せにし、
+      // ここでは前RUNの表示が一瞬残らないよう見た目だけリセットする
+      if (this.el.endlessWorldEnvValue) this.el.endlessWorldEnvValue.textContent = '-';
+      if (this.el.mapWorldEnvLabel) this.el.mapWorldEnvLabel.textContent = '';
+      // STEP30-3: 前RUNのEnvironmentを引き継がない（最初のLayerではTransition演出を出さない）
+      this._previousWorldEnvDef = null;
+      this.environmentHud.hide();
+      // STEP30-4: World Stabilityを100へリセットする（生涯データのmutationLevel等はリセットしない）
+      this.worldStabilityManager.reset();
+      // STEP30-5: World Mutationも同様にRUN開始時は必ず解除する
+      this.worldMutationManager.reset();
+      this.consecutiveUnknownAnalysesThisRun = 0;
 
       // Research Environment: 選んだ（Unstable Systemなら実際に解決された分も）Environmentを発見済みとして記録する
       if (this.environmentManager.getSelectedId()) {
@@ -426,7 +558,7 @@
      * （ChaosをMergeしただけで即ライフを失うような理不尽さを避けるため）。
      */
     _recalculateMaxLife() {
-      const newMaxLife = Math.max(1, STARTING_LIFE + this.protocolManager.getLifeBonus());
+      const newMaxLife = Math.max(1, STARTING_LIFE + this.protocolManager.getLifeBonus() + this.identityManager.getLifeBonus());
       const delta = newMaxLife - this.maxLife;
       this.maxLife = newMaxLife;
       this.life = delta > 0 ? Math.min(this.maxLife, this.life + delta) : Math.min(this.life, this.maxLife);
@@ -481,6 +613,7 @@
       const synergies = this.protocolManager.getActiveSynergies();
       if (synergies.length > 0) {
         message += ` / SYNERGY: ${synergies.map(s => s.name).join(', ')}`;
+        this._grantIdentityExp('synergyActive'); // STEP29: Protocol EngineerのEXP源
       }
       this.ui.showToast(message);
 
@@ -496,8 +629,10 @@
     _showMapChoices() {
       const nextDepth = this.depth + 1;
       // STEP28: Deep Scan（researchTree.js）の所持レベルに応じて分岐候補数が増える
+      // STEP29: ExplorerのMap Scan（primaryBonus/perk）もここに合算される
+      const extraChoices = this.metaProgression.getExtraMapChoices() + this.identityManager.getExtraMapChoices();
       const choices = MapGenerator.generateChoices(
-        nextDepth, this.protocolManager, this.environmentManager, this.metaProgression.getExtraMapChoices()
+        nextDepth, this.protocolManager, this.environmentManager, extraChoices, this.environmentModifierManager, this.worldMutationManager
       );
       this.mapUI.show(nextDepth, choices);
     }
@@ -515,9 +650,126 @@
       // Minimalの解放条件（ライフ1でDepth20以上に到達）を、このDepthへ進む瞬間の残りライフで判定する
       if (this.depth >= 20 && this.life === 1) this._life1AtDepth20ThisRun = true;
       this._checkProtocolUnlocks();
+      this._grantIdentityExp('depthAdvance'); // STEP29: ExplorerのEXP源
+
+      // STEP30-1: Layer移動のたびにEnvironmentを確定させる（Layerは今RUNのDepthそのもの）
+      const worldEnvResult = this.worldEnvironmentManager.setCurrentEnvironment(this.depth);
+      this._renderWorldEnvironmentBadge(worldEnvResult.def);
+      // STEP30-2: 現在Environmentが持つModifierを発見済みとして記録する（Random Modifierは
+      // 都度別の実体に解決されるため、その時点で借用された側のidがそのまま記録される）
+      this.environmentModifierManager.getActiveModifiers().forEach(m => this.save.recordEnvironmentModifierDiscovery(m.id));
+      // STEP30-3: 訪問履歴・First Discovery（Environment Archive用）を記録する
+      this.save.recordEnvironmentVisit(worldEnvResult.def.id, this.depth);
+      this.save.recordEnvironmentDiscoveryLog(worldEnvResult.def.id, this.depth);
 
       this._renderHud();
-      this._enterNode(node);
+
+      // STEP30-3: Environmentが実際に変化した時のみ、Transition→Scanの順で演出を挟んでから
+      // Puzzle/Node開始へ進む（変化していない時は既存どおり即座に進む＝既存ゲーム処理を維持）
+      // worldEnvResult.changedはRUNをまたいだ「保存済みの前回値」との比較のため、新規RUNの
+      // Layer1が偶然その値と一致するとfalseになりうる。ここではRUN内で直前に表示していた
+      // Environmentとの比較（_previousWorldEnvDefがnull＝このRUNで最初のLayer、を含む）で
+      // 判定し直し、新規RUNでも必ずLayer1でScanが表示されるようにする
+      const previousDef = this._previousWorldEnvDef;
+      const changedThisRun = !previousDef || previousDef.id !== worldEnvResult.def.id;
+      this._previousWorldEnvDef = worldEnvResult.def;
+
+      // STEP30-4: 「Unknown Dimension進入」-15。UNKNOWN DIMENSIONへ実際に切り替わった瞬間のみ
+      if (changedThisRun && worldEnvResult.def.id === 'env_unknown') {
+        this.worldStabilityManager.decreaseStability(STABILITY_DELTA_UNKNOWN_DIMENSION_ENTER, { layer: this.depth, event: 'Unknown Dimension進入' });
+        this._renderWorldEnvironmentBadge(worldEnvResult.def); // Stability変化をHUDへ即座に反映する
+      }
+
+      if (changedThisRun) {
+        this.transitionManager.show(previousDef, worldEnvResult.def, () => {
+          this.environmentScan.show(worldEnvResult.def, this.worldStabilityManager.getStatus(), () => this._afterLayerEnvironmentReady(node));
+        });
+      } else {
+        this._afterLayerEnvironmentReady(node);
+      }
+    }
+
+    /**
+     * STEP30-5: Environment Transition/Scan演出（変化した場合のみ）が完了した直後に呼ばれる。
+     * Mutation持続ターンを消費し、新たなMutation Trigger判定を行った上でNodeへ進む
+     * （Mutation Choice Event/Visual Sequenceが表示される場合は、それらが完了してから
+     * Nodeを開始する＝Puzzle開始より必ず前に表示される、という要求仕様セクション1の
+     * フローを守るための分岐）。
+     */
+    _afterLayerEnvironmentReady(node) {
+      this.worldMutationManager.tickDuration({ run: this.save.getTotalRuns() + 1, layer: this.depth });
+      this._checkMutationTrigger({}, () => this._enterNode(node));
+    }
+
+    /**
+     * World Mutation Trigger判定（要求仕様セクション4）をまとめて行うヘルパー。
+     * Level3（Collapse）は問答無用でMutation Visual Sequenceを表示し、
+     * Level1/2はMutation Choice Event（① Stabilize/② Exploit）を先に提示する。
+     * 何もトリガーされなければ即座に`onDone`を呼ぶ（既存フローを止めない）。
+     * @param {{consecutiveUnknownAnalyses?:number, riskChainLevel?:number,
+     *   inUnknownDimension?:boolean, specialEventTriggered?:boolean}} [extraContext]
+     * @param {Function} [onDone] Mutation関連の演出が全て完了した後（または何も
+     *   トリガーされなかった場合は即座に）呼ばれる
+     */
+    _checkMutationTrigger(extraContext, onDone) {
+      const context = Object.assign({
+        consecutiveUnknownAnalyses: this.consecutiveUnknownAnalysesThisRun,
+        riskChainLevel: this.riskChain.getChainLevel(),
+        inUnknownDimension: this.worldEnvironmentManager.getCurrentEnvironment().id === 'env_unknown'
+      }, extraContext);
+
+      const level = this.worldMutationManager.checkMutationTrigger(context);
+      if (level === 0) { if (onDone) onDone(); return; }
+
+      const historyContext = { run: this.save.getTotalRuns() + 1, layer: this.depth };
+      const afterMutationUiUpdate = () => {
+        this._renderWorldEnvironmentBadge(this.worldEnvironmentManager.getCurrentEnvironment());
+        if (onDone) onDone();
+      };
+
+      if (level === 3) {
+        // Collapse Mutationは問答無用で発生する（要求仕様セクション7）
+        const def = this.worldMutationManager.triggerMutation(3, historyContext);
+        if (def) this.mutationRenderer.show(def, afterMutationUiUpdate);
+        else if (onDone) onDone();
+        return;
+      }
+
+      // Level1/2: Mutation Choice Event（要求仕様セクション11）
+      this.mutationRenderer.showChoice({
+        onStabilize: () => {
+          this.worldStabilityManager.increaseStability(20, { layer: this.depth, event: 'Stabilize Choice' });
+          afterMutationUiUpdate();
+        },
+        onExploit: () => {
+          const def = this.worldMutationManager.triggerMutation(level, historyContext);
+          this.worldMutationManager.markExploitBonus();
+          if (def) this.mutationRenderer.show(def, afterMutationUiUpdate);
+          else afterMutationUiUpdate();
+        }
+      });
+    }
+
+    /**
+     * STEP30-1: 常時表示の小型Environmentバッジ（HUD/MAP画面双方）と、
+     * 軽量なVisual Theme反映（CSS変数`--world-env-color`）を更新する。
+     */
+    _renderWorldEnvironmentBadge(def) {
+      const label = `L${this.depth} ${def.name}`;
+      if (this.el.endlessWorldEnvValue) this.el.endlessWorldEnvValue.textContent = label;
+      if (this.el.mapWorldEnvLabel) this.el.mapWorldEnvLabel.textContent = label;
+      document.documentElement.style.setProperty('--world-env-color', def.uiColor);
+
+      // STEP30-3: リッチHUDパネル・Theme Animation背景も同じタイミングで更新する
+      // STEP30-4: World Stability（バー/%/Status）もここで合わせて反映する
+      // STEP30-5: Active中のMutation名もここで合わせて反映する
+      const activeMutation = this.worldMutationManager.getActiveMutation();
+      this.environmentHud.render({
+        layer: this.depth, envDef: def, modifiers: this.environmentModifierManager.getActiveModifiers(),
+        stability: this.worldStabilityManager.getStability(), status: this.worldStabilityManager.getStatus(),
+        mutationName: activeMutation ? activeMutation.name : null
+      });
+      this.environmentRenderer.render(def);
     }
 
     /**
@@ -529,6 +781,8 @@
         this._resolveUnknownNode(node);
         return;
       }
+      // STEP30-5: Unknown以外のNodeに入ったら「連続Unknown解析」カウントをリセットする
+      this.consecutiveUnknownAnalysesThisRun = 0;
 
       // リサーチマップ画面表示用に、実際に確定したNode種類をこのDepthの記録として残す
       this.visitedNodes.push({ depth: this.depth, type: node.type, name: node.name, icon: node.icon });
@@ -550,6 +804,9 @@
           this._triggerEvent();
           break;
         case 'research_lab':
+          // STEP30-4: 「Research Lab」+10
+          this.worldStabilityManager.increaseStability(STABILITY_DELTA_RESEARCH_LAB, { layer: this.depth, event: 'Research Lab' });
+          this._checkMutationTrigger();
           this.researchLab.show(this.depth); // 内部でui.showScreen('researchLab')する
           break;
         case 'protocol_signal':
@@ -577,9 +834,20 @@
      */
     _resolveUnknownNode(node) {
       // STEP28: Meta ProgressionのResearch Rankに応じて、Rank解放イベント(Temporal Echo等)も抽選対象になる
-      const event = UnknownEvents.pickEvent(this.metaProgression.getRankNumber());
+      // STEP30-2: QUANTUM NETWORKの「Rare Reward +20%」/NEURAL FORESTの「Unknown Analysis Success +10%」
+      // STEP30-5: SIGNAL NOISE Mutationの「Rare Reward +15%」もさらに合算する
+      const event = UnknownEvents.pickEvent(this.metaProgression.getRankNumber(), {
+        rareBoost: this.environmentModifierManager.getRareEventWeightBoost() + this.worldMutationManager.getRareEventWeightBoost(),
+        successBoost: this.environmentModifierManager.getUnknownSuccessBoost()
+      });
       this.unknownAnalysisCount++;
       this.save.recordUnknownEvent(event.id);
+      // STEP30-4: 「Unknown Node解析」-5
+      this.worldStabilityManager.decreaseStability(STABILITY_DELTA_UNKNOWN_NODE_ANALYZE, { layer: this.depth, event: 'Unknown Node解析' });
+      this._grantIdentityExp('unknownAnalyze'); // STEP29: Analyst/ExplorerのEXP源
+      // STEP30-5: 追加Trigger「Unknown Node連続解析」判定用カウンタ+Mutation Trigger確認
+      this.consecutiveUnknownAnalysesThisRun++;
+      this._checkMutationTrigger();
 
       if (event.effect.type === 'eliteShift') {
         // Elite Signal Shift: 既存のElite Node処理へそのまま合流させる（visitedNodes記録・
@@ -603,8 +871,7 @@
         icon: '❓',
         title: 'UNKNOWN SIGNAL ANALYSIS COMPLETE',
         message: `Result: ${event.name} — ${message}`,
-        onContinue: () => this._afterUnknownResolved(),
-        autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS
+        onContinue: () => this._afterUnknownResolved()
       });
     }
 
@@ -627,29 +894,42 @@
           this.upgradeManager.acquire(picked.id);
           return `Rare Upgrade acquired: ${picked.name}`;
         }
-        case 'protocolFragment':
-          this._gainProtocolFragments(event.effect.value);
-          return `Protocol Fragment +${event.effect.value}`;
-        case 'researchData':
-          this.researchData += event.effect.value;
-          return `Research Data +${event.effect.value}`;
+        case 'protocolFragment': {
+          // STEP29: ExplorerのUnknown Reward倍率をUnknown Node由来の報酬にのみ適用する
+          const fragmentValue = Math.round(event.effect.value * this.identityManager.getUnknownRewardMultiplier());
+          this._gainProtocolFragments(fragmentValue);
+          return `Protocol Fragment +${fragmentValue}`;
+        }
+        case 'researchData': {
+          const dataValue = Math.round(event.effect.value * this.identityManager.getUnknownRewardMultiplier());
+          this.researchData += dataValue;
+          return `Research Data +${dataValue}`;
+        }
         case 'lifeLoss':
           this.life = Math.max(0, this.life - event.effect.value);
+          // STEP30-5: 追加Trigger「Special Event」（System Corruption発生時）
+          this._checkMutationTrigger({ specialEventTriggered: true });
           return `Life -${event.effect.value}`;
         case 'secretRoom': {
-          const fragmentBonus = 3;
-          const dataBonus = 100;
+          const unknownMultiplier = this.identityManager.getUnknownRewardMultiplier();
+          const fragmentBonus = Math.round(3 * unknownMultiplier);
+          const dataBonus = Math.round(100 * unknownMultiplier);
           this._gainProtocolFragments(fragmentBonus);
           this.researchData += dataBonus;
           // STEP28: Archive Expansion「Secrets」カウント対象として記録する
           this.save.recordSecretDiscovery('secret_room');
+          // STEP30-5: 追加Trigger「Special Event」（Secret Room発見時）
+          this._checkMutationTrigger({ specialEventTriggered: true });
           return `Protocol Fragment +${fragmentBonus}, Research Data +${dataBonus}`;
         }
         case 'temporalEcho': {
           // STEP28: Meta ProgressionのResearch Rank4到達で解放される追加イベント
-          this._gainProtocolFragments(event.effect.fragmentValue);
-          this.researchData += event.effect.dataValue;
-          return `Protocol Fragment +${event.effect.fragmentValue}, Research Data +${event.effect.dataValue}`;
+          const unknownMultiplier = this.identityManager.getUnknownRewardMultiplier();
+          const fragmentValue = Math.round(event.effect.fragmentValue * unknownMultiplier);
+          const dataValue = Math.round(event.effect.dataValue * unknownMultiplier);
+          this._gainProtocolFragments(fragmentValue);
+          this.researchData += dataValue;
+          return `Protocol Fragment +${fragmentValue}, Research Data +${dataValue}`;
         }
         default:
           return '';
@@ -678,6 +958,13 @@
       const after = this.riskChain.getChainLevel();
       this.maxRiskMultiplierThisRun = Math.max(this.maxRiskMultiplierThisRun, this.riskChain.getMultiplier());
       this._renderRiskChainBadge();
+
+      // STEP30-4: 「Risk Chain継続」-2。Chainレベルが上昇した（＝高危険Nodeを連続選択した）瞬間のみ
+      if (after > before) {
+        this.worldStabilityManager.decreaseStability(STABILITY_DELTA_RISK_CHAIN_CONTINUE, { layer: this.depth, event: 'Risk Chain継続' });
+        // STEP30-5: 追加Trigger「高Risk Chain」
+        this._checkMutationTrigger({ riskChainLevel: after });
+      }
 
       if (after > before && after >= AI_WARNING_CHAIN_THRESHOLD) {
         this.ui.showToast(`⚠ RESEARCH INSTABILITY Lv.${after} — Reward x${this.riskChain.getMultiplier().toFixed(1)} (System stability decreasing)`);
@@ -727,8 +1014,14 @@
     /** Recovery Node: パズルを介さず即座にライフを回復し、結果をオーバーレイで示してから次のMap選択へ進む */
     _handleRecoveryNode() {
       const before = this.life;
-      this.life = Math.min(this.maxLife, this.life + RECOVERY_NODE_LIFE_AMOUNT);
+      // STEP30-2: NEURAL FORESTの「Life Recovery +1」を回復量へ加算する
+      const healAmount = RECOVERY_NODE_LIFE_AMOUNT + this.environmentModifierManager.getLifeRecoveryBonus();
+      this.life = Math.min(this.maxLife, this.life + healAmount);
       const recovered = this.life - before;
+      this._grantIdentityExp('recoveryUse'); // STEP29: SurvivalistのEXP源
+      // STEP30-4: 「Safe Node」+3（Recovery NodeはNode種類中もっとも低リスクのためSafe Nodeとして扱う）
+      this.worldStabilityManager.increaseStability(STABILITY_DELTA_SAFE_NODE, { layer: this.depth, event: 'Safe Node' });
+      this._checkMutationTrigger();
       this._renderHud();
 
       clearTimeout(this._advanceTimer);
@@ -736,19 +1029,27 @@
         icon: '❤️',
         title: 'RECOVERY',
         message: recovered > 0 ? `ライフが${recovered}回復した` : 'ライフはすでに満タンだった',
-        onContinue: () => this._showMapChoices(),
-        autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS
+        onContinue: () => this._showMapChoices()
       });
     }
 
     /**
      * Deep Research Environment所持時、Protocol Fragmentの獲得量に倍率をかけて加算する。
-     * STEP28: Protocol Synthesis（researchTree.js）の永続倍率もEnvironment側とは独立に乗算する
+     * STEP28: Protocol Synthesis（researchTree.js）の永続倍率もEnvironment側とは独立に乗算する。
+     * STEP29: Protocol EngineerのFragment Chance（primaryBonus/perk）もさらに独立して乗算する。
+     * STEP30-2: 現在のWorldEnvironment（QUANTUM NETWORK/DATA OCEAN）のProtocol Fragment
+     * Modifierも、EnvironmentModifierManager経由でさらに独立して乗算する
      */
     _gainProtocolFragments(amount) {
+      if (amount <= 0) return;
+      const withWorldEnvBonus = this.environmentModifierManager.applyProtocolModifier({ fragmentAmount: amount }).fragmentAmount;
       this.protocolFragmentsThisRun += Math.round(
-        amount * this.environmentManager.getFragmentMultiplier() * this.metaProgression.getFragmentGainMultiplier()
+        withWorldEnvBonus * this.environmentManager.getFragmentMultiplier()
+          * this.metaProgression.getFragmentGainMultiplier()
+          * this.identityManager.getFragmentGainMultiplier()
+          * this.worldMutationManager.getProtocolFragmentMultiplier() // STEP30-5: NEURAL INFECTIONの「Protocol Drop +40%」
       );
+      this._grantIdentityExp('fragmentGain'); // STEP29: Protocol EngineerのEXP源
     }
 
     /** Boss/Elite Puzzle出現時、GAME画面のラベル・ENDLESS HUDの見た目を切り替える */
@@ -807,12 +1108,14 @@
       this._renderHud();
 
       clearTimeout(this._advanceTimer);
+      // STEP30-3: AI Research Log。Event発生時にも現在Environmentの解析フレーバーを添える
+      const currentEnvId = this.worldEnvironmentManager.getCurrentEnvironment().id;
+      const logLine = G.EnvironmentLog ? G.EnvironmentLog.getLogMessage(currentEnvId) : '';
       this.ui.showNodeResult({
         icon: (G.NodeTypes.getType('event') || {}).icon || '✨',
         title: `EVENT: ${event.name}`,
-        message: resultMessage,
-        onContinue: () => this._showMapChoices(),
-        autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS
+        message: logLine ? `${resultMessage}\n"${logLine}"` : resultMessage,
+        onContinue: () => this._showMapChoices()
       });
     }
 
@@ -928,23 +1231,30 @@
       const speedBonus = stats.elapsedSeconds < stats.parSeconds
         ? Math.round((stats.parSeconds - stats.elapsedSeconds) * SPEED_BONUS_PER_SECOND)
         : 0;
-      // Combo Coreアップグレードでコンボ単価が上乗せされ、Analyst Protocolでさらに倍率がかかる
+      // Combo Coreアップグレードでコンボ単価が上乗せされ、Analyst Protocol・STEP29 ANALYST Identityでさらに倍率がかかる
       const comboBonusPerStack = COMBO_REWARD_PER_STACK + this.upgradeManager.getEffectTotal('comboBonusAdd');
-      const comboBonus = Math.round(this.combo * comboBonusPerStack * this.protocolManager.getComboBonusMultiplier());
+      const comboBonus = Math.round(
+        this.combo * comboBonusPerStack * this.protocolManager.getComboBonusMultiplier() * this.identityManager.getComboBonusMultiplier()
+      );
 
       let reward = CLEAR_REWARD + comboBonus;
       if (perfect) {
         // Perfect Analysisアップグレードでボーナスが上乗せされ、Analyst Protocol・Critical Logic
-        // Environmentでさらに倍率がかかる（両者は独立に掛け合わされる）
+        // Environment・STEP29 ANALYST Identityでさらに倍率がかかる（いずれも独立に掛け合わされる）
         const perfectBonus = PERFECT_REWARD + this.upgradeManager.getEffectTotal('perfectBonusAdd');
         reward += Math.round(
           perfectBonus * this.protocolManager.getPerfectBonusMultiplier() * this.environmentManager.getPerfectBonusMultiplier()
+            * this.identityManager.getPerfectBonusMultiplier()
         );
         this.perfectCount++;
       }
       reward += speedBonus;
-      // Overclockアップグレードで総獲得スコアが倍率アップし、Protocol（Explorer/Overclock）の倍率もかかる
-      reward = Math.round(reward * (1 + this.upgradeManager.getEffectTotal('scoreMultiplier')) * this.protocolManager.getScoreMultiplier());
+      // Overclockアップグレードで総獲得スコアが倍率アップし、Protocol（Explorer/Overclock）・
+      // STEP29 Research Identityの倍率もかかる
+      reward = Math.round(
+        reward * (1 + this.upgradeManager.getEffectTotal('scoreMultiplier'))
+          * this.protocolManager.getScoreMultiplier() * this.identityManager.getScoreMultiplier()
+      );
       // Blue Spectrum Environment: この問題のBLUEマス比率に応じたボーナスを加算する
       reward += this._computeBlueBonus(reward);
 
@@ -964,20 +1274,44 @@
       }
 
       // STEP27: Risk Chain倍率（高危険Node連続選択のボーナス）を、Boss/Elite固有の倍率とは
-      // 独立してさらに乗算する
-      reward = Math.round(reward * this.riskChain.getMultiplier());
+      // 独立してさらに乗算する。STEP30-2: FRACTAL COREの「Risk Chain Bonus +20%」もここで合成する。
+      // STEP30-5: REALITY BREAK Mutationの「Risk上昇」+Exploit選択の「Risk Increase」もさらに合成する
+      reward = Math.round(
+        reward * this.riskChain.getMultiplier()
+          * this.environmentModifierManager.getRiskChainBonusMultiplier()
+          * this.worldMutationManager.getRiskChainBonusMultiplier()
+      );
       // STEP28: Protocol Evolution（NEURAL RESEARCH LABで進化させたProtocol）による
       // 追加ボーナス。所持中Protocolの進化段階の合計に応じて上乗せされる（未進化なら0）
       const activeProtocolIds = this.protocolManager.getActiveDefs().map(d => d.id);
       reward = Math.round(reward * (1 + this.metaProgression.getProtocolEvolutionScoreBonus(activeProtocolIds)));
+      // STEP29: Protocol Engineerの「Synergy Boost」Perk。Synergyが発動中の時のみ追加で乗算する
+      if (this.protocolManager.getActiveSynergies().length > 0) {
+        reward = Math.round(reward * this.identityManager.getSynergyScoreMultiplier());
+      }
+
+      // STEP30-2: Reward System Integration。FRACTAL COREの「Reward +40%」とDATA OCEANの
+      // 「Research Data +20%」を、それぞれ最終スコア・Research Dataへ独立に適用する
+      // （要求仕様セクション5の「Base Reward × Environment × Risk Chain × Identity」のうち、
+      // Risk ChainはEnvironment適用より前段（上記reward計算内）で既に折り込み済み）
+      const baseResearchDataGain = Math.max(1, Math.round(reward * RESEARCH_DATA_RATIO));
+      const envAdjustedReward = this.environmentModifierManager.applyRewardModifier({ reward, researchData: baseResearchDataGain });
+      // STEP30-5: Reward Integration Hook（要求仕様セクション12）。FRACTAL OVERFLOW/
+      // REALITY BREAKの「Reward +60%/x2」・Exploit選択のボーナスをさらに独立に適用する
+      reward = Math.round(envAdjustedReward.reward * this.worldMutationManager.getMutationRewardModifier());
+      const mutationAdjustedResearchData = Math.round(envAdjustedReward.researchData * this.worldMutationManager.getResearchDataMultiplier());
 
       this.score += reward;
       // STEP27: Research Data（Extract Systemで使う蓄積リソース）は総獲得スコアの一部として
       // クリアのたびに少量加算される
-      this.researchData += Math.max(1, Math.round(reward * RESEARCH_DATA_RATIO));
+      this.researchData += mutationAdjustedResearchData;
 
       const recovered = this._tickLifeRegen();
       this._checkProtocolUnlocks();
+      this.clearsThisRun++;
+      this._grantIdentityExp('puzzleClear'); // STEP29: 全Identity共通の基礎EXP
+      if (perfect) this._grantIdentityExp('perfectClear'); // STEP29: AnalystのEXP源
+      if (stats.isBoss) this._grantIdentityExp('bossClear'); // STEP29: SurvivalistのEXP源
 
       let message = stats.isBoss
         ? `${stats.bossName} DEFEATED! +${reward}`
@@ -993,7 +1327,13 @@
       this._recordPuzzleHistory(stats, true);
       // クリア演出・トーストを読む間を置いてから次の問題（またはRESEARCH LAB）へ進む
       clearTimeout(this._advanceTimer);
-      this._advanceTimer = setTimeout(() => this._afterRoundEnd(), ADVANCE_DELAY_MS);
+      // HINT使用によるライフ消費（_handleHintUsed）が、ちょうどこのクリアと同じHINTで
+      // ライフを0にしていた場合はここでRUNを終える（クリア報酬は既に加算済みのまま終了する）
+      if (this.life <= 0) {
+        this._advanceTimer = setTimeout(() => this._endRun(), ADVANCE_DELAY_MS);
+      } else {
+        this._advanceTimer = setTimeout(() => this._afterRoundEnd(), ADVANCE_DELAY_MS);
+      }
     }
 
     /**
@@ -1014,11 +1354,16 @@
       this.save.recordPuzzleHistory(entry);
     }
 
-    /** Recovery Protocolアップグレード: 所持時のみ、一定クリアごとにライフを1回復する */
+    /**
+     * Recovery Protocolアップグレード: 所持時のみ、一定クリアごとにライフを1回復する。
+     * STEP29: SurvivalistのRecovery System Perkは、このアップグレード無しでも
+     * 単独でライフ自動回復を起動できる（Identity自身が持つ「その手段の簡易版」という判断）
+     */
     _tickLifeRegen() {
-      if (!this.upgradeManager.hasEffectType('lifeRegenInterval')) return false;
+      const identityRegenBonus = this.identityManager.getLifeRegenIntervalBonus();
+      if (!this.upgradeManager.hasEffectType('lifeRegenInterval') && identityRegenBonus <= 0) return false;
       this.clearsSinceLifeRegen++;
-      const interval = Math.max(1, RECOVERY_BASE_INTERVAL - this.upgradeManager.getEffectTotal('lifeRegenInterval'));
+      const interval = Math.max(1, RECOVERY_BASE_INTERVAL - this.upgradeManager.getEffectTotal('lifeRegenInterval') - identityRegenBonus);
       if (this.clearsSinceLifeRegen < interval) return false;
       this.clearsSinceLifeRegen = 0;
       if (this.life >= this.maxLife) return false;
@@ -1028,8 +1373,11 @@
 
     /** 制限時間切れ（ミス）時（endlessGame.jsのonTimeout経由） */
     _handleRoundTimeout(stats) {
-      // Critical Logic Environment所持時、ミスで失うライフが倍加する
-      let lifeLoss = Math.max(1, Math.round(1 * this.environmentManager.getMissPenaltyMultiplier()));
+      // Critical Logic Environment所持時、ミスで失うライフが倍加する。
+      // STEP29: SurvivalistのRisk Control（Perk含む）はここで軽減方向に働く
+      let lifeLoss = Math.max(1, Math.round(
+        1 * this.environmentManager.getMissPenaltyMultiplier() * this.identityManager.getMissPenaltyMultiplier()
+      ));
       // STEP28: Emergency Recovery（researchTree.js）所持時、RUN中最初のミスに限り軽減する
       if (!this._firstMissConsumedThisRun) {
         this._firstMissConsumedThisRun = true;
@@ -1065,6 +1413,39 @@
       }
     }
 
+    /**
+     * HINT使用時のライフ消費（ユーザー要望により追加）。ENDLESS RESEARCHのみが対象
+     * （通常ステージ/チュートリアル/Daily Puzzleにはライフの概念が無いため対象外）。
+     * 常にHINT1回の使用につき1ライフを消費する（Analyzerアップグレード等で複数マスが
+     * 同時開示されても、AI Prediction Protocolによる自動発動でも消費量は変わらない）。
+     *
+     * ここでライフが尽きた場合の扱いは既存の`_handleRoundTimeout`と同じ考え方に揃えている:
+     * - まだPuzzleがクリアされていない場合は、その場でTIME UPと同じ扱いにしてRUNを終了する
+     *   （Phoenix Protocol所持時は他のライフ切れ処理と同じくここで復活を消費する）
+     * - 直後の同じHINTでちょうどPuzzleがクリアされた場合は、ここでは何もせず
+     *   `_handleRoundClear()`側の末尾チェックに終了判定を委ねる（クリア報酬を正しく
+     *   加算してからRUNを終える。二重にRUN終了処理が走らないようにするための分岐）
+     */
+    _handleHintUsed() {
+      this.life = Math.max(0, this.life - 1);
+
+      if (this.life <= 0 && !this.round.game.cleared) {
+        if (this.upgradeManager.hasUnusedRevive()) {
+          this.upgradeManager.consumeRevive();
+          this.life = 1;
+          this.ui.showToast('PHOENIX PROTOCOL発動! ライフ1で復活した');
+        } else {
+          this.round.stop();
+          this.round.locked = true;
+          this.ui.showToast('LIFE DEPLETED! RUN終了');
+          clearTimeout(this._advanceTimer);
+          this._advanceTimer = setTimeout(() => this._endRun(), ADVANCE_DELAY_MS);
+        }
+      }
+
+      this._renderHud();
+    }
+
     /** ---------------- RESEARCH LAB ---------------- */
 
     _handleUpgradeSelected(def) {
@@ -1094,6 +1475,10 @@
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
 
+      // STEP29: AI Feedback System。protocolManager.reset()で消える前に、このRUNの
+      // Active Protocol構成をここで確保しておく
+      const activeProtocolIdsAtEnd = this.protocolManager.getActiveIds();
+
       // アップグレード・Protocol・Environmentはいずれもこの1RUN限定の効果のため、
       // 結果確定後にリセットする（ベスト記録(endlessSave.js)には一切関与しない）。
       // HUD自体はhidden化するが、表示内容も残さないようここで明示的に再描画しておく
@@ -1120,6 +1505,33 @@
         riskChainMultiplierThisRun: finalRiskChainMultiplier,
         unknownAnalysisCountThisRun: this.unknownAnalysisCount
       });
+
+      // STEP29: Achievement基盤。「生涯」条件はProtocolUnlockと同じく
+      // 「保存済みの過去分（recordRunで積んだ直後の値）+ 今RUN分」を都度合算した
+      // その場の値で判定する（今回はrecordRunが既に確定させた後のため過去分のみでよい）
+      const achievementSnapshot = {
+        perfectClearTotal: this.save.getTotalPerfectCount(),
+        bestDepthEver: this.save.getBestDepth(),
+        protocolEvolutionTotal: this.save.getTotalProtocolEvolutions(),
+        longRunDepth: this.depth
+      };
+      Achievements.findNewlyCompleted(achievementSnapshot, this.save.getCompletedAchievements()).forEach(id => {
+        if (!this.save.completeAchievement(id)) return;
+        const def = Achievements.getById(id);
+        if (def) this.ui.showToast(`🏆 ACHIEVEMENT: ${def.name}`);
+      });
+
+      // STEP29: AI Feedback System。今RUNの行動パターンを分析し、RESULT画面へ渡す
+      const nodeTypeCounts = {};
+      this.visitedNodes.forEach(n => { nodeTypeCounts[n.type] = (nodeTypeCounts[n.type] || 0) + 1; });
+      const aiFeedback = AIFeedback.analyze({
+        riskChainMax: finalRiskChainMultiplier,
+        extracted: this._extractedThisRun,
+        nodeTypeCounts,
+        perfectRatio: this.clearsThisRun > 0 ? this.perfectCount / this.clearsThisRun : 0,
+        activeProtocolIds: activeProtocolIdsAtEnd
+      });
+
       this.result.render(
         {
           depth: this.depth,
@@ -1135,10 +1547,24 @@
           bestDepth: this.save.getBestDepth(),
           isNewBestDepth: saveResult.isNewBestDepth,
           isNewBestScore: saveResult.isNewBestScore
-        }
+        },
+        aiFeedback
       );
 
       this.ui.showScreen('endlessResult');
+    }
+
+    /** ---------------- STEP29: Research Identity System ヘルパー ---------------- */
+
+    /** EXP加算後、レベルアップ/Perk解放が起きていればIdentityイベントを表示する */
+    _grantIdentityExp(source) {
+      const result = this.identityManager.addExp(source);
+      if (result.newlyUnlockedPerks.length > 0) {
+        const perk = result.newlyUnlockedPerks[0];
+        this.ui.showIdentityEvent({ label: 'PERK UNLOCKED', name: perk.name, sub: perk.description });
+      } else if (result.leveledUp) {
+        this.ui.showIdentityEvent({ label: 'IDENTITY LEVEL UP', name: this.identityManager.getLevelTitle(), sub: `Lv.${result.newLevel}` });
+      }
     }
 
     /** ---------------- main.jsからの盤面操作delegate ---------------- */

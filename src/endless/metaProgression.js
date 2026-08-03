@@ -34,9 +34,15 @@
   const EVOLUTION_STAGE_LABELS = ['Basic Protocol', 'Advanced Protocol', 'Quantum Protocol'];
 
   class MetaProgression {
-    /** @param {Object} deps @param {Object} deps.save EndlessSaveStoreインスタンス */
-    constructor({ save }) {
+    /**
+     * @param {Object} deps
+     * @param {Object} deps.save EndlessSaveStoreインスタンス
+     * @param {Object} [deps.identityManager] STEP29: Protocol Engineerの
+     *   Evolution Cost Down Perkによるコスト割引に使う（省略可）
+     */
+    constructor({ save, identityManager }) {
       this.save = save;
+      this.identityManager = identityManager || null;
     }
 
     /** ---------------- Research Data（永続資源） ---------------- */
@@ -191,12 +197,17 @@
       return this.getProtocolEvolutionStage(protocolId) >= EVOLUTION_STAGE_LABELS.length - 1;
     }
 
-    /** @returns {{dataCost:number, fragmentCost:number, archiveRequirement:number}} */
+    /**
+     * @returns {{dataCost:number, fragmentCost:number, archiveRequirement:number}}
+     * STEP29: Protocol Engineerの「Evolution Cost Down」Perk所持時、dataCost/fragmentCostに
+     * 割引率を掛ける（archiveRequirementは所持Protocol数の条件のため割引対象外）
+     */
     getEvolutionCost(protocolId) {
       const stage = this.getProtocolEvolutionStage(protocolId);
+      const discount = this.identityManager ? this.identityManager.getEvolutionCostReduction() : 0;
       return {
-        dataCost: (stage + 1) * 300,
-        fragmentCost: (stage + 1) * 3,
+        dataCost: Math.round((stage + 1) * 300 * (1 - discount)),
+        fragmentCost: Math.round((stage + 1) * 3 * (1 - discount)),
         archiveRequirement: (stage + 1) * 2
       };
     }
@@ -215,6 +226,7 @@
       this.save.spendPermanentResearchData(cost.dataCost);
       this.save.spendProtocolFragments(cost.fragmentCost);
       this.save.setProtocolEvolutionStage(protocolId, this.getProtocolEvolutionStage(protocolId) + 1);
+      this.save.incrementProtocolEvolutions(); // STEP29: Achievement「Protocol Creator」判定用
       return true;
     }
 

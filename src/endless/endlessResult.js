@@ -32,7 +32,11 @@
         researchData: document.getElementById('endlessResultResearchData'),
         protocolsFound: document.getElementById('endlessResultProtocolsFound'),
         riskChain: document.getElementById('endlessResultRiskChain'),
-        unknownAnalysis: document.getElementById('endlessResultUnknownAnalysis')
+        unknownAnalysis: document.getElementById('endlessResultUnknownAnalysis'),
+
+        // STEP29: AI Feedback System
+        aiObservation: document.getElementById('endlessResultAiObservation'),
+        aiRecommendation: document.getElementById('endlessResultAiRecommendation')
       };
 
       if (this.el.retryBtn) {
@@ -48,8 +52,9 @@
      *   deepestLayer?:number, protocolsFound?:number, riskChainMultiplier?:number,
      *   unknownAnalysisCount?:number}} runStats
      * @param {{bestDepth:number, isNewBestDepth:boolean, isNewBestScore:boolean}} saveInfo
+     * @param {{observation:string, recommendation:string}} [aiFeedback] STEP29: AI Feedback System
      */
-    render(runStats, saveInfo) {
+    render(runStats, saveInfo, aiFeedback) {
       if (!this.el.depth) return;
       this.el.depth.textContent = String(runStats.depth);
       this.el.score.textContent = String(runStats.score);
@@ -65,6 +70,12 @@
       if (this.el.protocolsFound) this.el.protocolsFound.textContent = String(runStats.protocolsFound || 0);
       if (this.el.riskChain) this.el.riskChain.textContent = `x${(runStats.riskChainMultiplier || 1).toFixed(1)}`;
       if (this.el.unknownAnalysis) this.el.unknownAnalysis.textContent = String(runStats.unknownAnalysisCount || 0);
+
+      // STEP29: AI Feedback System
+      if (aiFeedback) {
+        if (this.el.aiObservation) this.el.aiObservation.textContent = `"${aiFeedback.observation}"`;
+        if (this.el.aiRecommendation) this.el.aiRecommendation.textContent = aiFeedback.recommendation;
+      }
     }
   }
 

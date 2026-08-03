@@ -22,11 +22,13 @@
      * @param {Object} deps.ui 既存UIインスタンス（showScreenを再利用する）
      * @param {Object} deps.save EndlessSaveStoreインスタンス（Archive集計・Protocol発見一覧に使う）
      * @param {Object} deps.metaProgression MetaProgressionインスタンス
+     * @param {Object} [deps.identityManager] STEP29: Protocol Evolution実行時のEXP加算に使う（省略可）
      */
-    constructor({ ui, save, metaProgression }) {
+    constructor({ ui, save, metaProgression, identityManager }) {
       this.ui = ui;
       this.save = save;
       this.metaProgression = metaProgression;
+      this.identityManager = identityManager || null;
       this.onStartRun = null; // () => {} START NEW RESEARCH
       this.onExit = null;     // () => {} BACK TO TITLE
 
@@ -203,6 +205,19 @@
       if (!this.metaProgression.evolveProtocol(id)) return;
       this._render();
       this._showTechInstalled(`${name} Evolution`);
+      // STEP29: Protocol EngineerのEXP源「protocolEvolve」。未選択Identityなら何もしない
+      if (this.identityManager) this._grantIdentityExp('protocolEvolve');
+    }
+
+    /** STEP29: EXP加算後、レベルアップ/Perk解放が起きていればIdentityイベントを表示する */
+    _grantIdentityExp(source) {
+      const result = this.identityManager.addExp(source);
+      if (result.newlyUnlockedPerks.length > 0) {
+        const perk = result.newlyUnlockedPerks[0];
+        this.ui.showIdentityEvent({ label: 'PERK UNLOCKED', name: perk.name, sub: perk.description });
+      } else if (result.leveledUp) {
+        this.ui.showIdentityEvent({ label: 'IDENTITY LEVEL UP', name: this.identityManager.getLevelTitle(), sub: `Lv.${result.newLevel}` });
+      }
     }
 
     _renderUnlocks() {

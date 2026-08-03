@@ -52,20 +52,34 @@
    * @param {Object} [protocolManager] 所持Protocolに応じた重み補正に使う（省略可）
    * @param {Object} [environmentManager] Signal Noise Environmentによる重み補正に使う（省略可）
    * @param {number} [extraChoices] STEP28: Deep Scan（researchTree.js）による追加候補数（省略可、0扱い）
+   * @param {Object} [environmentModifierManager] STEP30-2: 現在のWorldEnvironmentの
+   *   Modifier（Unknown Spawn/Elite Node/Rare Event等のMap向け重み補正、Research Lab
+   *   Spawnの追加出現）に使う（省略可）
+   * @param {Object} [worldMutationManager] STEP30-5: Active中のMutation（QUANTUM COLLAPSEの
+   *   追加候補・Elite重み、REALITY BREAKのUnknown重み等）に使う（省略可）
    * @returns {Array<Object>} 選択可能なMap Nodeの配列（Boss出現Depthでは要素1つ）
    */
-  function generateChoices(depth, protocolManager, environmentManager, extraChoices) {
+  function generateChoices(depth, protocolManager, environmentManager, extraChoices, environmentModifierManager, worldMutationManager) {
     if (Boss && Boss.isBossDepth(depth)) {
       return [buildNode('boss', depth)];
     }
 
-    const targetCount = Math.min(MAX_CHOICE_COUNT, CHOICE_COUNT + Math.max(0, extraChoices || 0));
+    const mutationExtraChoices = worldMutationManager ? worldMutationManager.getExtraMapChoices() : 0;
+    const targetCount = Math.min(MAX_CHOICE_COUNT, CHOICE_COUNT + Math.max(0, extraChoices || 0) + Math.max(0, mutationExtraChoices));
 
     const choices = [];
-    if (depth > 0 && depth % LAB_EVERY_DEPTH === 0) choices.push(buildNode('research_lab', depth));
+    const isLabDepth = depth > 0 && depth % LAB_EVERY_DEPTH === 0;
+    if (isLabDepth) choices.push(buildNode('research_lab', depth));
     if (depth > 0 && depth % SIGNAL_EVERY_DEPTH === 0) choices.push(buildNode('protocol_signal', depth));
 
-    const weights = getWeights(depth, protocolManager, environmentManager);
+    // STEP30-2: NEURAL FORESTの「Research Lab Spawn +15%」。通常周期の対象Depthでない時のみ、
+    // 追加のResearch Lab候補が出現する確率を上乗せする（既存の周期出現ルールは変更しない）
+    if (environmentModifierManager && !isLabDepth) {
+      const extraLabChance = environmentModifierManager.getExtraLabChance();
+      if (extraLabChance > 0 && Math.random() < extraLabChance) choices.push(buildNode('research_lab', depth));
+    }
+
+    const weights = getWeights(depth, protocolManager, environmentManager, environmentModifierManager, worldMutationManager);
     while (choices.length < targetCount) {
       choices.push(buildNode(weightedPick(weights), depth));
     }
@@ -73,8 +87,8 @@
     return shuffle(choices);
   }
 
-  /** @returns {Object} depthのTierに対応する重みテーブルのコピー（Protocol/Environment補正込み） */
-  function getWeights(depth, protocolManager, environmentManager) {
+  /** @returns {Object} depthのTierに対応する重みテーブルのコピー（Protocol/Environment/WorldEnvironment Modifier/Mutation補正込み） */
+  function getWeights(depth, protocolManager, environmentManager, environmentModifierManager, worldMutationManager) {
     const tier = WEIGHT_TIERS.find(t => depth <= t.maxDepth) || WEIGHT_TIERS[WEIGHT_TIERS.length - 1];
     const weights = Object.assign({}, tier.weights);
 
@@ -87,6 +101,21 @@
         if (!protocolManager.isActive(protocolId)) return;
         const boost = PROTOCOL_WEIGHT_BOOST[protocolId];
         weights[boost.key] *= boost.multiplier;
+      });
+    }
+
+    // STEP30-2: 現在のWorldEnvironmentが持つnodeWeightMultiplier_*（Unknown Spawn/Elite Node/
+    // Rare Event=Event Node）を、Protocol補正とは独立にさらに乗算する
+    if (environmentModifierManager) {
+      Object.keys(weights).forEach(type => {
+        weights[type] *= environmentModifierManager.getNodeWeightMultiplier(type);
+      });
+    }
+    // STEP30-5: Active中のMutation（QUANTUM COLLAPSEのElite増加、REALITY BREAKのUnknown増加）を、
+    // Environment Modifierとは独立にさらに乗算する
+    if (worldMutationManager) {
+      Object.keys(weights).forEach(type => {
+        weights[type] *= worldMutationManager.getNodeWeightMultiplier(type);
       });
     }
     return weights;

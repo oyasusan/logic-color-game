@@ -53,7 +53,12 @@
           researchMap: document.getElementById('screen-researchmap'),
           researchLab: document.getElementById('screen-researchlab'),
           neuralLab: document.getElementById('screen-neurallab'),
-          endlessResult: document.getElementById('screen-endlessresult')
+          endlessResult: document.getElementById('screen-endlessresult'),
+          // STEP29: Research Identity System
+          identitySelect: document.getElementById('screen-identityselect'),
+          researchProfile: document.getElementById('screen-researchprofile'),
+          // STEP30-3: World Environment Archive
+          worldEnvArchive: document.getElementById('screen-worldenvarchive')
         },
 
         // TITLE
@@ -113,6 +118,12 @@
         nodeResultTitle: document.getElementById('nodeResultTitle'),
         nodeResultMessage: document.getElementById('nodeResultMessage'),
         nodeResultContinueBtn: document.getElementById('nodeResultContinueBtn'),
+
+        // STEP29: Identity Level Up / Perk Unlock overlay
+        identityEventOverlay: document.getElementById('identityEventOverlay'),
+        identityEventLabel: document.getElementById('identityEventLabel'),
+        identityEventName: document.getElementById('identityEventName'),
+        identityEventSub: document.getElementById('identityEventSub'),
 
         toast: document.getElementById('toast')
       };
@@ -525,6 +536,20 @@
       }
     }
 
+    /**
+     * STEP29: Identity Level Up / Perk Unlock演出を一時的に表示する
+     * （showProtocolDiscoveryと同じオーバーレイ構造を流用）。
+     * @param {{label:string, name:string, sub:string}} info
+     */
+    showIdentityEvent(info) {
+      if (Animation) {
+        Animation.showIdentityEvent(
+          this.el.identityEventOverlay, this.el.identityEventLabel,
+          this.el.identityEventName, this.el.identityEventSub, info
+        );
+      }
+    }
+
     /** ---------------- デバッグ: 答え表示（?debug=true時のみ呼ばれる） ---------------- */
 
     showAnswerOverlay(answer) {
@@ -565,28 +590,24 @@
      * 現在の画面の上にオーバーレイ表示する（トースト+screen('game')への一時遷移
      * だと、直前のPuzzle盤面が一瞬見えてから即トースト→次のMap画面に切り替わり、
      * 何が起きたか分かりにくいという問題があったため導入）。
-     * @param {{icon:string, title:string, message:string, onContinue?:Function, autoAdvanceMs?:number}} opts
+     * 自動では閉じず、「つづける」ボタンのクリックを待ってから次へ進む
+     * （ユーザーフィードバック「トーストが消えるのが速すぎて読めない」を受けた変更）。
+     * @param {{icon:string, title:string, message:string, onContinue?:Function}} opts
      */
-    showNodeResult({ icon, title, message, onContinue, autoAdvanceMs }) {
+    showNodeResult({ icon, title, message, onContinue }) {
       if (!this.el.nodeResultOverlay) { if (onContinue) onContinue(); return; }
       this.el.nodeResultIcon.textContent = icon || '';
       this.el.nodeResultTitle.textContent = title || '';
       this.el.nodeResultMessage.textContent = message || '';
       this.el.nodeResultOverlay.classList.remove('hidden');
 
-      clearTimeout(this._nodeResultTimer);
       this._nodeResultContinue = () => {
-        clearTimeout(this._nodeResultTimer);
         this.hideNodeResult();
         if (onContinue) onContinue();
       };
-      if (autoAdvanceMs) {
-        this._nodeResultTimer = setTimeout(this._nodeResultContinue, autoAdvanceMs);
-      }
     }
 
     hideNodeResult() {
-      clearTimeout(this._nodeResultTimer);
       if (this.el.nodeResultOverlay) this.el.nodeResultOverlay.classList.add('hidden');
     }
   }

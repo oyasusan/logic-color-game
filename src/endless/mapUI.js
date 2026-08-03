@@ -29,17 +29,26 @@
      * @param {Object} deps.ui 既存UIインスタンス（showScreenを再利用する）
      * @param {Object} deps.protocolManager Oracle所持判定に使う
      * @param {Object} [deps.metaProgression] STEP28: Advanced Analysis（Unknown Node解析確率）に使う（省略可）
+     * @param {Object} [deps.identityManager] STEP29: Analyst/ExplorerのUnknown Node解析確率ボーナスに使う（省略可）
+     * @param {Object} [deps.environmentModifierManager] STEP30-2: 現在のWorldEnvironmentの
+     *   Unknown Node解析確率ボーナス・ENVIRONMENT ANALYSISパネル表示に使う（省略可）
      */
-    constructor({ ui, protocolManager, metaProgression }) {
+    constructor({ ui, protocolManager, metaProgression, identityManager, environmentModifierManager }) {
       this.ui = ui;
       this.protocolManager = protocolManager;
       this.metaProgression = metaProgression || null;
+      this.identityManager = identityManager || null;
+      this.environmentModifierManager = environmentModifierManager || null;
       this.onSelect = null; // (node) => {}
       this.choices = [];
 
       this.el = {
         depthLabel: document.getElementById('mapDepthLabel'),
-        cards: document.getElementById('mapNodeCards')
+        cards: document.getElementById('mapNodeCards'),
+        // STEP30-2: ENVIRONMENT ANALYSISパネル（AI Analysis UI Integration）
+        envAnalysisPanel: document.getElementById('mapEnvironmentAnalysis'),
+        envAnalysisName: document.getElementById('mapEnvAnalysisName'),
+        envAnalysisEffects: document.getElementById('mapEnvAnalysisEffects')
       };
     }
 
@@ -51,7 +60,24 @@
       this.choices = choices;
       if (this.el.depthLabel) this.el.depthLabel.textContent = `DEPTH ${depth}`;
       this._render();
+      this._renderEnvironmentAnalysis();
       this.ui.showScreen('map');
+    }
+
+    /**
+     * STEP30-2: AI Analysis UI Integration（要求仕様セクション7）。
+     * 現在のWorldEnvironment名と、Active中のModifier一覧（cosmetic用の
+     * rewardPredictionAccuracy/aiConfidencePenaltyも含め全て表示専用として並べる）を示す。
+     */
+    _renderEnvironmentAnalysis() {
+      if (!this.environmentModifierManager || !this.el.envAnalysisPanel) return;
+      const env = this.environmentModifierManager.worldEnvironmentManager.getCurrentEnvironment();
+      const modifiers = this.environmentModifierManager.getActiveModifiers();
+      if (this.el.envAnalysisName) this.el.envAnalysisName.textContent = env.name;
+      if (this.el.envAnalysisEffects) {
+        this.el.envAnalysisEffects.innerHTML = modifiers.map(m => `<div class="env-analysis-effect">${m.name}</div>`).join('');
+      }
+      this.el.envAnalysisPanel.classList.remove('hidden');
     }
 
     _render() {
@@ -70,6 +96,17 @@
       });
     }
 
+    /**
+     * STEP30-3: Research Map Integration（要求仕様セクション7）。現在のWorldEnvironmentの
+     * アイコン+名前をNodeカードへ表示する小さなタグ。全Nodeで内容は同じ（Environmentは
+     * Map全体で共通のため、Node個別の属性ではない）
+     */
+    _environmentTagHtml() {
+      if (!this.environmentModifierManager) return '';
+      const env = this.environmentModifierManager.worldEnvironmentManager.getCurrentEnvironment();
+      return `<span class="map-node-env-tag">${env.icon || ''} ${env.name}</span>`;
+    }
+
     /** 通常Node（Unknown以外）: AI Analysis Panel付きの選択可能なカードを1枚組み立てる */
     _renderNodeCard(node, display) {
       const analysis = AIAnalysis ? AIAnalysis.analyze(node) : null;
@@ -78,6 +115,7 @@
       card.className = 'lab-card map-node-card map-node-' + node.type + ' ai-panel';
       card.innerHTML = `
         <span class="ai-signal-label">SIGNAL DETECTED</span>
+        ${this._environmentTagHtml()}
         <span class="map-node-icon">${display.icon}</span>
         <span class="lab-card-name">${display.name}</span>
         ${analysis ? this._analysisBlockHtml(analysis) : ''}
@@ -102,10 +140,13 @@
       const card = document.createElement('div');
       card.className = 'lab-card map-node-card map-node-unknown ai-panel ai-panel-unknown';
 
-      const revealChance = this.metaProgression ? this.metaProgression.getUnknownRevealChance() : 0;
+      const revealChance = (this.metaProgression ? this.metaProgression.getUnknownRevealChance() : 0)
+        + (this.identityManager ? this.identityManager.getUnknownRevealChanceBonus() : 0) // STEP29
+        + (this.environmentModifierManager ? this.environmentModifierManager.getModifierValue('unknownRevealChance') : 0); // STEP30-2
       const reveal = node.resolvedNode && (oracleActive || Math.random() < revealChance);
       card.innerHTML = `
         <span class="ai-signal-label">DEEP UNKNOWN SIGNAL</span>
+        ${this._environmentTagHtml()}
         <span class="map-node-icon">❓</span>
         ${reveal
           ? `<div class="ai-analysis-block">

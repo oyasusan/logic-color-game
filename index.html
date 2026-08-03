@@ -703,6 +703,7 @@
     color: var(--text);
     text-align: center;
     line-height: 1.5;
+    white-space: pre-line;
   }
 
   .node-result-card .primary-btn { margin-top: 6px; padding: 10px 32px; }
@@ -1996,6 +1997,223 @@
   .neurallab-nav { display: flex; gap: 10px; margin: 10px 0; }
   .neurallab-nav .ghost-btn, .neurallab-nav .primary-btn { flex: 1; }
 
+  /* ---- STEP29: Research Identity System ---- */
+  .identity-select-cards { max-width: 420px; }
+  .identity-card { border-color: var(--blue); box-shadow: 0 0 14px rgba(41, 224, 255, 0.15); gap: 6px; }
+  .identity-card-theme { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--blue); }
+  .identity-card-bonuses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .identity-card-bonus {
+    font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px;
+    background: rgba(41, 224, 255, 0.12); color: var(--gold);
+  }
+
+  .rp-identity-value { color: var(--blue); }
+
+  .rp-perk-list, .rp-achievement-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .rp-perk-item, .rp-achievement-item {
+    display: flex; align-items: baseline; gap: 8px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--panel);
+  }
+  .rp-perk-item.locked, .rp-achievement-item.locked { opacity: 0.55; }
+  .rp-perk-item.unlocked { border-color: var(--gold); }
+  .rp-achievement-item.unlocked { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 213, 74, 0.2); }
+  .rp-perk-level { font-size: 12px; font-weight: 800; color: var(--blue); flex-shrink: 0; }
+  .rp-perk-name, .rp-achievement-name { font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .rp-perk-desc, .rp-achievement-desc { font-size: 13px; color: var(--text-dim); }
+  .rp-achievement-icon { font-size: 16px; flex-shrink: 0; }
+
+  .ai-observation-text { font-size: 15px; font-style: italic; color: var(--text); text-align: center; margin: 6px 0; }
+  .ai-recommendation-row { font-size: 13px; color: var(--text-dim); text-align: center; margin-bottom: 6px; }
+  .ai-recommendation-row span { color: var(--gold); font-weight: 700; }
+
+  /* ---- STEP30-1: Environment Framework ---- */
+  :root { --world-env-color: var(--blue); }
+
+  .endless-world-env { color: var(--world-env-color); }
+  #endlessHud.boss-active .endless-world-env, #endlessHud.elite-active .endless-world-env { color: inherit; }
+
+  .map-world-env-label {
+    font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    color: var(--world-env-color); margin-top: 2px;
+  }
+
+  .environment-hud-card { border: 1px solid var(--world-env-color); box-shadow: 0 0 30px var(--world-env-color); }
+  .environment-hud-title { font-size: 13px; letter-spacing: 3px; color: var(--text-dim); margin-bottom: 6px; }
+  .environment-hud-name { color: var(--world-env-color); }
+  .environment-hud-status-row { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+  .environment-hud-status { color: var(--green); font-weight: 800; margin-left: 4px; }
+
+  /* ---- STEP30-2: Environment Modifier System（ENVIRONMENT ANALYSISパネル） ---- */
+  .env-analysis-panel {
+    width: 100%; max-width: 360px; margin: 0 auto 10px; padding: 10px 14px;
+    border-radius: 12px; border: 1px solid var(--world-env-color); background: var(--panel);
+  }
+  .env-analysis-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: var(--world-env-color); }
+  .env-analysis-current { font-size: 13px; color: var(--text); margin-top: 4px; }
+  .env-analysis-current span { color: var(--world-env-color); font-weight: 700; }
+  .env-analysis-effects-label { font-size: 11px; color: var(--text-dim); margin-top: 6px; letter-spacing: 1px; }
+  .env-analysis-effects { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+  .env-analysis-effect { font-size: 12px; color: var(--gold); }
+
+  /* ---- STEP30-3: Environment Visual / HUD Evolution ---- */
+
+  /* Environment Scan Sequence */
+  .env-scan-card { max-width: 320px; text-align: center; border-color: var(--world-env-color); box-shadow: 0 0 30px var(--world-env-color); }
+  .env-scan-phase.hidden { display: none; }
+  .env-scan-title { font-size: 15px; font-weight: 800; letter-spacing: 3px; color: var(--world-env-color); }
+  .env-scan-subtitle { font-size: 13px; color: var(--text-dim); margin: 8px 0; }
+  .env-scan-progress-track {
+    width: 100%; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.08);
+    overflow: hidden; margin-top: 8px;
+  }
+  .env-scan-progress-fill { height: 100%; width: 0%; background: var(--world-env-color); transition: width 0.15s linear; }
+  .env-scan-progress-percent { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .env-scan-name { font-size: 22px; font-weight: 800; color: var(--world-env-color); margin: 6px 0; }
+  .env-scan-access { font-size: 12px; color: var(--green); letter-spacing: 1px; }
+  .env-scan-log { font-size: 13px; font-style: italic; color: var(--text-dim); margin-top: 8px; white-space: pre-line; }
+  .env-scan-skip-btn { margin-top: 14px; width: 100%; }
+
+  /* Environment Transition */
+  .env-transition-card { max-width: 320px; text-align: center; border-color: var(--world-env-color); box-shadow: 0 0 30px var(--world-env-color); }
+  .env-transition-title { font-size: 15px; font-weight: 800; letter-spacing: 3px; color: var(--world-env-color); margin-bottom: 8px; }
+  .env-transition-row { display: flex; justify-content: space-between; font-size: 14px; margin: 4px 0; }
+  .env-transition-key { color: var(--text-dim); }
+  .env-transition-value { color: var(--text); font-weight: 700; }
+  .env-transition-sync { font-size: 12px; color: var(--text-dim); margin-top: 10px; letter-spacing: 1px; }
+  .env-transition-progress-track {
+    width: 100%; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.08);
+    overflow: hidden; margin-top: 6px;
+  }
+  .env-transition-progress-fill { height: 100%; width: 0%; background: var(--world-env-color); transition: width 0.15s linear; }
+  .env-transition-progress-percent { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+  /* Environment HUD（常時表示、fixed配置） */
+  .environment-hud-panel {
+    position: fixed; top: 8px; right: 8px; z-index: 15;
+    max-width: 180px; padding: 8px 12px; border-radius: 10px;
+    border: 1px solid var(--world-env-color); background: rgba(8, 10, 18, 0.85);
+    box-shadow: 0 0 16px var(--world-env-color);
+  }
+  .eh-layer { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim); }
+  .eh-env-name { font-size: 14px; font-weight: 800; color: var(--world-env-color); }
+  .eh-stability-row { font-size: 10px; color: var(--green); margin-top: 2px; letter-spacing: 1px; }
+  .eh-modifier-list { margin-top: 4px; display: flex; flex-direction: column; gap: 1px; }
+  .eh-modifier-row { font-size: 10px; color: var(--gold); }
+
+  /* STEP30-4: World Stability HUD拡張 */
+  .eh-stability-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-top: 4px; }
+  .eh-stability-bar-track {
+    width: 100%; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.1);
+    overflow: hidden; margin-top: 2px;
+  }
+  .eh-stability-bar-fill { height: 100%; width: 100%; background: #3dff8a; transition: width 0.3s ease, background 0.3s ease; }
+  .eh-stability-percent { font-size: 10px; color: var(--text-dim); text-align: right; }
+
+  /* Environment Scan: World Status別ログ行 */
+  .env-scan-status-log { color: var(--text); font-weight: 600; margin-top: 4px; }
+
+  /* ---- STEP30-5: World Mutation Trigger System ---- */
+  .eh-mutation-row { font-size: 10px; color: #ff3f6b; margin-top: 4px; font-weight: 800; letter-spacing: 1px; }
+
+  /* Mutation Visual Sequence / Choice Eventは他の演出オーバーレイより手前に表示する
+     （例: Unknown Node解析結果のNode Resultオーバーレイの上に重ねて表示されうるため） */
+  .mutation-sequence-overlay, .mutation-choice-overlay { z-index: 25; background: rgba(20, 2, 6, 0.88); }
+
+  .mutation-sequence-card, .mutation-choice-card {
+    max-width: 320px; text-align: center; border-color: #ff3f6b; box-shadow: 0 0 30px rgba(255, 63, 107, 0.5);
+  }
+  .mutation-phase.hidden { display: none; }
+  .mutation-warning-title, .mutation-complete-title { font-size: 16px; font-weight: 800; letter-spacing: 3px; color: #ff3f6b; }
+  .mutation-warning-subtitle { font-size: 13px; color: var(--text-dim); margin: 8px 0 16px; }
+  .mutation-processing-title { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; }
+  .mutation-processing-spinner {
+    width: 32px; height: 32px; margin: 16px auto 0; border-radius: 50%;
+    border: 3px solid rgba(255, 63, 107, 0.25); border-top-color: #ff3f6b;
+    animation: mutationSpin 0.8s linear infinite;
+  }
+  @keyframes mutationSpin { 100% { transform: rotate(360deg); } }
+  .mutation-complete-name { font-size: 20px; font-weight: 800; color: #ff3f6b; margin: 8px 0; }
+  .mutation-complete-desc { font-size: 13px; color: var(--text-dim); margin-bottom: 14px; }
+
+  .mutation-choice-title { font-size: 16px; font-weight: 800; letter-spacing: 2px; color: #ff3f6b; }
+  .mutation-choice-subtitle { font-size: 13px; color: var(--text-dim); margin: 6px 0 14px; }
+  .mutation-choice-option { width: 100%; margin-top: 8px; border-color: #ff3f6b; }
+
+  /* Research Map履歴パネルにWorld Mutation History小見出しを追加 */
+  .rm-panel-subheading {
+    font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim);
+    margin: 10px 0 4px; text-transform: uppercase;
+  }
+  .rm-panel-subheading:first-child { margin-top: 0; }
+  .rm-panel-item-mutation { border-color: #ff3f6b; }
+
+  /* Environment Theme Animation（Environmentごとの軽量CSS背景演出） */
+  .environment-theme-layer {
+    position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    overflow: hidden; opacity: 0.5;
+  }
+  .environment-theme-layer.perf-low { opacity: 0 !important; animation: none !important; }
+  .environment-theme-layer.perf-low::before, .environment-theme-layer.perf-low::after { display: none !important; }
+
+  .theme-grid {
+    background-image: repeating-linear-gradient(0deg, rgba(41,224,255,0.12) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(41,224,255,0.12) 0 1px, transparent 1px 32px);
+  }
+  .theme-grid::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 40%;
+    background: linear-gradient(to bottom, transparent, rgba(41,224,255,0.18), transparent);
+    animation: envScanLine 4s linear infinite;
+  }
+  @keyframes envScanLine { 0% { top: -40%; } 100% { top: 100%; } }
+
+  .theme-network {
+    background-image: radial-gradient(circle, rgba(185,104,255,0.25) 2px, transparent 2.5px);
+    background-size: 40px 40px;
+    animation: envNodePulse 3s ease-in-out infinite;
+  }
+  @keyframes envNodePulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
+
+  .theme-neural {
+    background-image: radial-gradient(circle at 30% 40%, rgba(61,255,138,0.25), transparent 60%),
+      radial-gradient(circle at 70% 65%, rgba(61,255,138,0.2), transparent 55%);
+    animation: envNeuralPulse 5s ease-in-out infinite;
+  }
+  @keyframes envNeuralPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+  .theme-data {
+    background-image: repeating-linear-gradient(120deg, rgba(34,255,204,0.15) 0 6px, transparent 6px 24px);
+    animation: envDataFlow 6s linear infinite;
+  }
+  @keyframes envDataFlow { 0% { background-position: 0 0; } 100% { background-position: 200px 100px; } }
+
+  .theme-fractal {
+    background-image: conic-gradient(from 0deg, rgba(255,157,63,0.05), rgba(255,157,63,0.25), rgba(255,157,63,0.05));
+    animation: envFractalRotate 12s linear infinite;
+  }
+  @keyframes envFractalRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+  .theme-glitch {
+    background: repeating-linear-gradient(0deg, rgba(255,63,107,0.15) 0 2px, transparent 2px 6px);
+    animation: envGlitch 0.4s steps(2) infinite;
+  }
+  @keyframes envGlitch {
+    0% { transform: translate(0,0); opacity: 0.4; }
+    50% { transform: translate(-2px,1px); opacity: 0.6; }
+    100% { transform: translate(2px,-1px); opacity: 0.4; }
+  }
+
+  /* Research Map Integration: Nodeカードへの現在Environment表示 */
+  .map-node-env-tag {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    color: var(--world-env-color); margin-bottom: 2px;
+  }
+
+  /* World Environment Archive */
+  .archive-card-icon { font-size: 20px; }
+  .archive-first-discovery { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .archive-effects-label { font-size: 11px; color: var(--text-dim); margin-top: 6px; letter-spacing: 1px; }
+  .archive-effect-row { font-size: 12px; color: var(--gold); }
+
   /* Surface Arrival演出 */
   .surface-arrival-card { max-width: 300px; text-align: center; }
   .surface-arrival-title { font-size: 18px; font-weight: 800; letter-spacing: 3px; color: var(--blue); }
@@ -2117,8 +2335,52 @@
     </div>
     <button type="button" id="endlessStartBtn" class="primary-btn">START RUN</button>
     <button type="button" id="neuralLabModeSelectBtn" class="ghost-btn">🧪 NEURAL RESEARCH LAB</button>
+    <button type="button" id="researchProfileModeSelectBtn" class="ghost-btn">🧑‍🔬 RESEARCH PROFILE</button>
     <button type="button" id="protocolArchiveBtn" class="ghost-btn">PROTOCOL ARCHIVE</button>
     <button type="button" id="environmentArchiveBtn" class="ghost-btn">ENVIRONMENT ARCHIVE</button>
+    <button type="button" id="worldEnvArchiveModeSelectBtn" class="ghost-btn">🌍 WORLD ENVIRONMENT ARCHIVE</button>
+    <button type="button" id="performanceModeBtn" class="ghost-btn">PERFORMANCE: NORMAL</button>
+  </section>
+
+  <!-- ============ STEP29: IDENTITY SELECT (新規プレイ開始時、一度だけ研究者タイプを選ぶ) ============ -->
+  <section id="screen-identityselect" class="screen">
+    <div class="lab-header">
+      <h2 class="lab-title">SELECT RESEARCH IDENTITY</h2>
+      <div class="lab-subtitle">CHOOSE YOUR RESEARCH APPROACH</div>
+    </div>
+    <p class="lab-instruction">どのような研究者として成長するかを1つ選択する（以後、この選択は変更されない）</p>
+    <div id="identitySelectCards" class="lab-cards identity-select-cards"></div>
+    <button type="button" id="identitySelectBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+  </section>
+
+  <!-- ============ STEP29: RESEARCH PROFILE (Identity/Level/生涯進行状況/Achievement一覧) ============ -->
+  <section id="screen-researchprofile" class="screen">
+    <div class="select-header">
+      <button type="button" id="researchProfileBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>RESEARCH PROFILE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">IDENTITY</span><span id="rpIdentityValue" class="endless-stat-value rp-identity-value">UNASSIGNED</span></div>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">LEVEL</span><span id="rpLevelValue" class="endless-stat-value">-</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">EXP</span><span id="rpExpValue" class="endless-stat-value">-</span></div>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">DEEPEST LAYER</span><span id="rpDeepestLayerValue" class="endless-stat-value">0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">PROTOCOLS FOUND</span><span id="rpProtocolsFoundValue" class="endless-stat-value">0</span></div>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">UNKNOWN ANALYSIS</span><span id="rpUnknownAnalysisValue" class="endless-stat-value">0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">PREFERRED RISK</span><span id="rpPreferredRiskValue" class="endless-stat-value">-</span></div>
+    </div>
+
+    <h3 class="neurallab-section-title">IDENTITY PERK TREE</h3>
+    <div id="rpPerkList" class="rp-perk-list"></div>
+
+    <h3 class="neurallab-section-title">ACHIEVEMENTS</h3>
+    <div id="rpAchievementList" class="rp-achievement-list"></div>
   </section>
 
   <!-- ============ PROTOCOL ARCHIVE (発見済み/未発見Protocol一覧、レア度・Fragment表示) ============ -->
@@ -2146,6 +2408,19 @@
       <div class="endless-stat"><span class="endless-stat-label">DISCOVERED</span><span id="envArchiveDiscovered" class="endless-stat-value">0 / 0</span></div>
     </div>
     <div id="envArchiveCards" class="archive-cards"></div>
+  </section>
+
+  <!-- ============ STEP30-3: WORLD ENVIRONMENT ARCHIVE (Layerに紐づくWorldEnvironment専用) ============ -->
+  <section id="screen-worldenvarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="worldEnvArchiveBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>WORLD ENVIRONMENT ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">DISCOVERED</span><span id="worldEnvArchiveDiscovered" class="endless-stat-value">0 / 0</span></div>
+    </div>
+    <div id="worldEnvArchiveCards" class="archive-cards"></div>
   </section>
 
   <!-- ============ PROTOCOL SELECT (RUN開始時、研究方針を1つ選ぶ) ============ -->
@@ -2183,6 +2458,7 @@
 
   <!-- ============ MAP (分岐するNode候補から次の1歩を選ぶ) ============ -->
   <section id="screen-map" class="screen">
+    <div id="mapEnvironmentThemeLayer" class="environment-theme-layer"></div>
     <div class="lab-header map-screen-header">
       <button type="button" id="mapOverviewBtn" class="icon-btn map-overview-btn" aria-label="リサーチマップ">
         <span class="map-overview-icon">🗺️</span>
@@ -2191,6 +2467,7 @@
       <div class="map-header-titles">
         <h2 class="lab-title">MAP</h2>
         <div id="mapDepthLabel" class="lab-subtitle">DEPTH 1</div>
+        <div id="mapWorldEnvLabel" class="map-world-env-label"></div>
       </div>
       <button type="button" id="mapExtractBtn" class="icon-btn map-extract-btn" aria-label="EXTRACT">
         <span class="map-overview-icon">🚀</span>
@@ -2198,6 +2475,13 @@
       </button>
     </div>
     <p class="lab-instruction">進む先を1つ選択する（Node種類ごとにrisk/rewardが異なる）</p>
+    <!-- STEP30-2: ENVIRONMENT ANALYSIS（AI Analysis UI Integration） -->
+    <div id="mapEnvironmentAnalysis" class="env-analysis-panel hidden">
+      <div class="env-analysis-title">ENVIRONMENT ANALYSIS</div>
+      <div class="env-analysis-current">Current: <span id="mapEnvAnalysisName">DIGITAL GRID</span></div>
+      <div class="env-analysis-effects-label">Active Effects</div>
+      <div id="mapEnvAnalysisEffects" class="env-analysis-effects"></div>
+    </div>
     <div id="mapNodeCards" class="map-node-cards"></div>
   </section>
 
@@ -2350,6 +2634,7 @@
 
   <!-- ============ GAME ============ -->
   <section id="screen-game" class="screen">
+    <div id="environmentThemeLayer" class="environment-theme-layer"></div>
     <header class="game-header">
       <button type="button" id="gameBackBtn" class="ghost-btn">‹ BACK</button>
       <span id="stageLabel">STAGE</span>
@@ -2392,6 +2677,10 @@
         <div class="endless-hud-item">
           <span class="endless-hud-label">DATA</span>
           <span id="endlessResearchDataValue" class="endless-hud-value endless-research-data">0</span>
+        </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">ZONE</span>
+          <span id="endlessWorldEnvValue" class="endless-hud-value endless-world-env">-</span>
         </div>
       </div>
       <!-- 発動中のProtocol Synergy表示（endless.jsが更新する。未発動の間はhidden） -->
@@ -2482,6 +2771,11 @@
       </div>
       <div class="archive-updated-badge">ARCHIVE UPDATED</div>
 
+      <!-- STEP29: AI Feedback System -->
+      <h3 class="research-report-title">AI OBSERVATION</h3>
+      <div id="endlessResultAiObservation" class="ai-observation-text">""</div>
+      <div class="ai-recommendation-row">Recommended: <span id="endlessResultAiRecommendation">-</span></div>
+
       <div class="endless-result-buttons">
         <button type="button" id="endlessResultTitleBtn" class="ghost-btn">TITLE</button>
         <button type="button" id="endlessRetryBtn" class="primary-btn">RETRY</button>
@@ -2517,6 +2811,97 @@
       <div class="level-up-label">PROTOCOL DISCOVERED</div>
       <div id="discoveryName" class="level-up-value discovery-name">Quantum</div>
       <div id="discoveryRarity" class="discovery-rarity">LEGENDARY</div>
+    </div>
+  </div>
+
+  <!-- ============ STEP29: IDENTITY EVENT (Identity Level Up / Perk Unlock演出) ============ -->
+  <div id="identityEventOverlay" class="overlay level-up-overlay discovery-overlay hidden">
+    <div class="level-up-card">
+      <div id="identityEventLabel" class="level-up-label">IDENTITY LEVEL UP</div>
+      <div id="identityEventName" class="level-up-value discovery-name">Lv.2</div>
+      <div id="identityEventSub" class="discovery-rarity"></div>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-3: ENVIRONMENT SCAN SEQUENCE (Layer移動、Environment変化時) ============ -->
+  <div id="environmentScanOverlay" class="overlay env-scan-overlay hidden">
+    <div class="clear-card env-scan-card">
+      <div id="environmentScanPhaseScanning" class="env-scan-phase">
+        <div class="env-scan-title">SCANNING AREA...</div>
+        <div class="env-scan-subtitle">Analyzing Structure...</div>
+        <div class="env-scan-progress-track"><div id="environmentScanProgressFill" class="env-scan-progress-fill"></div></div>
+        <div id="environmentScanProgressPercent" class="env-scan-progress-percent">0%</div>
+      </div>
+      <div id="environmentScanPhaseIdentified" class="env-scan-phase hidden">
+        <div class="env-scan-title">ENVIRONMENT IDENTIFIED</div>
+        <div id="environmentScanName" class="env-scan-name">DIGITAL GRID</div>
+        <div class="env-scan-access">Research Access Granted</div>
+        <div id="environmentScanLogMessage" class="env-scan-log">"Stable data structure detected."</div>
+        <div id="environmentScanStatusLogMessage" class="env-scan-log env-scan-status-log"></div>
+      </div>
+      <button type="button" id="environmentScanSkipBtn" class="ghost-btn env-scan-skip-btn">続ける</button>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-3: ENVIRONMENT TRANSITION (Environment変更時) ============ -->
+  <div id="environmentTransitionOverlay" class="overlay env-transition-overlay hidden">
+    <div class="clear-card env-transition-card">
+      <div class="env-transition-title">ENVIRONMENT SHIFT</div>
+      <div class="env-transition-row"><span class="env-transition-key">Previous</span><span id="environmentTransitionPrevious" class="env-transition-value">-</span></div>
+      <div class="env-transition-row"><span class="env-transition-key">New</span><span id="environmentTransitionNew" class="env-transition-value">-</span></div>
+      <div class="env-transition-sync">Synchronizing...</div>
+      <div class="env-transition-progress-track"><div id="environmentTransitionProgressFill" class="env-transition-progress-fill"></div></div>
+      <div id="environmentTransitionProgressPercent" class="env-transition-progress-percent">0%</div>
+      <button type="button" id="environmentTransitionSkipBtn" class="ghost-btn env-scan-skip-btn">続ける</button>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-3: ENVIRONMENT HUD (常時表示、fixed配置でGAME/MAP両画面に表示) ============ -->
+  <div id="environmentHudPanel" class="environment-hud-panel hidden">
+    <div id="ehLayerValue" class="eh-layer">LAYER 1</div>
+    <div id="ehEnvName" class="eh-env-name">DIGITAL GRID</div>
+    <div class="eh-stability-label">WORLD STABILITY</div>
+    <div class="eh-stability-bar-track"><div id="ehStabilityBarFill" class="eh-stability-bar-fill"></div></div>
+    <div id="ehStabilityPercent" class="eh-stability-percent">100%</div>
+    <div class="eh-stability-row">STATUS: <span id="ehStabilityValue">STABLE</span></div>
+    <div id="ehMutationRow" class="eh-mutation-row hidden">MUTATION: <span id="ehMutationValue"></span></div>
+    <div id="ehModifierList" class="eh-modifier-list"></div>
+  </div>
+
+  <!-- ============ STEP30-5: MUTATION SEQUENCE (Warning→処理→Complete。続けるボタン必須) ============ -->
+  <div id="mutationSequenceOverlay" class="overlay mutation-sequence-overlay hidden">
+    <div class="clear-card mutation-sequence-card">
+      <div id="mutationPhaseWarning" class="mutation-phase">
+        <div class="mutation-warning-title">SYSTEM WARNING</div>
+        <div class="mutation-warning-subtitle">WORLD STRUCTURE INSTABILITY</div>
+        <button type="button" id="mutationWarningContinueBtn" class="ghost-btn env-scan-skip-btn">続ける</button>
+      </div>
+      <div id="mutationPhaseProcessing" class="mutation-phase hidden">
+        <div class="mutation-processing-title">ANALYZING WORLD STRUCTURE...</div>
+        <div class="mutation-processing-spinner"></div>
+      </div>
+      <div id="mutationPhaseComplete" class="mutation-phase hidden">
+        <div class="mutation-complete-title">WORLD MUTATION</div>
+        <div id="mutationCompleteName" class="mutation-complete-name">DATA STORM DETECTED</div>
+        <div id="mutationCompleteDesc" class="mutation-complete-desc"></div>
+        <button type="button" id="mutationCompleteContinueBtn" class="primary-btn">続ける</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STEP30-5: MUTATION CHOICE EVENT (Stabilize/Exploit選択) ============ -->
+  <div id="mutationChoiceOverlay" class="overlay mutation-choice-overlay hidden">
+    <div class="clear-card mutation-choice-card">
+      <div class="mutation-choice-title">SYSTEM INSTABILITY</div>
+      <div class="mutation-choice-subtitle">World Stabilityが臨界値に近づいています</div>
+      <button type="button" id="mutationChoiceStabilizeBtn" class="lab-card mutation-choice-option">
+        <span class="lab-card-name">① Stabilize</span>
+        <span class="lab-card-desc">Stability +20 / 報酬は通常のまま</span>
+      </button>
+      <button type="button" id="mutationChoiceExploitBtn" class="lab-card mutation-choice-option">
+        <span class="lab-card-name">② Exploit</span>
+        <span class="lab-card-desc">Mutationを受け入れる / 報酬+50%・リスク上昇</span>
+      </button>
     </div>
   </div>
 
@@ -2573,6 +2958,34 @@
   <script src="src/debug.js"></script>
   <script src="src/endless/map.js"></script>
   <script src="src/endless/endlessSave.js"></script>
+  <!-- STEP29: Research Identity System（researchTree.js等より先に読み込む必要は無いが、
+       identityManager.js/researchProfile.jsがG.ResearchIdentity/G.Achievementsを
+       参照するため、endless.js本体より前であればここでよい） -->
+  <script src="src/endless/researchIdentity.js"></script>
+  <script src="src/endless/achievements.js"></script>
+  <script src="src/endless/identityManager.js"></script>
+  <script src="src/endless/identitySelect.js"></script>
+  <script src="src/endless/researchProfile.js"></script>
+  <script src="src/endless/aiFeedback.js"></script>
+  <!-- STEP30-1: Environment Framework（既存の「Research Environment」システムとは別概念。
+       命名衝突を避けWorldEnvironment/WorldEnvironmentManagerとしている） -->
+  <script src="src/endless/worldEnvironment.js"></script>
+  <script src="src/endless/worldEnvironmentManager.js"></script>
+  <script src="src/endless/environmentModifierManager.js"></script>
+  <!-- STEP30-3: Environment Visual / HUD Evolution -->
+  <script src="src/endless/environmentLog.js"></script>
+  <script src="src/endless/environmentScan.js"></script>
+  <script src="src/endless/transitionManager.js"></script>
+  <script src="src/endless/environmentHud.js"></script>
+  <script src="src/endless/environmentRenderer.js"></script>
+  <script src="src/endless/worldEnvironmentArchive.js"></script>
+  <!-- STEP30-4: World Stability System -->
+  <script src="src/endless/worldState.js"></script>
+  <script src="src/endless/worldStabilityManager.js"></script>
+  <!-- STEP30-5: World Mutation Trigger System -->
+  <script src="src/endless/mutationData.js"></script>
+  <script src="src/endless/worldMutationManager.js"></script>
+  <script src="src/endless/mutationRenderer.js"></script>
   <script src="src/endless/researchTree.js"></script>
   <script src="src/endless/metaProgression.js"></script>
   <script src="src/endless/upgrades.js"></script>

@@ -1438,3 +1438,197 @@ Endless Researchで獲得したResearch DataをRUNをまたいで恒久的な探
 - RUN終了フローの変更は、RESULT画面の「TITLE」ボタンは既存通り即座にタイトルへ戻れるようにし（用事が済んだプレイヤーへの摩擦を増やさないため）、「RETRY」ボタンのみSurface Arrival→NEURAL RESEARCH LABを経由するよう変更した。MODE SELECT画面にも🧪ボタンを追加し、RUNを挟まずいつでもNEURAL RESEARCH LABを開けるようにしている
 
 **テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除した）。要求仕様セクション13の完了確認フロー（①RUN開始→②Puzzleクリア→③Research Data取得→④Extract→⑤Research Lab到達→⑥Upgrade購入→⑦Save→⑧次回Runで効果確認）を実際のコード経路で通し、旧セーブからのマイグレーション、Research Rank計算とPermanent Unlock（Protocol/Environment/Unknown Eventの3種すべて）、Protocol Evolution、MODE SELECTからの直接アクセス、既存のSTAGE SELECT等への無影響を含めて計46項目を検証、全項目PASS・ランタイムエラー無し。
+
+## STEP29: Research Identity System
+
+プレイヤーが単に強化されるだけでなく「どのような研究者として成長するか」というプレイスタイルの個性を持たせる要求仕様（STEP29）に基づき実装した。既存のENDLESS RESEARCHのゲームループ・Protocol/Environment/Meta Progression等の各システムは一切変更せず、それらに横から効果を合算する形で追加している。
+
+**新規ファイル**:
+- `src/endless/researchIdentity.js` — ANALYST/EXPLORER/PROTOCOL ENGINEER/SURVIVALISTの4種Identityの静的定義（primaryBonus/secondaryBonus/Lv1・5・10の3段階Perk Tree/EXP源テーブル）。Lv1〜10の必要EXP式`100 × (1 + (現在Lv-1) × 0.8)`はresearchTree.jsのコスト式と同じ発想で設計した（要求仕様に数値指定が無かったため）
+- `src/endless/identityManager.js` — 選択中Identityの状態管理（EXP加算・レベルアップ・Perk自動解放）と効果集計を担当する管理クラス。metaProgression.jsと同じく状態を持たずendlessSave.jsへ委譲し、Protocolと異なりRUNをまたいで恒久的に育つためreset()を持たない
+- `src/endless/identitySelect.js` — 新規プレイ開始時（まだIdentity未選択の時のみ）に表示する4択選択画面
+- `src/endless/researchProfile.js` — Identity・Level・生涯進行状況（Deepest Layer/Protocols Found/Unknown Analysis/Preferred Risk）・Perk Tree・Achievement一覧を表示する読み取り専用画面
+- `src/endless/achievements.js` — Identity関連Achievement4種（Logic Architect/Deep Signal Hunter/Protocol Creator/Endless Researcher）の定義+達成判定。protocolUnlock.jsと同じ「snapshot[type] >= value」汎用判定パターン
+- `src/endless/aiFeedback.js` — RUN終了時、今RUNの行動パターン（Risk Chain最大値・Extract有無・Node種類別選択回数・PERFECT率）から観測コメント+推奨行動を1組返す、優先順位付きルールテーブルによる決定的な判定モジュール
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `selectedIdentityId`/`secondaryIdentityId`（Hybrid用、データのみ）/`identityExp`/`identityLevel`/`unlockedIdentityPerks`/`completedAchievements`/`totalProtocolEvolutions`を追加。既存のマイグレーション機構（`Object.assign(defaultData(), JSON.parse(raw))`）がそのまま働くため追加コード不要だった
+- `metaProgression.js`: コンストラクタが`identityManager`を受け取れるようにし、`getEvolutionCost()`にProtocol Engineerの「Evolution Cost Down」Perkによる割引を反映。`evolveProtocol()`成功時に`totalProtocolEvolutions`をインクリメント（Achievement「Protocol Creator」判定用）
+- `neuralLab.js`: `identityManager`を受け取り、Protocol Evolution成功時にEXP源`protocolEvolve`を加算してIdentityイベント演出を出す
+- `mapUI.js`: Unknown Nodeの解析確率にAnalyst/ExplorerのIdentityボーナス（`getUnknownRevealChanceBonus()`）を合算
+- `ui.js`/`animation.js`: Identity Level Up/Perk Unlock演出`showIdentityEvent()`を追加（Protocol Discoveryと同じオーバーレイ構造を、ラベル文言も差し替え可能にした汎用版として流用）
+- `endlessResult.js`: RESULT画面に「AI OBSERVATION」欄（observation文+recommendation）を追加表示
+- `endless.js`: identityManager/identitySelect/researchProfileの生成・配線。新規プレイ時のみProtocol Selectの前にIdentity Selectを挟む分岐。スコア計算（scoreMultiplier/perfectBonusMultiplier/comboBonusMultiplier）・Fragment獲得倍率・Miss時ライフ損失倍率・Map分岐候補数・ライフ自動回復間隔・Synergy発動時の追加スコア倍率の各既存計算式へIdentity効果を合算。関連Node攻略/Reward取得の各所（Puzzleクリア・PERFECTクリア・Boss撃破・Depth進行・Unknown解析・Recovery Node・Fragment獲得・Synergy発動）でEXPを加算。RUN終了時にAchievement判定とAI Feedback分析を実行しRESULT画面へ渡す
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- Analystの「Puzzle Analysis」（primaryBonus）と「AI Confidence」（secondaryBonus）は、どちらも`unknownRevealChance`という同一の効果キーに合算する設計にした。2つの独立した新規サブシステムを作ると既存のAI Analysis Panel（aiAnalysis.js）へ深く手を入れる必要が生じるため、ラベル（表示文言）だけ分けて実際の効果は1つのレバーに集約した
+- Survivalistの「Recovery System」Perkは、既存のRecovery Protocolアップグレード（`lifeRegenInterval`）を所持していなくても単独でライフ自動回復を起動できるようにした（Identity自身がその手段の簡易版を持つ、という判断。既存アップグレードの価値を損なわないよう、両方所持時は効果が合算される）
+- Achievementの「Long Run」条件（Survivalist「Endless Researcher」）は要求仕様に閾値指定が無かったため、Boss Depth50到達をLong Runの基準として設計した。「Preferred Risk」（Research Profile）の判定閾値（LOW<1.5, MEDIUM<2.2, HIGH以上）も同様に設計した
+- Hybrid Identity System（セクション7）は要求仕様どおりデータ構造（`secondaryIdentityId`の保存・`getHybridLabel()`）のみ対応し、選択UIは実装していない。組み合わせ表示名は要求仕様で例示された1組（PROTOCOL ENGINEER+EXPLORER="Protocol探索特化型"）のみ個別マッピングし、他の組み合わせは汎用フォールバック表記にした
+- Identity選択は「新規プレイ開始時に一度だけ」という要求のとおり、以後変更するUIは設けていない（再選択・Identity変更は今回のスコープ外）
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション14の完了確認フロー（①New Research開始→②Identity選択→③Run実行→④Identity Bonus適用確認→⑤EXP獲得→⑥Level Up→⑦Perk Unlock→⑧Profile更新→⑨Save確認）を実際のコード経路で通し、4種Identityそれぞれの効果集計値、実際のPuzzleクリア（盤面へ解答をタップして本物のスコア計算式を経由）によるRESULT画面のAI Observation表示、Achievement判定用カウンタの加算、既存のSTAGE SELECT等への無影響を含めて計47項目を検証、全項目PASS。**テスト中に発見・修正したバグ**: `identityManager.js`に`getScoreMultiplier()`が未定義のまま`endless.js`側から呼ばれており、実際にPuzzleをクリアすると例外が発生する状態だった（現行4 IdentityにはscoreMultiplier型の効果を持つものが無いため単体テストでは表面化せず、実クリアフローのテストで発覚）。既存のprotocolManager.getScoreMultiplier()と同じ「常に1以上を返す」パターンで追加し解消した。
+
+## STEP30-1: Environment Framework（Dynamic Research World 第一段階）
+
+「Research Layerに紐づくEnvironment（研究環境）」という概念の基盤を追加する要求仕様（STEP30-1）に基づき実装した。要求仕様どおり今回はEnvironment Modifier/World Mutation/Environment Event/Stability変化は実装せず、データ構造・Layerとの紐付け・HUD表示・Saveのみの「基盤実装」に留めている。
+
+**命名についての重要な注意**: このプロジェクトには既に「Research Environment」という名前のRUN限定システム（`environments.js`/`environmentManager.js`、RUN開始時に選ぶBlue Spectrum等6種、スコア倍率等のゲームプレイ効果を持つ）が存在する。STEP30-1が要求する「Environment」（Layerに紐づく恒久的な見た目テーマ、ゲームプレイ効果は今回一切持たない）はそれとは全くの別概念のため、クラス名・グローバル名・Save項目名の衝突を避けて`WorldEnvironment`/`WorldEnvironmentManager`という名前にしている。
+
+**新規ファイル**:
+- `src/endless/worldEnvironment.js` — env_grid/env_network/env_forest/env_ocean/env_fractal/env_unknownの6種の静的定義（id/name/theme/description/background/uiColor/bgmId/unlockCondition）。Layer1-5/6-10/11-15/16-20/21-25の固定対応表と、Layer26以降がその対応表を離れる境界(`RANDOM_START_LAYER=26`)を保持する
+- `src/endless/worldEnvironmentManager.js` — `getCurrentEnvironment()`/`getEnvironmentByLayer(layer)`/`getTheme()`/`getBackground()`/`getUIColor()`/`getBgmId()`/`unlockEnvironment(id)`/`isUnlocked(id)`の要求API全てを実装した管理クラス。metaProgression.js/identityManager.jsと同じく状態を持たずendlessSave.jsへ委譲する
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `currentWorldEnvironmentId`（初期値`env_grid`）・`unlockedWorldEnvironments`（初期値はunlockCondition:'always'の5種）・`discoveredWorldEnvironments`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `ui.js`/`animation.js`: Layer移動でEnvironmentが変化した瞬間のみ表示する約2秒間のHUD演出`showEnvironmentHud()`を追加（Identity Level Up演出と同じオーバーレイ機構を流用）
+- `endless.js`: `worldEnvironmentManager`の生成・配線。`_handleMapNodeSelected()`（Layer移動＝Depth進行のタイミング）で`setCurrentEnvironment(depth)`を呼び、変化時のみHUD演出を出す。常時表示の小型バッジ（ENDLESS HUD内「ZONE」欄・MAP画面ヘッダー内`mapWorldEnvLabel`）を新設し、CSS変数`--world-env-color`へ`uiColor`を反映する簡易Visual Theme Framework
+- `index.html`: ENDLESS HUDへの「ZONE」バッジ・MAP画面ヘッダーへの小型Layer/Environment表示・Environment HUDオーバーレイ・関連CSSを追加
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- ここでの「Layer」は既存の`puzzleTier.js`が持つ4段階Tier（難易度用の粗い区分）とは別物で、RUN内のDepthそのものを指す、5Layerごとに見た目が切り替わるための、より細かい粒度として扱った（要求仕様の「Layer1/6/11/16/21」という区切り方が既存Tier境界と一致しないため独立させた）
+- Layer26以降の「ランダム」は、Layerが変わるたびに再抽選すると見た目が毎回チカチカ変わってしまうため、5Layerごとのバンド単位（`Math.floor((layer-26)/5)`をハッシュのシードにする決定的選出）で固定し、Layer1-25までと同じ「5Layer保持される」体感速度に揃えた
+- UNKNOWN DIMENSIONの`unlockCondition`は`{type:'layer', value:26}`とし、「Layer26以降のランダムプールに入るタイミング」と「Achievementや他のArchive系と同じ解放の概念で扱えるようにするタイミング」を意図的に一致させた
+- HUD演出の「フェードアウト」は、このプロジェクトの`.hidden`が`display:none`固定でCSSトランジションが効かないため、既存のLEVEL UP/Discovery演出と同じ「一定時間（約2秒）後に自動で消える」形で実現している（新しいCSSトランジション機構は追加していない）
+- Visual Theme Framework（セクション7）は要求仕様どおり「簡易実装」とし、Canvas演出（`theme.js`のネオンAIテーマ背景）自体には一切手を加えず、CSS変数`--world-env-color`によるHUD/バッジの色味変更のみに留めた
+- BGM Integration Hook（セクション8）は要求仕様どおり`getBgmId()`の値を取得可能にするだけで、`sound.js`側の再生ロジックには接続していない
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション11の動作確認フロー（①ゲーム開始→②Research Map表示→③Layer移動→④Environment表示→⑤LayerごとのEnvironment変化→⑥Save→⑦Reload→⑧Environment状態復元）を実際のコード経路で通し、Layer1-25の固定対応10パターン全て、Layer26以降のバンド単位の決定性、実RUNでのバッジ/CSS変数反映、新規`EndlessSaveStore`インスタンスでの永続化復元、`unlockEnvironment`/`isUnlocked`のAPI、旧形式（STEP30-1のフィールドを持たない）セーブデータからのマイグレーション、既存のSTAGE SELECT等への無影響を含めて計42項目を検証、全項目PASS・ランタイムエラー無し。
+
+## STEP30-2: Environment Modifier System
+
+STEP30-1で追加したWorldEnvironment（見た目テーマのみ）を、実際にPuzzle/Reward/Protocol/Map/Unknown/Riskへ影響するシステムへ拡張する要求仕様（STEP30-2）に基づき実装した。既存のENDLESS RESEARCHのPuzzle生成・スコア計算・Protocol/Identity等の各システムは一切破壊せず、それぞれの既存計算式へ「Environment Modifier」という新しい乗算/加算項を追加する形にしている。
+
+**新規ファイル**:
+- `src/endless/environmentModifierManager.js` — 要求仕様セクション2の全API（`getActiveModifiers()`/`getModifierValue(type)`/`applyPuzzleModifier(data)`/`applyRewardModifier(data)`/`applyProtocolModifier(data)`）に加え、map/risk向けの補助getter（`getNodeWeightMultiplier`/`getExtraLabChance`/`getLifeRecoveryBonus`/`getRiskChainBonusMultiplier`/`getRareEventWeightBoost`/`getUnknownSuccessBoost`）を実装。状態は持たずworldEnvironmentManagerへ委譲する「Modifier Calculation Layer」（要求仕様セクション8）そのもの
+
+**既存ファイルの変更**:
+- `worldEnvironment.js`: 6種それぞれに`modifiers[]`（3種ずつ、計18種）を追加。UNKNOWN DIMENSIONの"Random Modifier"は既存の「Unstable System」Research Environment（environments.js）と同じ設計思想で、`type:'randomModifier'`としてenvironmentModifierManager.js側が呼ばれるたびに他Environmentから無作為に1つ実体を借用する
+- `unknownEvents.js`: `pickEvent(currentRank, opts)`に`{rareBoost, successBoost}`の重み補正オプションを追加（省略時は全件重み1の完全一様抽選＝既存挙動と完全に同一、後方互換）
+- `mapGenerator.js`: `generateChoices()`に5番目の引数`environmentModifierManager`を追加。Map Node抽選の重み（puzzle/event/elite/recovery/unknown）へ`nodeWeightMultiplier_*`を乗算し、NEURAL FORESTの「Research Lab Spawn +15%」は既存の周期出現ルール（3Depthごと）とは独立に追加候補として上乗せする
+- `endlessGame.js`（EndlessRoundController）: `environmentModifierManager`を受け取り、制限時間（FRACTAL COREの「Puzzle Difficulty +25%」）とHINT開示マス数（DIGITAL GRIDの「Puzzle Hint Effect +1」、既存のhintRevealBonusキーへ合算）へ反映
+- `mapUI.js`: Unknown Node解析確率へDIGITAL GRIDの「AI Prediction Accuracy +10%」を合算。新規「ENVIRONMENT ANALYSIS」パネル（要求仕様セクション7）を追加し、現在Environment名とActive Modifier名一覧を表示する
+- `endlessSave.js`: `discoveredEnvironmentModifiers`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `endless.js`: environmentModifierManagerの生成・各所への配線。Reward計算（FRACTAL COREの「Reward +40%」・DATA OCEANの「Research Data +20%」）・Risk Chain倍率（FRACTAL COREの「Risk Chain Bonus +20%」）・Protocol Fragment獲得量（QUANTUM NETWORK/DATA OCEANの「Protocol Fragment +10%/+30%」）・Recovery Node回復量（NEURAL FORESTの「Life Recovery +1」）・Unknown Node解決の重み（QUANTUM NETWORKの「Rare Reward +20%」/NEURAL FORESTの「Unknown Analysis Success +10%」）へ反映。Layer移動のたびにActive Modifierを発見済みとして記録する
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- FRACTAL COREの「Puzzle Difficulty +25%」は、既存のTier/emptyRatio（実測ベースで安全域が厳密にチューニング済み、puzzleTier.js参照）を直接動かすと生成タイムアウトのリスクがあるため、代わりに制限時間を短縮する既存の仕組み（Elite Nodeの Time Pressure Modifierが使う`timeLimitMultiplierScale`と同じレバー）に乗せて「実質的な難易度上昇」を実現した。要求仕様の例（Base Difficulty5→Final6.25）が想定する連続的な難易度スケールは、このゲームの離散的なTier/疎密度システムには存在しないため、この解釈に置き換えている
+- QUANTUM NETWORKの「Reward Prediction Accuracy -15%」とUNKNOWN DIMENSIONの「AI Confidence -50%」は、aiAnalysis.js（STEP27）の決定的な計算式そのものへ手を加えるのは侵襲的すぎると判断し、ENVIRONMENT ANALYSISパネルでの表示専用（`getActiveModifiers()`で値は取得可能）に留めた。要求仕様セクション7の例自体も「Active Effectsの一覧表示」を求めているのみで、既存AI Analysis Panelの数値計算自体の変更は要求していない
+- QUANTUM NETWORKの「Rare Reward +20%」とUNKNOWN DIMENSIONの「Rare Event Chance +50%」は、どちらも「特定の抽選結果が出やすくなる」効果のため、前者はunknownEvents.pickEvent()のrare_upgrade重み補正、後者はmapGenerator.jsのevent Node出現重み補正という、それぞれ最も近い既存の抽選ロジックへ接続した
+- NEURAL FORESTの「Research Lab Spawn +15%」は、Research Lab Nodeが元々「3Depthごとに必ず1枠出現する」周期ルール（重み抽選の対象外）のため、周期ルール自体は変更せず「対象外Depthでも15%の確率で追加の候補として出現する」という上乗せ方式にした
+- Random Modifierの解決は、呼ぶたびに`Math.random()`で無作為に再抽選する設計にした（「Random」という名前どおりの毎回変わる挙動を優先し、決定的キャッシュは行わない）
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション12の確認フロー（①Layer到達→②Environment確認→③Modifier表示→④Puzzle開始→⑤補正確認→⑥Reward取得→⑦Protocol取得→⑧Save）を実際のコード経路で通し、6環境×3Modifierの定義完全性、各Modifierの数値計算（`applyPuzzleModifier`/`applyRewardModifier`/`applyProtocolModifier`の入出力）、Random Modifierの解決、`unknownEvents.pickEvent`の重み付け抽選を統計的に確認、実RUNで21Layer（Layer1のDIGITAL GRIDからLayer21のFRACTAL CORE）まで実際にPuzzleを解いて進行させ、ENVIRONMENT ANALYSISパネルの表示・FRACTAL CORE到達時の制限時間短縮の実測値・Reward/Protocol Fragment増加・Save/Reload後の状態復元・旧形式セーブのマイグレーション・既存のSTAGE SELECT等への無影響を含めて計42項目を検証、全項目PASS。
+
+## STEP30-3: Environment Visual / HUD Evolution
+
+STEP30-1/30-2で追加したWorldEnvironmentを「内部データ」から「プレイヤーが現在探索している研究領域として認識できるUI・演出」へ拡張する要求仕様（STEP30-3）に基づき実装した。Puzzle Generator/Reward Logic/Protocol Logicには一切触れず、新規UI/演出モジュールの追加のみで完結させている。
+
+**新規ファイル**（要求仕様セクション10の推奨命名にほぼ準拠。命名衝突を避けるための変更点は後述）:
+- `src/endless/environmentLog.js` — AI Research Log（Environmentごとの解析フレーバーテキスト6種）の静的データ
+- `src/endless/environmentScan.js`（EnvironmentScan） — Layer開始時、Environmentが実際に変化した瞬間に表示する2段階演出（"SCANNING AREA..."→プログレスバー→"ENVIRONMENT IDENTIFIED"+AI Research Log）。SKIP可能、合計表示時間は約1〜3秒（要求仕様どおり）
+- `src/endless/transitionManager.js`（TransitionManager） — Environment変更時、Scanより前に表示する"ENVIRONMENT SHIFT / Previous→New / Synchronizing..."演出。RUN最初のLayer（比較対象が無い）ではスキップされる
+- `src/endless/environmentHud.js`（EnvironmentHUD） — 常時表示のリッチHUDパネル（LAYER/Environment名/World Status/Active Modifier一覧）のDOM描画のみを担当
+- `src/endless/environmentRenderer.js`（EnvironmentRenderer） — Environmentごとの軽量CSSアニメーション背景（Theme Animation）のクラス切り替えと、Performance Control（`performanceMode`: high/normal/low）を担当
+- `src/endless/worldEnvironmentArchive.js`（`WorldEnvironmentArchive`） — Environment Archive Extension。Protocol Archiveとは別に、First Discovery Layer・Effects一覧を表示する専用画面
+
+**命名についての注意**: 要求仕様は新規moduleの例として`EnvironmentHUD.js`等を挙げているが、この命名規則はSTEP30-1で確立した「既存のRUN限定Research Environmentシステム（`environmentArchive.js`/`EnvironmentArchive`）との衝突を避けるためWorldEnvironment系は`World`を冠する」という方針を踏襲する必要があった。そのためArchive画面のみ`WorldEnvironmentArchive`とし、画面id/ボタンも既存の`screen-environmentarchive`/`environmentArchiveBtn`とは別の`screen-worldenvarchive`/`worldEnvArchiveModeSelectBtn`にしている（他の新規moduleは既存名と衝突しないためそのままの命名を採用した）。
+
+**既存ファイルの変更**:
+- `worldEnvironment.js`: 各定義へ`icon`（絵文字1文字）を追加（Research Map Node表示・Archive表示用）
+- `endlessSave.js`: `environmentDiscoveryLog`（Environmentごとの初回発見Layer番号）・`environmentVisitHistory`（直近100件の訪問履歴）・`performanceMode`（既定値'normal'）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `mapUI.js`: 各Map Nodeカードへ現在Environmentのアイコン+名前タグを追加（要求仕様セクション7）
+- `ui.js`/`animation.js`: STEP30-1で追加した簡易な2秒ポップアップ`showEnvironmentHud`を削除し、より上位互換のEnvironment Scan Sequence（environmentScan.js）へ完全に置き換えた
+- `endless.js`: environmentScan/transitionManager/environmentHud/environmentRenderer/worldEnvironmentArchiveの生成・配線。`_handleMapNodeSelected()`を、Environmentが変化した時のみ「Transition→Scan→Puzzle/Node開始」の順で演出を挟む非同期フロー（コールバックチェーン）に再構成。Event Node発生時にもAI Research Logの1文をトーストへ追記。MODE SELECTに🌍World Environment Archiveボタン・PERFORMANCE（high/normal/low巡回）ボタンを追加
+- `index.html`: Environment Scanオーバーレイ・Transitionオーバーレイ・常時表示Environment HUDパネル（`position:fixed`でGAME/MAP両画面に重ねて表示）・Environment Theme Animation用の背景レイヤー（`#environmentThemeLayer`/`#mapEnvironmentThemeLayer`、6環境分のCSS keyframes+`perf-low`での無効化）・World Environment Archive画面・関連CSS一式を追加
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- 要求仕様のフロー図（セクション1「Layer Change→Environment Scan→Analysis Complete→Puzzle Start」）は字面上「Layer移動のたびに毎回Scanを挟む」とも読めるが、5Layerごとにしか環境が変わらない現行仕様でこれを字義どおり実装すると、既存のテンポの良い進行体験（数十秒に1回のPuzzle開始のたびに2秒超の演出が強制される）を大きく損なう。これはアーキテクチャルール「既存ゲーム処理を変更しない」の趣旨に反すると判断し、STEP30-1で既に確立していた「Environmentが実際に変化した時のみ」という判定をそのまま踏襲した。ただしこの判定は「RUNをまたいだ保存済みの前回値」ではなく「このRUN内で直前に表示していたEnvironment」との比較に修正した（新規RUNのLayer1が偶然、保存済みの前回値と同じEnvironmentだった場合でも、RUN開始直後には必ずScanを1回表示するため）
+- Environment Theme Animation（セクション3）は「既存Canvas/CSS構造を利用する」という指示を、新しいJS描画ループ（`requestAnimationFrame`等）を追加せず、既存の`theme.js`（ネオンAIテーマの全画面共通canvas背景）はそのまま維持しつつ、ENDLESS RESEARCH中の画面にだけ重ねる軽量なCSS keyframesアニメーション層として実現した。パフォーマンスコストがゼロに近いため、Performance Control（セクション4）の「high/normal」は現時点で描画内容を区別せず、「low」でのみ`perf-low`クラスによりアニメーション・不透明度をOFFにする設計にした（high/normalの差別化は将来の拡張余地としてREADMEに明記するに留めた）
+- World Statusの表示（セクション2「STABILITY: STABLE」）は、Stability変化システム自体がSTEP30-1〜30-2のどちらでも実装されていない（STEP30-1要求仕様で明示的に将来ステップへ先送りされていた）ため、常に固定値"STABLE"を表示するプレースホルダーとした
+- Environment Transitionの「Previous」は、RUN最初のLayerでは存在しない（比較対象が無い）ため、その場合はTransition演出自体をスキップしてScan演出へ直接進む設計にした
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション11の確認フロー（①Run開始→②Environment Scan表示→③Puzzle開始→④HUD表示確認→⑤Layer移動→⑥Environment変更→⑦Transition表示→⑧Archive更新→⑨Save/Load確認）を実際のコード経路で通し、AI Research Log・全環境のicon定義・Performance Control・Scan Sequenceの2段階演出とSKIP・常時HUD表示（Layer/Environment名/STABLE/Active Modifier一覧）・Theme Animation背景クラスの反映・Layer1→Layer6でのenv_grid→env_network実移行（`TransitionManager.show()`の実際の呼び出しをスパイして確認）・World Environment ArchiveでのFirst Discovery Layer/Effects表示・未発見Environmentの???表示・Save/Reload後の状態復元・旧形式セーブのマイグレーション・既存のSTAGE SELECT等への無影響を含めて計48項目を検証、全項目PASS。**テスト実装上の教訓**: このテストで最初「Transition overlayがhiddenクラスを持つかどうか」をポーリングして検出しようとしたところ、オーバーレイの表示→SKIP完了が同じ`advanceOneLayer()`呼び出し内の同期処理で完結してしまい、外側のポーリングタイミングでは既に非表示に戻っていて検出できなかった（false negativeになりかけた）。`TransitionManager.show()`自体をスパイ（元の関数をラップして呼び出し回数を記録）する方式に切り替えて解決した。UIの一時的な表示/非表示を伴う演出系のテストでは、DOM状態のポーリングよりも関数呼び出しのスパイの方が確実というのは、今後もこのプロジェクトで再利用できる教訓。
+
+## STEP30-4: World Stability System
+
+Research World全体に「安定度」という状態パラメータを追加し、プレイヤーの探索行動によって世界状態が変化する基盤を作る要求仕様（STEP30-4）に基づき実装した。要求仕様どおり今回はWorld Mutation発生・Environment変更・Hidden Layer生成は実装せず、Stability管理・状態判定・HUD表示・AI分析連携・Save対応のみに留めている。
+
+**新規ファイル**:
+- `src/endless/worldState.js` — WorldStateデータの初期値（stability=100/mutationLevel=0/instabilityCount=0/lastMutation=null/history=[]）とStatus判定（`getStatusForStability()`: 100〜80=STABLE/80〜50=UNSTABLE/50〜20=CRITICAL/20〜0=COLLAPSE、境界値は下限側に含める形で統一）の純粋データ＋ヘルパーのみを持つ
+- `src/endless/worldStabilityManager.js` — 要求仕様セクション2の全API（`getStability()`/`increaseStability(value)`/`decreaseStability(value)`/`getStatus()`/`getWorldState()`/`checkMutation()`）に加え、セクション5「Environment連携準備」用の`getEnvironmentStatusKey(environmentId)`（例: `"env_ocean:CRITICAL"`）、セクション8「Reward System Hook」用の`getWorldRewardModifier()`（今回は常に`1.0`固定）を実装
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `worldStability`（直近スナップショット、初期値100）・`worldMutationLevel`（初期値0）・`worldInstabilityCount`・`worldLastMutation`（初期値null）・`worldHistory`（直近100件）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `environmentLog.js`: セクション7「AI Research Log Integration」。World Status別のメッセージ4種（STABLE/UNSTABLE/CRITICAL/COLLAPSE）を追加
+- `environmentHud.js`: セクション6「HUD Integration」。WORLD STABILITYバー・パーセント・STATUS表示を追加し、StatusごとにHUD全体の縁の色も変化させる（STABLE=緑〜COLLAPSE=赤）
+- `environmentScan.js`: `show(envDef, worldStatus, onComplete)`に第2引数を追加し、"ENVIRONMENT IDENTIFIED"の下にWorld Status別ログも表示するようにした（第2引数を省略する既存の呼び出し方＝STEP30-3までとも互換を保っている）
+- `endless.js`: worldStabilityManagerの生成・配線。要求仕様セクション3のStability変化イベント全てを実際のゲームプレイ箇所へ接続: Unknown Node解析-5（`_resolveUnknownNode`）・Unknown Dimension進入-15（`_handleMapNodeSelected`でEnvironmentがenv_unknownへ変化した瞬間）・Risk Chain継続-2（`_registerRiskChain`でChainレベルが上昇した瞬間）・Research Lab+10（`_enterNode`のresearch_labケース）・Safe Node+3（`_handleRecoveryNode`）・Extract成功+5（`_handleExtractReturn`）。RUN開始時に`reset()`で必ず100へ戻す
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- `stability`自体はworldEnvironment.jsの`currentWorldEnvironmentId`と同じ設計判断で「RUNごとにリセットされる今RUNの現在値」として扱い、`mutationLevel`/`instabilityCount`/`history`はRUNをまたいで蓄積する生涯データとして扱った。要求仕様セクション9は「stability/mutationLevel/historyを保存」としか書いていないが、動作確認フロー（セクション12「①New Run開始→②Stability100確認」）が明確に「新規RUNでは100から始まる」ことを求めているため、この2つの性質を両立させる設計にした。実装中に発見した細部の一貫性改善として、`WorldStabilityManager`のコンストラクタは（当初は常に100固定で初期化していたが）`worldEnvironmentManager.getCurrentEnvironment()`と同じく直近の保存済みスナップショットを初期値として引き継ぐよう修正した（新規RUN開始時は必ず`reset()`で100に戻すため実プレイ上の見た目は変わらないが、設計の一貫性のため）
+- 「Unknown Dimension進入」-15は、Node種類の「Unknown Node」（Research Map上の"???"）ではなく、Environment名の「UNKNOWN DIMENSION」（Layerに紐づく見た目テーマ、STEP30-1参照）を指すという要求仕様の用語を正しく区別し、`_handleMapNodeSelected`でEnvironmentがenv_unknownへ実際に切り替わった瞬間（`changedThisRun`）にのみ発火させた
+- 「Safe Node」は要求仕様に定義が無かったため、8種のMap Node中もっともリスクが低い（`nodeTypes.js`のrisk値が最小の）Recovery Nodeとして解釈した
+- 「Risk Chain継続」-2は、Risk Chainのレベルが実際に上昇した（＝高危険Nodeを連続選択した）瞬間にのみ発火させ、レベル維持・リセット時には発火しない設計にした
+- 「Mutation Event用予約」-10は、World Mutation自体がSTEP30-5以降の実装対象で今回は発生イベントが存在しないため、定数として値だけ定義し、実際に呼び出す箇所は用意していない
+- Environment Scanの`show()`シグネチャに第2引数`worldStatus`を追加する際、既存の`show(envDef, onComplete)`という2引数呼び出し（STEP30-3で書いたコード）を壊さないよう、第2引数が関数かどうかで分岐する後方互換処理を入れた
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション12の確認フロー（①New Run開始→②Stability100確認→③Unknown Node選択→④Stability低下確認→⑤Research Lab選択→⑥回復確認→⑦HUD表示確認→⑧Save/Load確認）を実際のコード経路で通し、Status判定の全境界値・`WorldStabilityManager`の増減/クランプ/履歴記録/生涯データ分離・`checkMutation()`/`getWorldRewardModifier()`のプレースホルダー値・`getEnvironmentStatusKey()`・HUDのバー幅/パーセント/Status文字列/縁色反映・Environment ScanオーバーレイへのStatus別ログ表示・Save/Reload後の状態復元・旧形式セーブのマイグレーションを含めて計54項目を検証、全項目PASS。**テスト中に発見した罠**: `UnknownEvents.pickEvent()`は7種の結果からランダムに1つを返すため、Unknown Node解析の単体効果（-5）だけを検証しようとしても、たまたま`elite_shift`が選ばれるとElite Nodeへ再帰してRisk Chain継続の-2も追加でかかってしまい、期待値と実際の値が食い違うことがあった（STEP27テスト時と同じ「pickEventを一時的に固定する」手法で解決）。また`getWorldHistory()`は新しい順（reverse）で返る仕様のため、「最初に記録したエントリ」を検証する際は配列の先頭ではなく末尾を見る必要がある点もテスト実装時に踏んだ落とし穴。
+
+## ENDLESS RESEARCH: HINT使用時のライフ消費
+
+ユーザーからの直接要望（「ヒントを使ったらライフが減る仕様を追加して」）に基づき実装した。**ENDLESS RESEARCHモードのみが対象**（通常ステージ/チュートリアル/Daily Puzzleにはライフの概念自体が存在しないため対象外）。ユーザーへの事前確認で、HINT1回使用あたり-1ライフ・Analyzerアップグレード等による複数マス同時開示でも常に1回分のみ・AI Prediction Protocolによる自動HINT発動も同様に消費する、という仕様を確定させた。
+
+**変更ファイル**:
+- `endlessGame.js`（EndlessRoundController）: `onHintUsed`コールバックを新設し、`handleHint()`が実際に1マス以上開示できた瞬間（開示マス数に関わらず1回だけ）に呼び出す。手動HINT・AI Prediction Protocolの自動発動はどちらも同じ`handleHint()`を経由するため、この1箇所の変更だけで両方に反映される
+- `endless.js`: `this.round.onHintUsed = () => this._handleHintUsed();`で配線。新設した`_handleHintUsed()`がライフを1減らし、既存の`_handleRoundTimeout()`と同じ考え方でライフ切れ処理を行う
+
+**重要な設計判断（ライフ切れとPuzzleクリアが同時に起こる際の競合回避）**:
+- HINTでのライフ消費は、既存の「ミス（タイムアップ）でライフが減る」仕組みと違い、Puzzle攻略の**途中**でライフが尽きうる（既存のライフ変化は全てラウンドの区切り＝クリア/タイムアップのタイミングでしか起きなかった）という、このゲームで初めてのケースになる。特に「HINTがちょうど最後のマスを開示してPuzzleをクリアさせ、かつそのHINTでライフが0になる」という同時発生を、`_handleRoundClear()`・`_endRun()`・RUN終了タイマー（`_advanceTimer`）の二重発火・競合無しに処理する必要があった
+- 解決策として、`_handleHintUsed()`内では**Puzzleがまだクリアされていない場合のみ**その場でRUN終了処理（Phoenix Protocol所持時は復活）を行い、Puzzleが同じHINTでクリア済みの場合は何もせず`_handleRoundClear()`側の末尾に新設したライフ0チェックへ判定を委ねる（クリア報酬を正しく加算してからRUNを終える）、という一方通行の分岐にした。どちらか一方の経路だけが必ずRUN終了を担当するため、`_advanceTimer`の奪い合いによる二重処理は起きない
+- 既存のPhoenix Protocol（Rare Upgrade、ライフ0の瞬間に1度だけ復活）・Emergency Recovery（researchTree.js、初回ミス限定の軽減）との関係は、HINT起因のライフ0もPhoenix Protocolの復活対象に含めた（プレイヤーから見て「ライフが0になった」という体験は原因を問わず一貫させるべきと判断）一方、Emergency Recoveryは名称・既存コメントどおり「ミス（タイムアップ）」専用の軽減のため、HINT起因の消費には適用していない
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。通常のHINT使用でライフが正確に1減ること、Analyzerアップグレード相当の複数マス開示でも消費が1のままであること、開示するマスが無い空振りHINTでは消費されないこと、ライフ1の状態でHINTを使い（Puzzle未クリアのまま）ライフ0でRUNが終了しRESULT画面が表示されること、Phoenix Protocol所持時はRUN終了の代わりにライフ1で復活し以後は消費済みになること、「クリアと同時にライフ0になる」ケースでもクリア報酬が正しく加算されてからRUNが終了すること、通常ステージ/チュートリアルにはライフの概念が無く既存のHINT動作が無変更であることを含めて計15項目を検証、全項目PASS。**テスト実装上の注意**: このテストでは前のRUNの`round.puzzle`/`game.cleared`が次のRUN開始直後も一時的に残留するため、「新しいPuzzleに到達したか」の判定は`round.puzzle`の有無だけでなく`!game.cleared`と`screen-game`のアクティブ状態も合わせて確認する必要があった（本番コードの不具合ではなく、テストヘルパー側の判定不足だった）。
+
+## ENDLESS RESEARCH: 情報系オーバーレイの自動送りを廃止し「続ける」ボタン必須化
+
+ユーザーからの直接要望（「トースト表示したとき、SKIPボタンではなく続けるボタンに変更して。トーストが消えるのが速すぎて読めない。続けるボタンをクリックするまで先に進まないようにして」）に基づき実装した。事前確認で対象範囲を確定: **情報量が多く読む必要がある演出系オーバーレイのみ**（Environment Scan・Environment Transition・Node Result〈Recovery/Event結果〉）が対象。DEPTH CLEAR等のプレイ中に毎回出る短い一行トースト（`ui.showToast`、1.6秒で自動的に消える）は対象外のまま維持した。
+
+**変更ファイル**:
+- `environmentScan.js`: Phase2「ENVIRONMENT IDENTIFIED」の自動完了タイマー（`IDENTIFIED_DURATION_MS`）を削除。Phase1「SCANNING AREA...」のプログレスバー演出（読む情報が無い純粋な演出のため）はそのまま自動でPhase2へ遷移させ、Phase2以降は「続ける」ボタンのクリックのみで完了するようにした
+- `transitionManager.js`: オーバーレイを自動で閉じるタイマー（`TRANSITION_DURATION_MS`後の`_complete()`呼び出し）を削除。プログレスバーの進行アニメーション自体は演出として自動で100%まで走るが、オーバーレイは「続ける」ボタンのクリックまで閉じない
+- `ui.js`: `showNodeResult()`から`autoAdvanceMs`パラメータと関連タイマーを削除し、常に「つづける」ボタンのクリックのみで次へ進むようにした
+- `endless.js`: `showNodeResult()`の3箇所の呼び出しから`autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS`を削除し、未使用になった定数`NODE_RESULT_AUTO_ADVANCE_MS`を削除した
+- `index.html`: `environmentScanSkipBtn`/`environmentTransitionSkipBtn`のボタン文言を「SKIP」から「続ける」に変更（要素id自体は変更していない）
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。Environment Scanオーバーレイが（旧・約2.2秒だった）3秒待っても自動的には消えず、その間Puzzle/Node開始がブロックされたままであること、「続ける」クリックで初めて進行すること、Node Resultオーバーレイも同様に3秒待っても背後の画面が切り替わらず「つづける」クリックで初めてMAP画面に進むこと、実際のRUNでLayer6まで進めてTransition/Scanの両方を正しくクリックで通過できること、ボタン文言が両方とも「続ける」になっていること、既存のSTAGE SELECT等への無影響を含めて計17項目を検証、全項目PASS。
+
+## STEP30-5: World Mutation Trigger System
+
+World Stabilityの低下によってResearch World自体が変質する「Mutation」システムを追加する要求仕様（STEP30-5）に基づき実装した。Environment→Modifier→Stability→Mutationという一連のパイプラインの最終段。Puzzle Generator/Save System全面変更は行わず、新規moduleの追加とAdditive（加算/乗算）な効果適用のみで完結させている。
+
+**新規ファイル**:
+- `src/endless/mutationData.js`（MutationData） — 6種のMutation定義（Minor: DATA STORM/SIGNAL NOISE、Major: FRACTAL OVERFLOW/NEURAL INFECTION/QUANTUM COLLAPSE、Collapse: REALITY BREAK）とLevel 0〜3ラベル、Trigger閾値（60/30/10）の静的データ
+- `src/endless/worldMutationManager.js`（WorldMutationManager） — 要求仕様セクション1の全API（`checkMutationTrigger()`/`triggerMutation(type)`/`getActiveMutation()`/`clearMutation()`/`getMutationHistory()`）に加え、Environment Integration用`getEnvironmentState()`/`getDisplayEnvironmentName()`、Reward Integration Hook用`getMutationRewardModifier()`、各効果getter群を実装
+- `src/endless/mutationRenderer.js`（MutationRenderer） — Mutation Visual Sequence（SYSTEM WARNING→処理→WORLD MUTATION Complete）とMutation Choice Event（① Stabilize/② Exploit）のDOM描画。直近のユーザーフィードバック「トーストが消えるのが速すぎて読めない」を踏まえ、読む情報がある2段階（Warning/Complete）は自動では進まず「続ける」ボタンのクリックを待つ設計にした
+
+**checkMutationTrigger()とtriggerMutation()を意図的に分離した設計**: 前者は現在の状況が発生条件を満たすかの「確認」のみ行い副作用を持たない、後者は実際にMutationを「発生」させる副作用を持つ。これによりendless.js側で「Level1/2はMutation Choice Eventを挟んでからtriggerMutation()を呼ぶ、Level3は問答無用でtriggerMutation()を呼ぶ」という要求仕様セクション7・11の分岐を自然に実装できた。
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `activeMutation`/`mutationLevel`/`mutationHistory`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `environmentHud.js`: 「MUTATION: {NAME}」行を追加（Mutation未発生時は非表示）
+- `mapGenerator.js`: `generateChoices()`に6番目の引数`worldMutationManager`を追加。QUANTUM COLLAPSEの追加候補・Elite重み、REALITY BREAKのUnknown重みをMap Node抽選へ反映
+- `endlessGame.js`（EndlessRoundController）: `worldMutationManager`を受け取り、FRACTAL OVERFLOWの「Puzzle Difficulty +30%」を既存のPuzzle Difficulty同様「制限時間短縮」として適用
+- `researchMap.js`: 履歴パネルへWorld Mutation History（Archive Integration、要求仕様セクション14）を追加表示
+- `endless.js`: worldMutationManager/mutationRendererの生成・配線。Layer移動のたびにMutation持続ターンを消費し（`tickDuration()`）、Trigger判定を行う。要求仕様セクション4の「追加Trigger」（Unknown Node連続解析/Unknown Dimension到達/高Risk Chain/Special Event）はそれぞれの発生箇所（`_resolveUnknownNode`/Unknown Dimension進入/`_registerRiskChain`/`_applyUnknownEvent`のSystem Corruption・Secret Room）から`_checkMutationTrigger()`を呼ぶ形で実装。Reward/Research Data/Protocol Fragment/Risk Chain倍率の各既存計算式へ`worldMutationManager`の効果を追加で乗算
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- 要求仕様セクション4の「追加Trigger」4種には具体的な閾値指定が無かったため、「Stability単体ではまだLevel1に届いていない状況でも、危険な兆候（連続Unknown解析3回・Unknown Dimension到達・Risk Chain4以上・Special Event発生）が重なればLevel1相当の機会を与える」という設計にした（`checkMutationTrigger()`が独立した別の閾値系統を持つのではなく、Stability判定が0だった場合のみ追加条件を見る、というシンプルな優先順位にした）
+- Mutation Choice Eventの「① Stabilize」はStability+20してMutationの発生自体を回避し、「② Exploit」は発生を受け入れて報酬+50%・リスク+20%のボーナスが上乗せされる設計にした（要求仕様に具体的な数値指定が無かったため設計）。Collapse Mutation（Level3）は「問答無用で発生」という要求仕様セクション7の記述どおりChoice Eventを挟まない
+- `duration`（Mutationの持続Layer数）は要求仕様に具体的な数値指定が無かったため、Minor=3・Major=5・Collapse=99（事実上、Stability回復かExtractまで持続）として設計した
+- Environment Integration（要求仕様セクション9）の「DATA OCEAN→CORRUPTED DATA OCEAN」は、実際に別のEnvironmentのModifierへ切り替えるような大掛かりな変更はせず、Mutationごとに定義した`namePrefix`（CORRUPTED/DISTORTED/OVERFLOWING/INFECTED/COLLAPSING/BROKEN）を表示名に付け加えるだけの表示専用効果とした。HUD Integration（要求仕様セクション10）の例が「DATA OCEAN」のままMUTATION行を別掲する構成だったため、HUDの環境名表示自体はプレフィックス無しの素の名前のまま維持し、`getDisplayEnvironmentName()`は将来Archiveの詳細表示等で使う想定の別APIとして用意するに留めた
+- NEURAL INFECTIONの「Environment Modifier Random」は、他Environmentのmodifiersから1つを無作為に借用する（既存のResearch Environment「Unstable System」・STEP30-2のRandom Modifierと同じ設計思想）。呼ぶたびに再抽選すると値が不安定になるため、Mutation発生時に一度だけ抽選し持続中は同じ結果を返し続けるようキャッシュした
+- Mutation Visual Sequence/Choice Eventのオーバーレイは、Unknown Node解析結果のNode Resultオーバーレイ等より手前に表示する必要がある（同じ操作の中で連続してMutationがトリガーされうるため）ため、他の演出オーバーレイより高いz-indexを与えて正しく積み重なるようにした
+- Extract成功（RUN終了直前のタイミング）はMutation Trigger判定の対象から意図的に外した。RUNが終わる直前に新しいMutationを通知しても、その後すぐRESULT画面へ切り替わってしまい実際の効果を体験する機会が無く、要求仕様の意図（プレイを続ける中で世界が変質していく体験）にそぐわないと判断したため
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）。要求仕様セクション16の確認フロー（①Run開始→②Stability低下→③Threshold到達→④Mutation発生→⑤Visual表示→⑥HUD更新→⑦Reward Modifier確認→⑧Save/Load確認）を実際のコード経路で通し、6種Mutationの定義完全性・Level別内訳・Trigger閾値（60/30/10）の境界値・追加Trigger4種・`triggerMutation`/`clearMutation`/`tickDuration`（duration到達での自動解除）・各効果getter（researchDataMultiplier/nodeWeightMultiplier/rewardModifier等）の数値計算・NEURAL INFECTIONのRandom Modifierキャッシュ挙動・Environment State/Display Name・実RUNでのStability低下→Mutation Choice Event（Stabilize/Exploitコールバック）→Exploit選択→Visual Sequence（Warning/Complete両フェーズが自動では消えないこと含む）→HUD反映→Reward Modifier反映→Save/Reload後の状態復元・旧形式セーブのマイグレーション・新規RUNでのリセット・既存のSTAGE SELECT等への無影響を含めて計72項目を検証、全項目PASS。

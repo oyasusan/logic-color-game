@@ -38,10 +38,30 @@
    *   `unlock`フィールド付きイベント（現時点ではTemporal Echoのみ）は、この値が
    *   条件を満たすまで抽選対象から除外される（既存イベントはunlockフィールドが
    *   無いため常に対象のまま、後方互換）。
+   * @param {{rareBoost?:number, successBoost?:number}} [opts] STEP30-2: Environment
+   *   Modifier Systemによる重み補正（省略時は全件重み1の完全一様抽選＝既存挙動と同一）。
+   *   - rareBoost: QUANTUM NETWORKの「Rare Reward +20%」。rare_upgradeの重みを引き上げる
+   *   - successBoost: NEURAL FORESTの「Unknown Analysis Success +10%」。
+   *     system_corruption（ライフ減少）の重みを引き下げる
    */
-  function pickEvent(currentRank) {
+  function pickEvent(currentRank, opts) {
+    opts = opts || {};
+    const rareBoost = Math.max(0, opts.rareBoost || 0);
+    const successBoost = Math.max(0, opts.successBoost || 0);
     const pool = ALL.filter(e => !e.unlock || (currentRank || 0) >= e.unlock.value);
-    return pool[Math.floor(Math.random() * pool.length)];
+
+    const weights = pool.map(e => {
+      if (e.effect.type === 'rareUpgrade') return 1 + rareBoost * 5; // 例: rareBoost0.2 -> 重み2倍
+      if (e.effect.type === 'lifeLoss') return Math.max(0.1, 1 - successBoost * 5); // 例: successBoost0.1 -> 重み半分
+      return 1;
+    });
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    let roll = Math.random() * total;
+    for (let i = 0; i < pool.length; i++) {
+      if (roll < weights[i]) return pool[i];
+      roll -= weights[i];
+    }
+    return pool[pool.length - 1];
   }
 
   function getById(id) {

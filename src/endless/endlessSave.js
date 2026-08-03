@@ -53,12 +53,51 @@
       researchTreeLevels: {},     // { [researchTree.jsのid]: 購入済みレベル(0〜maxLevel) }
       unlockedTechnologies: [],   // Permanent Unlock Systemで解放済みの技術id一覧（metaProgression.js RANK_GATES参照）
       protocolEvolution: {},      // { [protocol id]: 進化段階(0=Basic/1=Advanced/2=Quantum) }
-      secretsDiscovered: []       // Archive Expansion「Secrets」カウント用の発見済みsecret id一覧
+      secretsDiscovered: [],      // Archive Expansion「Secrets」カウント用の発見済みsecret id一覧
+      totalProtocolEvolutions: 0, // STEP29: Protocol Evolution実行の生涯累計回数（Achievement「Protocol Creator」判定用）
+
+      // ---- STEP29: Research Identity System ----
+      selectedIdentityId: null,     // 一度選んだら以降ずっとこの値（Protocolと違いRUNごとにはリセットしない）
+      secondaryIdentityId: null,    // Hybrid Identity System（今回UI選択は無し、データ構造のみ対応）
+      identityExp: 0,               // 現在のIdentity LevelでのEXP累積（レベルアップ時に消費して繰り越す）
+      identityLevel: 1,             // 1〜ResearchIdentity.MAX_LEVEL
+      unlockedIdentityPerks: [],    // 解放済みPerk id一覧（選択中Identityのperkのみが積まれる想定）
+      completedAchievements: [],    // 達成済みAchievement id一覧（achievements.js参照）
+
+      // ---- STEP30-1: Environment Framework（Research LayerのVisual Theme。
+      // 既存の「Research Environment」（environments.js、RUN限定のゲームプレイ効果）とは
+      // 別概念のため、フィールド名は衝突を避けて"WorldEnvironment"で統一している ----
+      currentWorldEnvironmentId: 'env_grid',           // 直近確定したEnvironment（RUNをまたいで復元表示するため保存）
+      unlockedWorldEnvironments: ['env_grid', 'env_network', 'env_forest', 'env_ocean', 'env_fractal'], // unlockCondition:'always'の5種は初期解放済み
+      discoveredWorldEnvironments: [],                  // 実際にLayerで遭遇したことがあるEnvironment id一覧
+
+      // ---- STEP30-2: Environment Modifier System ----
+      discoveredEnvironmentModifiers: [], // 実際にLayerで遭遇したことがあるModifier id一覧（Random Modifierで借用された側のidも含む）
+
+      // ---- STEP30-3: Environment Visual / HUD Evolution ----
+      environmentDiscoveryLog: [],   // { id, layer } 各EnvironmentへFirst Discoveryした時のLayer番号（Environment Archive表示用、1件につき最初の1回のみ記録）
+      environmentVisitHistory: [],   // { id, layer, timestamp } 直近ENVIRONMENT_VISIT_HISTORY_LIMIT件の訪問履歴（古い順に追加）
+      performanceMode: 'normal',      // 'high'|'normal'|'low'。Environment Theme Animationの描画負荷設定
+
+      // ---- STEP30-4: World Stability System ----
+      worldStability: 100,     // 直近RUNで確定していたstabilityのスナップショット（RUN開始時は必ず100へリセットされる。worldEnvironmentのcurrentWorldEnvironmentIdと同じ「スナップショット保存」方式）
+      worldMutationLevel: 0,   // STEP30-5以降のWorld Mutation System向け生涯データ（今回は書き込むだけで消費ロジックは無い）
+      worldInstabilityCount: 0, // stability低下イベントの生涯累計回数
+      worldLastMutation: null,  // 直近Mutation発生時の情報（Mutation自体が未実装のため今回は常にnull）
+      worldHistory: [],         // { layer, event, before, after, timestamp } 直近WORLD_HISTORY_LIMIT件のstability変化履歴（古い順に追加）
+
+      // ---- STEP30-5: World Mutation Trigger System ----
+      activeMutation: null,     // 現在Active中のMutation id（無ければnull）
+      mutationLevel: 0,         // 0(Normal)〜3(Collapse)。activeMutationが無ければ常に0
+      mutationHistory: []       // { run, layer, mutation, level, result, timestamp } 直近MUTATION_HISTORY_LIMIT件（Archive Integration用、古い順に追加）
     };
   }
 
   const PUZZLE_HISTORY_LIMIT = 100;    // 無制限に増え続けないよう、直近100件のみ保持する
   const RESEARCH_HISTORY_LIMIT = 50;   // STEP27: RUNサマリーの保持件数上限
+  const ENVIRONMENT_VISIT_HISTORY_LIMIT = 100; // STEP30-3: Environment訪問履歴の保持件数上限
+  const WORLD_HISTORY_LIMIT = 100; // STEP30-4: World Stability変化履歴の保持件数上限
+  const MUTATION_HISTORY_LIMIT = 100; // STEP30-5: World Mutation履歴の保持件数上限
 
   class EndlessSaveStore {
     constructor() {
@@ -345,6 +384,257 @@
 
     getSecretsDiscoveredCount() {
       return this.data.secretsDiscovered.length;
+    }
+
+    /** STEP28→STEP29: Protocol Evolution実行の生涯累計回数（Achievement「Protocol Creator」判定用） */
+    incrementProtocolEvolutions() {
+      this.data.totalProtocolEvolutions++;
+      this.save();
+    }
+
+    getTotalProtocolEvolutions() {
+      return this.data.totalProtocolEvolutions;
+    }
+
+    /** ---------------- STEP29: Research Identity System ---------------- */
+
+    getSelectedIdentityId() {
+      return this.data.selectedIdentityId;
+    }
+
+    /** 新規プレイ開始時に一度だけ呼ばれる想定（Protocolと違い、以降は変更しない） */
+    setSelectedIdentityId(id) {
+      this.data.selectedIdentityId = id;
+      this.save();
+    }
+
+    getSecondaryIdentityId() {
+      return this.data.secondaryIdentityId;
+    }
+
+    /** Hybrid Identity System: 現時点ではUI選択の呼び出し口が無いデータ構造のみの対応 */
+    setSecondaryIdentityId(id) {
+      this.data.secondaryIdentityId = id;
+      this.save();
+    }
+
+    getIdentityExp() {
+      return this.data.identityExp;
+    }
+
+    getIdentityLevel() {
+      return this.data.identityLevel;
+    }
+
+    /** @param {number} exp 繰り越し後のEXP残量 @param {number} level 新しいLevel */
+    setIdentityProgress(exp, level) {
+      this.data.identityExp = exp;
+      this.data.identityLevel = level;
+      this.save();
+    }
+
+    getUnlockedIdentityPerks() {
+      return this.data.unlockedIdentityPerks.slice();
+    }
+
+    /** @returns {boolean} 新規解放ならtrue（既に解放済みならfalse） */
+    unlockIdentityPerk(id) {
+      if (this.data.unlockedIdentityPerks.indexOf(id) !== -1) return false;
+      this.data.unlockedIdentityPerks.push(id);
+      this.save();
+      return true;
+    }
+
+    getCompletedAchievements() {
+      return this.data.completedAchievements.slice();
+    }
+
+    /** @returns {boolean} 新規達成ならtrue（既に達成済みならfalse） */
+    completeAchievement(id) {
+      if (this.data.completedAchievements.indexOf(id) !== -1) return false;
+      this.data.completedAchievements.push(id);
+      this.save();
+      return true;
+    }
+
+    /** ---------------- STEP30-1: Environment Framework ---------------- */
+
+    getCurrentWorldEnvironmentId() {
+      return this.data.currentWorldEnvironmentId;
+    }
+
+    setCurrentWorldEnvironmentId(id) {
+      this.data.currentWorldEnvironmentId = id;
+      this.save();
+    }
+
+    getUnlockedWorldEnvironments() {
+      return this.data.unlockedWorldEnvironments.slice();
+    }
+
+    isWorldEnvironmentUnlocked(id) {
+      return this.data.unlockedWorldEnvironments.indexOf(id) !== -1;
+    }
+
+    /** @returns {boolean} 新規解放ならtrue（既に解放済みならfalse） */
+    unlockWorldEnvironment(id) {
+      if (this.isWorldEnvironmentUnlocked(id)) return false;
+      this.data.unlockedWorldEnvironments.push(id);
+      this.save();
+      return true;
+    }
+
+    getDiscoveredWorldEnvironments() {
+      return this.data.discoveredWorldEnvironments.slice();
+    }
+
+    /** @returns {boolean} 新規発見ならtrue（既に発見済みならfalse） */
+    recordWorldEnvironmentDiscovery(id) {
+      if (this.data.discoveredWorldEnvironments.indexOf(id) !== -1) return false;
+      this.data.discoveredWorldEnvironments.push(id);
+      this.save();
+      return true;
+    }
+
+    /** ---------------- STEP30-2: Environment Modifier System ---------------- */
+
+    getDiscoveredEnvironmentModifiers() {
+      return this.data.discoveredEnvironmentModifiers.slice();
+    }
+
+    /** @returns {boolean} 新規発見ならtrue（既に発見済みならfalse） */
+    recordEnvironmentModifierDiscovery(id) {
+      if (this.data.discoveredEnvironmentModifiers.indexOf(id) !== -1) return false;
+      this.data.discoveredEnvironmentModifiers.push(id);
+      this.save();
+      return true;
+    }
+
+    /** ---------------- STEP30-3: Environment Visual / HUD Evolution ---------------- */
+
+    /** @returns {boolean} 新規のFirst Discoveryならtrue（既に記録済みならfalse） */
+    recordEnvironmentDiscoveryLog(id, layer) {
+      if (this.data.environmentDiscoveryLog.some(e => e.id === id)) return false;
+      this.data.environmentDiscoveryLog.push({ id, layer });
+      this.save();
+      return true;
+    }
+
+    getEnvironmentDiscoveryLog() {
+      return this.data.environmentDiscoveryLog.slice();
+    }
+
+    /** @returns {number|null} 指定EnvironmentのFirst Discovery Layer（未発見ならnull） */
+    getFirstDiscoveryLayer(id) {
+      const entry = this.data.environmentDiscoveryLog.find(e => e.id === id);
+      return entry ? entry.layer : null;
+    }
+
+    recordEnvironmentVisit(id, layer) {
+      this.data.environmentVisitHistory.push({ id, layer, timestamp: Date.now() });
+      if (this.data.environmentVisitHistory.length > ENVIRONMENT_VISIT_HISTORY_LIMIT) {
+        this.data.environmentVisitHistory.splice(0, this.data.environmentVisitHistory.length - ENVIRONMENT_VISIT_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の訪問履歴から新しい順 */
+    getEnvironmentVisitHistory() {
+      return this.data.environmentVisitHistory.slice().reverse();
+    }
+
+    getPerformanceMode() {
+      return this.data.performanceMode;
+    }
+
+    setPerformanceMode(mode) {
+      this.data.performanceMode = mode;
+      this.save();
+    }
+
+    /** ---------------- STEP30-4: World Stability System ---------------- */
+
+    getWorldStability() {
+      return this.data.worldStability;
+    }
+
+    setWorldStability(value) {
+      this.data.worldStability = value;
+      this.save();
+    }
+
+    getWorldMutationLevel() {
+      return this.data.worldMutationLevel;
+    }
+
+    setWorldMutationLevel(value) {
+      this.data.worldMutationLevel = value;
+      this.save();
+    }
+
+    getWorldInstabilityCount() {
+      return this.data.worldInstabilityCount;
+    }
+
+    incrementWorldInstabilityCount() {
+      this.data.worldInstabilityCount++;
+      this.save();
+    }
+
+    getWorldLastMutation() {
+      return this.data.worldLastMutation;
+    }
+
+    setWorldLastMutation(value) {
+      this.data.worldLastMutation = value;
+      this.save();
+    }
+
+    recordWorldHistory(entry) {
+      this.data.worldHistory.push(Object.assign({ timestamp: Date.now() }, entry));
+      if (this.data.worldHistory.length > WORLD_HISTORY_LIMIT) {
+        this.data.worldHistory.splice(0, this.data.worldHistory.length - WORLD_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の履歴から新しい順 */
+    getWorldHistory() {
+      return this.data.worldHistory.slice().reverse();
+    }
+
+    /** ---------------- STEP30-5: World Mutation Trigger System ---------------- */
+
+    getActiveMutationId() {
+      return this.data.activeMutation;
+    }
+
+    setActiveMutationId(id) {
+      this.data.activeMutation = id;
+      this.save();
+    }
+
+    getMutationLevel() {
+      return this.data.mutationLevel;
+    }
+
+    setMutationLevel(level) {
+      this.data.mutationLevel = level;
+      this.save();
+    }
+
+    /** @param {{run:number, layer:number, mutation:string, level:number, result:string}} entry */
+    recordMutationHistory(entry) {
+      this.data.mutationHistory.push(Object.assign({ timestamp: Date.now() }, entry));
+      if (this.data.mutationHistory.length > MUTATION_HISTORY_LIMIT) {
+        this.data.mutationHistory.splice(0, this.data.mutationHistory.length - MUTATION_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の履歴から新しい順 */
+    getMutationHistory() {
+      return this.data.mutationHistory.slice().reverse();
     }
   }
 

@@ -366,20 +366,46 @@
       if (!container) return;
       container.innerHTML = '';
       const history = (this.state.puzzleHistory || []).slice(0, 20);
-      if (history.length === 0) {
+      // STEP30-5: World Mutation History（Archive Integration、要求仕様セクション14）
+      const mutationHistory = (this.state.mutationHistory || []).slice(0, 10);
+
+      if (history.length === 0 && mutationHistory.length === 0) {
         container.innerHTML = '<div class="rm-panel-empty">まだ記録が無い</div>';
         return;
       }
-      history.forEach(entry => {
-        const item = document.createElement('div');
-        item.className = 'rm-panel-item' + (entry.cleared ? '' : ' failed');
-        const label = entry.isBoss ? 'BOSS' : entry.isElite ? 'ELITE' : 'PUZZLE';
-        item.innerHTML = `
-          <span class="rm-panel-item-name">DEPTH ${entry.depth} ・ ${label} ・ ${entry.size}×${entry.size}</span>
-          <span class="rm-panel-item-desc">${entry.cleared ? 'CLEAR' : 'FAILED'}</span>
-        `;
-        container.appendChild(item);
-      });
+
+      if (mutationHistory.length > 0) {
+        const heading = document.createElement('div');
+        heading.className = 'rm-panel-subheading';
+        heading.textContent = 'WORLD MUTATION HISTORY';
+        container.appendChild(heading);
+        mutationHistory.forEach(entry => {
+          const item = document.createElement('div');
+          item.className = 'rm-panel-item rm-panel-item-mutation';
+          item.innerHTML = `
+            <span class="rm-panel-item-name">LAYER ${entry.layer} ・ ${entry.mutation}</span>
+            <span class="rm-panel-item-desc">${entry.result}</span>
+          `;
+          container.appendChild(item);
+        });
+      }
+
+      if (history.length > 0) {
+        const heading = document.createElement('div');
+        heading.className = 'rm-panel-subheading';
+        heading.textContent = 'PUZZLE HISTORY';
+        container.appendChild(heading);
+        history.forEach(entry => {
+          const item = document.createElement('div');
+          item.className = 'rm-panel-item' + (entry.cleared ? '' : ' failed');
+          const label = entry.isBoss ? 'BOSS' : entry.isElite ? 'ELITE' : 'PUZZLE';
+          item.innerHTML = `
+            <span class="rm-panel-item-name">DEPTH ${entry.depth} ・ ${label} ・ ${entry.size}×${entry.size}</span>
+            <span class="rm-panel-item-desc">${entry.cleared ? 'CLEAR' : 'FAILED'}</span>
+          `;
+          container.appendChild(item);
+        });
+      }
     }
 
     _showOverlay(el) {
