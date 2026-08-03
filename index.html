@@ -284,6 +284,15 @@
   }
 
   /* ---------- GAME: 中央 ---------- */
+  /* GAME画面だけは、盤面が大きくENDLESS HUD等で縦に収まらない場合でも
+     header（‹ BACK）とfooter（UNDO/RESET/HINT）を常に画面内に固定表示し、
+     mainの内部だけをスクロールさせる（他の画面の.screen.active { overflow-y:auto }
+     という「画面全体をスクロール」する挙動を上書きする）。footerが盤面の下に
+     隠れてタップできなくなる問題を、盤面サイズに関わらず解消するための対応 */
+  #screen-game.active {
+    overflow-y: hidden;
+  }
+
   #screen-game main {
     flex: 1;
     display: flex;
@@ -292,6 +301,8 @@
     justify-content: center;
     gap: 10px;
     min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   #statusBar {
@@ -649,6 +660,25 @@
     100% { transform: scale(1) rotate(0); opacity: 1; }
   }
 
+  /* ---------- PROTOCOL DISCOVERY演出（Phase C。LEVEL UP演出の見た目を流用しグリーン基調に） ---------- */
+  .discovery-overlay .level-up-label { color: var(--green); }
+
+  .discovery-name {
+    background: linear-gradient(90deg, var(--green), var(--blue));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 30px rgba(67, 255, 160, 0.4);
+  }
+
+  .discovery-rarity {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: var(--gold);
+  }
+
   #clearTitle {
     font-size: 20px;
     font-weight: 800;
@@ -816,6 +846,8 @@
   }
 
   .endless-hud-value.endless-time { color: var(--blue); }
+  .endless-hud-value.endless-protocol { color: var(--green); font-size: 12px; }
+  .endless-hud-value.endless-environment { color: var(--gold); font-size: 11px; }
 
   .endless-life { font-size: 13px; letter-spacing: 1px; }
 
@@ -929,10 +961,181 @@
     box-shadow: 0 0 8px rgba(255, 213, 74, 0.35);
   }
 
+  /* 発動中のProtocol Synergy表示（GAME画面のENDLESS HUD直下、endless.jsが更新する） */
+  .endless-synergy-badge {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 5px 10px;
+    margin: 0 auto 4px;
+    width: fit-content;
+    border-radius: 10px;
+    border: 1px solid var(--green);
+    color: var(--green);
+    background: rgba(67, 255, 160, 0.08);
+    box-shadow: 0 0 10px rgba(67, 255, 160, 0.3);
+  }
+
   /* ---------- RESEARCH LAB ---------- */
   #screen-researchlab {
     align-items: center;
     padding-top: calc(var(--safe-top) + 24px);
+  }
+
+  /* ---------- PROTOCOL SELECT ---------- */
+  #screen-protocolselect {
+    align-items: center;
+    padding-top: calc(var(--safe-top) + 24px);
+  }
+
+  /* Research Labのカード（アップグレード）と見た目を差別化するグリーン基調のアクセント */
+  .protocol-card {
+    border-color: var(--green);
+    box-shadow: 0 0 14px rgba(67, 255, 160, 0.15);
+  }
+
+  #protocolSelectBackBtn {
+    margin-top: 18px;
+  }
+
+  /* ---------- ENVIRONMENT DETECTION ---------- */
+  #screen-environmentdetect {
+    align-items: center;
+    padding-top: calc(var(--safe-top) + 24px);
+  }
+
+  /* Protocol Select（グリーン）と差別化するゴールド基調のアクセント */
+  .environment-card {
+    border-color: var(--gold);
+    box-shadow: 0 0 14px rgba(255, 213, 74, 0.15);
+  }
+
+  #environmentDetectBackBtn {
+    margin-top: 18px;
+  }
+
+  /* ---------- ENVIRONMENT ARCHIVE ---------- */
+  #screen-environmentarchive {
+    overflow-y: auto;
+  }
+
+  .environment-archive-card.unlocked {
+    border-color: var(--gold);
+  }
+
+  /* ---------- PROTOCOL ARCHIVE (Phase C) ---------- */
+  #protocolArchiveBtn {
+    margin-top: 10px;
+  }
+
+  #environmentArchiveBtn {
+    margin-top: 8px;
+  }
+
+  #screen-protocolarchive {
+    overflow-y: auto;
+  }
+
+  .archive-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .archive-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .archive-card.locked {
+    opacity: 0.55;
+  }
+
+  .archive-card-rarity {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+  }
+
+  .archive-card-name {
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .archive-card-desc {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-dim);
+  }
+
+  .archive-card.rarity-common.unlocked  { border-color: var(--blue); }
+  .archive-card.rarity-rare.unlocked    { border-color: var(--green); box-shadow: 0 0 12px rgba(67, 255, 160, 0.15); }
+  .archive-card.rarity-legendary.unlocked {
+    border-color: var(--gold);
+    background: linear-gradient(135deg, rgba(255, 213, 74, 0.08), var(--panel));
+    box-shadow: 0 0 16px rgba(255, 213, 74, 0.25);
+  }
+  .archive-card.rarity-common.unlocked .archive-card-rarity  { color: var(--blue); }
+  .archive-card.rarity-rare.unlocked .archive-card-rarity    { color: var(--green); }
+  .archive-card.rarity-legendary.unlocked .archive-card-rarity { color: var(--gold); }
+
+  /* ---------- PROTOCOL SIGNAL ---------- */
+  #screen-protocolsignal {
+    align-items: center;
+    padding-top: calc(var(--safe-top) + 24px);
+  }
+
+  .protocol-signal-card {
+    /* 選択不可の情報表示専用カード（Protocol Selectのカードと違いクリックできない） */
+    cursor: default;
+  }
+
+  .protocol-signal-actions {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .protocol-signal-btn {
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+
+  .protocol-signal-btn:active { transform: scale(0.98); }
+
+  .protocol-signal-btn-merge {
+    border-color: var(--green);
+    color: var(--green);
+    box-shadow: 0 0 12px rgba(67, 255, 160, 0.2);
+  }
+
+  .protocol-signal-btn-replace {
+    border-color: var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 12px rgba(255, 213, 74, 0.15);
+  }
+
+  .protocol-signal-btn-ignore {
+    color: var(--text-dim);
   }
 
   .lab-header { text-align: center; margin-bottom: 6px; }
@@ -1130,9 +1333,71 @@
     </div>
     <div class="endless-best-stats">
       <div class="endless-stat"><span class="endless-stat-label">BOSS CLEARS</span><span id="endlessTotalBossClear" class="endless-stat-value">0</span></div>
-      <div class="endless-stat"><span class="endless-stat-label">FRAGMENTS</span><span id="endlessMemoryFragments" class="endless-stat-value">0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">MEMORY FRAGMENTS</span><span id="endlessMemoryFragments" class="endless-stat-value">0</span></div>
     </div>
     <button type="button" id="endlessStartBtn" class="primary-btn">START RUN</button>
+    <button type="button" id="protocolArchiveBtn" class="ghost-btn">PROTOCOL ARCHIVE</button>
+    <button type="button" id="environmentArchiveBtn" class="ghost-btn">ENVIRONMENT ARCHIVE</button>
+  </section>
+
+  <!-- ============ PROTOCOL ARCHIVE (発見済み/未発見Protocol一覧、レア度・Fragment表示) ============ -->
+  <section id="screen-protocolarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="protocolArchiveBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>PROTOCOL ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">DISCOVERED</span><span id="archiveDiscovered" class="endless-stat-value">0 / 0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">PROTOCOL FRAGMENTS</span><span id="archiveFragments" class="endless-stat-value">0</span></div>
+    </div>
+    <div id="archiveCards" class="archive-cards"></div>
+  </section>
+
+  <!-- ============ ENVIRONMENT ARCHIVE (発見済み/未発見Environment一覧) ============ -->
+  <section id="screen-environmentarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="environmentArchiveBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>ENVIRONMENT ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">DISCOVERED</span><span id="envArchiveDiscovered" class="endless-stat-value">0 / 0</span></div>
+    </div>
+    <div id="envArchiveCards" class="archive-cards"></div>
+  </section>
+
+  <!-- ============ PROTOCOL SELECT (RUN開始時、研究方針を1つ選ぶ) ============ -->
+  <section id="screen-protocolselect" class="screen">
+    <div class="lab-header">
+      <h2 class="lab-title">PROTOCOL SELECT</h2>
+      <div class="lab-subtitle">CHOOSE YOUR RESEARCH PROTOCOL</div>
+    </div>
+    <p class="lab-instruction">最初の研究方針を1つ選択する（Protocol Slotは最大2つ。以降はDepth5ごとのPROTOCOL SIGNALで組み合わせを構築できる）</p>
+    <div id="protocolSelectCards" class="lab-cards"></div>
+    <button type="button" id="protocolSelectBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+  </section>
+
+  <!-- ============ ENVIRONMENT DETECTION (Protocol Select完了後、RUN環境を1つ選ぶ) ============ -->
+  <section id="screen-environmentdetect" class="screen">
+    <div class="lab-header">
+      <h2 class="lab-title">ENVIRONMENT DETECTION</h2>
+      <div class="lab-subtitle">RESEARCH ENVIRONMENT DETECTED</div>
+    </div>
+    <p class="lab-instruction">このRUNの環境条件を1つ選択する（同じProtocolでも攻略が変わる）</p>
+    <div id="environmentDetectCards" class="lab-cards"></div>
+    <button type="button" id="environmentDetectBackBtn" class="ghost-btn">‹ PROTOCOL SELECT</button>
+  </section>
+
+  <!-- ============ PROTOCOL SIGNAL (Depth5ごと、新しいProtocolをMerge/Replace/Ignore) ============ -->
+  <section id="screen-protocolsignal" class="screen">
+    <div class="lab-header">
+      <h2 class="lab-title">PROTOCOL SIGNAL</h2>
+      <div id="protocolSignalDepth" class="lab-subtitle">DEPTH 5 SIGNAL DETECTED</div>
+    </div>
+    <p class="lab-instruction">新しい研究プロトコルを検知した。組み込む（MERGE）か、入れ替える（REPLACE）か、見送る（IGNORE）か選択する</p>
+    <div id="protocolSignalCard" class="lab-cards"></div>
+    <div id="protocolSignalActions" class="protocol-signal-actions"></div>
   </section>
 
   <!-- ============ GAME ============ -->
@@ -1148,6 +1413,14 @@
       <div id="tutorialBanner" class="hidden"></div>
       <!-- ENDLESS RESEARCH中のみ表示するHUD（endless.jsがhidden切り替えを管理） -->
       <div id="endlessHud" class="endless-hud hidden">
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">PROTOCOL</span>
+          <span id="endlessProtocolValue" class="endless-hud-value endless-protocol">-</span>
+        </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">ENV</span>
+          <span id="endlessEnvironmentValue" class="endless-hud-value endless-environment">-</span>
+        </div>
         <div class="endless-hud-item">
           <span class="endless-hud-label">DEPTH</span>
           <span id="endlessDepthValue" class="endless-hud-value">0</span>
@@ -1169,6 +1442,8 @@
           <span id="endlessTimeValue" class="endless-hud-value endless-time">00:00</span>
         </div>
       </div>
+      <!-- 発動中のProtocol Synergy表示（endless.jsが更新する。未発動の間はhidden） -->
+      <div id="endlessSynergyBadge" class="endless-synergy-badge hidden"></div>
       <!-- 取得済みアップグレードのバッジ一覧（endless.jsが更新する。無い間は空のまま） -->
       <div id="endlessUpgradeList" class="endless-upgrade-list"></div>
       <div id="statusBar">
@@ -1255,6 +1530,15 @@
     </div>
   </div>
 
+  <!-- ============ PROTOCOL DISCOVERY (Phase C、新規Protocol発見時の演出) ============ -->
+  <div id="discoveryOverlay" class="overlay level-up-overlay discovery-overlay hidden">
+    <div class="level-up-card">
+      <div class="level-up-label">PROTOCOL DISCOVERED</div>
+      <div id="discoveryName" class="level-up-value discovery-name">Quantum</div>
+      <div id="discoveryRarity" class="discovery-rarity">LEGENDARY</div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script src="src/board.js"></script>
@@ -1277,12 +1561,24 @@
   <script src="src/endless/upgrades.js"></script>
   <script src="src/endless/rareUpgrades.js"></script>
   <script src="src/endless/upgradeManager.js"></script>
+  <script src="src/endless/protocols.js"></script>
+  <script src="src/endless/protocolSignals.js"></script>
+  <script src="src/endless/protocolSynergy.js"></script>
+  <script src="src/endless/protocolManager.js"></script>
+  <script src="src/endless/protocolUnlock.js"></script>
+  <script src="src/endless/protocolFragment.js"></script>
+  <script src="src/endless/environments.js"></script>
   <script src="src/endless/boss.js"></script>
   <script src="src/endless/events.js"></script>
   <script src="src/endless/eventManager.js"></script>
   <script src="src/endless/endlessGame.js"></script>
   <script src="src/endless/endlessResult.js"></script>
   <script src="src/endless/researchLab.js"></script>
+  <script src="src/endless/protocolSelect.js"></script>
+  <script src="src/endless/protocolSignal.js"></script>
+  <script src="src/endless/protocolArchive.js"></script>
+  <script src="src/endless/environmentManager.js"></script>
+  <script src="src/endless/environmentArchive.js"></script>
   <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>

@@ -33,9 +33,17 @@
     { maxDepth: Infinity, size: 7, emptyRatio: 0.75, label: 'hard' }
   ];
 
-  /** @returns {{size:number, emptyRatio:number, label:string}} */
-  function getDifficultyForDepth(depth) {
-    const tier = DEPTH_TIERS.find(t => depth <= t.maxDepth) || DEPTH_TIERS[DEPTH_TIERS.length - 1];
+  /**
+   * @param {number} depth
+   * @param {number} [tierOffset] Overclock Protocol用。目標TierをN段階引き上げる
+   *   （0=通常。DEPTH_TIERSの末尾を超える分は末尾Tierにクランプする）
+   * @returns {{size:number, emptyRatio:number, label:string}}
+   */
+  function getDifficultyForDepth(depth, tierOffset) {
+    const baseIndex = DEPTH_TIERS.findIndex(t => depth <= t.maxDepth);
+    const index = baseIndex === -1 ? DEPTH_TIERS.length - 1 : baseIndex;
+    const offsetIndex = Math.min(DEPTH_TIERS.length - 1, Math.max(0, index + (tierOffset || 0)));
+    const tier = DEPTH_TIERS[offsetIndex];
     return { size: tier.size, emptyRatio: tier.emptyRatio, label: tier.label };
   }
 

@@ -64,6 +64,27 @@
       this._levelUpTimer = setTimeout(() => {
         overlayEl.classList.add('hidden');
       }, duration || 1400);
+    },
+
+    /**
+     * Protocol Archive: 新規Protocol発見時の演出を一時的に出す。durationミリ秒後に自動で隠す。
+     * showLevelUpと同じ構造（LEVEL UP演出のオーバーレイパターンを流用）。
+     * @param {HTMLElement} overlayEl
+     * @param {HTMLElement} nameEl
+     * @param {HTMLElement} rarityEl
+     * @param {{name:string, rarity:string}} def
+     * @param {number} [duration=1800]
+     */
+    showDiscovery(overlayEl, nameEl, rarityEl, def, duration) {
+      if (!overlayEl || !nameEl || !def) return;
+      nameEl.textContent = def.name;
+      if (rarityEl) rarityEl.textContent = String(def.rarity || '').toUpperCase();
+      overlayEl.classList.remove('hidden');
+      retrigger(overlayEl.firstElementChild, 'level-up-card'); // 既存のLEVEL UPと同じ入場アニメーションを再利用
+      clearTimeout(this._discoveryTimer);
+      this._discoveryTimer = setTimeout(() => {
+        overlayEl.classList.add('hidden');
+      }, duration || 1800);
     }
   };
 

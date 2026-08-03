@@ -19,8 +19,9 @@
   const MEMORY_FRAGMENT_MAX = 3;
 
   class EventManager {
-    shouldTrigger() {
-      return Math.random() < EVENT_TRIGGER_RATE;
+    /** @param {number} [rateMultiplier=1] Signal Noise Environment等で発生率を補正する倍率 */
+    shouldTrigger(rateMultiplier) {
+      return Math.random() < EVENT_TRIGGER_RATE * (rateMultiplier || 1);
     }
 
     pickEvent() {

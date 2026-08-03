@@ -23,7 +23,20 @@
       endlessBestScore: 0,
       totalRuns: 0,
       totalBossClear: 0,  // Phase3: 生涯Boss撃破回数の累計
-      memoryFragments: 0  // Phase3: Memory Fragmentイベントで獲得した生涯累計数
+      memoryFragments: 0, // Phase3: Memory Fragmentイベントで獲得した生涯累計数
+
+      // ---- Phase C: Protocol Archive / Unlock / Fragment ----
+      unlockedProtocols: ['explorer', 'analyst', 'overclock'], // 初期解放済み3種（protocols.js基本3種）
+      protocolFragments: 0,       // Protocol Fragment生涯累計（Phase C時点では消費先未実装）
+      discoveredProtocolCount: 3, // unlockedProtocols.lengthのミラー（Archive表示用）
+      totalEventCount: 0,         // Chaosの解放条件(Event発生10回)判定用、生涯Event発生回数
+      totalPerfectCount: 0,       // Precisionの解放条件(PERFECT100回)判定用、生涯PERFECTクリア回数
+
+      // ---- Research Environment: Environment Archive / 発見記録 ----
+      // 要求仕様の「unlockedEnvironment」は複数idを保持する配列のため、
+      // unlockedProtocolsと表記を揃えて複数形(unlockedEnvironments)にしている
+      unlockedEnvironments: [],   // 一度でも選んでRUNを開始したことがあるEnvironment id一覧（解放条件は無く、選べば発見扱い）
+      discoveredEnvironmentCount: 0 // unlockedEnvironments.lengthのミラー（Archive表示用）
     };
   }
 
@@ -55,7 +68,8 @@
 
     /**
      * 1回のRUN終了時に記録する。
-     * @param {{depth:number, score:number, bossClearCount?:number, memoryFragmentsGained?:number}} result
+     * @param {{depth:number, score:number, bossClearCount?:number, memoryFragmentsGained?:number,
+     *   eventCountGained?:number, perfectCountGained?:number, protocolFragmentsGained?:number}} result
      * @returns {{isNewBestDepth:boolean, isNewBestScore:boolean}}
      */
     recordRun(result) {
@@ -68,6 +82,13 @@
 
       this.data.totalBossClear += result.bossClearCount || 0;
       this.data.memoryFragments += result.memoryFragmentsGained || 0;
+
+      // Phase C: Protocol解放条件の集計用カウンタ・Protocol Fragment。
+      // 解放判定自体はRUN中にendless.js側がライブに（このメソッドとは別経路で）行うため、
+      // ここでは単純にRUN内で発生した分を生涯累計へ積み増すだけでよい
+      this.data.totalEventCount += result.eventCountGained || 0;
+      this.data.totalPerfectCount += result.perfectCountGained || 0;
+      this.data.protocolFragments += result.protocolFragmentsGained || 0;
 
       this.save();
       return { isNewBestDepth, isNewBestScore };
@@ -91,6 +112,72 @@
 
     getMemoryFragments() {
       return this.data.memoryFragments;
+    }
+
+    /** ---------------- Phase C: Protocol Archive / Unlock / Fragment ---------------- */
+
+    getUnlockedProtocols() {
+      return this.data.unlockedProtocols.slice();
+    }
+
+    isProtocolUnlocked(id) {
+      return this.data.unlockedProtocols.indexOf(id) !== -1;
+    }
+
+    /**
+     * Protocolを解放済みとして即座に記録する（RUN中でも呼ばれる。発見演出のタイミングと
+     * 一致させるため、recordRun()のRUN終了時バッチ処理とは別に都度即時保存する）。
+     * @returns {boolean} 新規に解放された場合true、既に解放済みだった場合false
+     */
+    unlockProtocol(id) {
+      if (this.isProtocolUnlocked(id)) return false;
+      this.data.unlockedProtocols.push(id);
+      this.data.discoveredProtocolCount = this.data.unlockedProtocols.length;
+      this.save();
+      return true;
+    }
+
+    getProtocolFragments() {
+      return this.data.protocolFragments;
+    }
+
+    getDiscoveredProtocolCount() {
+      return this.data.discoveredProtocolCount;
+    }
+
+    getTotalEventCount() {
+      return this.data.totalEventCount;
+    }
+
+    getTotalPerfectCount() {
+      return this.data.totalPerfectCount;
+    }
+
+    /** ---------------- Research Environment: Archive / 発見記録 ---------------- */
+
+    getUnlockedEnvironments() {
+      return this.data.unlockedEnvironments.slice();
+    }
+
+    isEnvironmentUnlocked(id) {
+      return this.data.unlockedEnvironments.indexOf(id) !== -1;
+    }
+
+    /**
+     * Environmentを発見済みとして即座に記録する（unlockProtocolと同じく、RUN中でも
+     * その場で即時保存する）。
+     * @returns {boolean} 新規に発見された場合true、既に発見済みだった場合false
+     */
+    unlockEnvironment(id) {
+      if (this.isEnvironmentUnlocked(id)) return false;
+      this.data.unlockedEnvironments.push(id);
+      this.data.discoveredEnvironmentCount = this.data.unlockedEnvironments.length;
+      this.save();
+      return true;
+    }
+
+    getDiscoveredEnvironmentCount() {
+      return this.data.discoveredEnvironmentCount;
     }
   }
 

@@ -44,6 +44,11 @@
           game: document.getElementById('screen-game'),
           // ENDLESS RESEARCH用の画面（src/endless/配下が利用する）
           modeSelect: document.getElementById('screen-modeselect'),
+          protocolSelect: document.getElementById('screen-protocolselect'),
+          protocolSignal: document.getElementById('screen-protocolsignal'),
+          protocolArchive: document.getElementById('screen-protocolarchive'),
+          environmentDetect: document.getElementById('screen-environmentdetect'),
+          environmentArchive: document.getElementById('screen-environmentarchive'),
           researchLab: document.getElementById('screen-researchlab'),
           endlessResult: document.getElementById('screen-endlessresult')
         },
@@ -93,6 +98,11 @@
         // LEVEL UP overlay
         levelUpOverlay: document.getElementById('levelUpOverlay'),
         levelUpValue: document.getElementById('levelUpValue'),
+
+        // Protocol Discovery overlay（Phase C）
+        discoveryOverlay: document.getElementById('discoveryOverlay'),
+        discoveryName: document.getElementById('discoveryName'),
+        discoveryRarity: document.getElementById('discoveryRarity'),
 
         toast: document.getElementById('toast')
       };
@@ -475,6 +485,13 @@
     /** LEVEL UP演出を一時的に表示する（クリア画面の上に重ねて出し、自動で消える） */
     showLevelUp(level) {
       if (Animation) Animation.showLevelUp(this.el.levelUpOverlay, this.el.levelUpValue, level);
+    }
+
+    /** Protocol発見演出を一時的に表示する（Phase C。GAME画面の上に重ねて出し、自動で消える） */
+    showProtocolDiscovery(def) {
+      if (Animation) {
+        Animation.showDiscovery(this.el.discoveryOverlay, this.el.discoveryName, this.el.discoveryRarity, def);
+      }
     }
 
     /** ---------------- デバッグ: 答え表示（?debug=true時のみ呼ばれる） ---------------- */

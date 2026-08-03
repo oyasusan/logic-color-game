@@ -27,11 +27,16 @@
      * @param {Object} deps.ui 既存UIインスタンス（buildBoard/updateCell等の盤面描画を再利用する）
      * @param {Object} deps.puzzleManager 既存PuzzleManagerインスタンス（問題生成を再利用する）
      * @param {Object} deps.upgradeManager RESEARCH LABで取得したアップグレードの効果を参照する
+     * @param {Object} [deps.protocolManager] RUN開始時に選択したProtocolの効果を参照する（Difficulty Tierへの反映用）
+     * @param {Object} [deps.environmentManager] RUN開始時に選択したResearch Environmentの効果を参照する
+     *   （Difficulty Tier加算・Blue Spectrumの生成バイアスへの反映用）
      */
-    constructor({ ui, puzzleManager, upgradeManager }) {
+    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager }) {
       this.ui = ui;
       this.puzzleManager = puzzleManager;
       this.upgradeManager = upgradeManager;
+      this.protocolManager = protocolManager || null;
+      this.environmentManager = environmentManager || null;
 
       this.game = null;
       this.puzzle = null;
@@ -64,9 +69,14 @@
       this.bossConfig = Boss ? Boss.getBossConfig(depth) : null;
       this.isBoss = !!this.bossConfig;
 
+      // Overclock Protocol・Deep Research Environment所持時、Boss以外は目標Difficulty Tierを
+      // 引き上げる（両者は独立に加算される。例: 両方所持なら合計+2）
+      const tierOffset =
+        (this.protocolManager ? this.protocolManager.getDifficultyTierOffset() : 0) +
+        (this.environmentManager ? this.environmentManager.getDifficultyTierOffset() : 0);
       const { size, emptyRatio, label } = this.isBoss
         ? this.bossConfig
-        : EndlessMap.getDifficultyForDepth(depth);
+        : EndlessMap.getDifficultyForDepth(depth, tierOffset);
       this.puzzle = this._generateWithRetry(size, emptyRatio, this.isBoss ? 'boss' : label);
       this.game = new Game(this.puzzle);
 
@@ -96,19 +106,53 @@
      * （tools/build_puzzles.js）ではこれを検知して即座に失敗させたいが、
      * プレイ中のENDLESS RESEARCHでは例外がそのままRUNのクラッシュに直結して
      * しまうため、seedを変えて数回リトライする。
+     *
+     * Blue Spectrum Environment所持時（hasBlueBias()）は、既存のリトライ回数
+     * （maxAttempts=5）をそのまま使いつつ「最初の成功をすぐ返す」のではなく
+     * 「複数候補を生成してBLUE比率が最も高いものを選ぶ」方式に切り替える
+     * （generator.js/solver.js自体には一切手を加えない、事後選抜による実現）。
      */
     _generateWithRetry(size, emptyRatio, label) {
       const maxAttempts = 5;
+      const wantsBlueBias = this.environmentManager && this.environmentManager.hasBlueBias();
       let lastError = null;
+      let best = null;
+      let bestBlueRatio = -1;
+
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const seed = `endless-${size}-${Date.now()}-${Math.floor(Math.random() * 1e9)}-${attempt}`;
         try {
-          return this.puzzleManager.getGeneratedPuzzleWithRatio(size, emptyRatio, seed, label);
+          const puzzle = this.puzzleManager.getGeneratedPuzzleWithRatio(size, emptyRatio, seed, label);
+          if (!wantsBlueBias) return puzzle;
+
+          const ratio = this._blueRatio(puzzle);
+          if (ratio > bestBlueRatio) {
+            best = puzzle;
+            bestBlueRatio = ratio;
+          }
         } catch (e) {
           lastError = e;
         }
       }
+
+      if (best) return best;
       throw lastError;
+    }
+
+    /** @returns {number} puzzle.answer中の色付きマスに対するBLUEマスの割合（0〜1） */
+    _blueRatio(puzzle) {
+      const answer = puzzle.answer;
+      let blue = 0;
+      let colored = 0;
+      for (let r = 0; r < answer.length; r++) {
+        for (let c = 0; c < answer[r].length; c++) {
+          const cell = answer[r][c];
+          if (cell === G.CellState.EMPTY) continue;
+          colored++;
+          if (cell === G.CellState.BLUE) blue++;
+        }
+      }
+      return colored === 0 ? 0 : blue / colored;
     }
 
     stop() {

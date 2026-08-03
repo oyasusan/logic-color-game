@@ -66,13 +66,25 @@ logic-color-game/
 │   ├ upgrades.js        通常アップグレード10種の定義データ(id/name/category/description/effect)
 │   ├ rareUpgrades.js    Rare Upgrade4種の定義データ＋出現率設定(Phase3)
 │   ├ upgradeManager.js  RUN中の所持アップグレード管理（取得・重複スタック・Evolution上限・効果集計）
+│   ├ protocols.js       Protocol3種の定義データ(id/name/description/effects)。RUN開始時のProtocol Selectで提示(Phase A)
+│   ├ protocolSignals.js Protocol Signal限定の追加Protocol5種(Oracle/Precision/Chaos/Minimal/Quantum)の定義データ(Phase B→Phase CでQuantum追加+unlock/rarity付与)
+│   ├ protocolSynergy.js 2Protocol組み合わせで発動するSynergy4種(Navigator等)の定義データ・判定(Phase B)
+│   ├ protocolManager.js Active中Protocol群(最大2個)の管理・効果集計(加算/乗算/OR)(Phase A→Phase Bで複数管理化)
+│   ├ protocolUnlock.js  Protocol解放条件(protocols.js/protocolSignals.jsの`unlock`フィールド)の判定(Phase C)
+│   ├ protocolFragment.js Protocol Fragment獲得量の定義(Boss/Event/High Depth)(Phase C)
 │   ├ boss.js            Boss Puzzle(Depth10/25/50)の生成設定(Phase3)
 │   ├ events.js          Event Node5種の定義データ(Phase3)
 │   ├ eventManager.js    Event Nodeの出現判定・ランダム選択(Phase3)
-│   ├ endlessGame.js     1問ごとの生成・制限時間・操作中継・アップグレード/Boss効果の適用
+│   ├ endlessGame.js     1問ごとの生成・制限時間・操作中継・アップグレード/Boss/Protocol効果の適用
 │   ├ endlessResult.js   RESULT画面の描画
 │   ├ researchLab.js     3択アップグレード選択画面（Depth3ごとに出現、Rare混入対応）
-│   └ endless.js         RUN全体の統括（画面遷移・スコア計算・アップグレード/Event/Boss反映）
+│   ├ protocolSelect.js  RUN開始直後のProtocol Select画面(Phase A)
+│   ├ protocolSignal.js  Depth5ごとのProtocol Signal画面（Merge/Replace/Ignore、Phase Cで解放済みのみ候補化）(Phase B)
+│   ├ protocolArchive.js 発見済み/未発見Protocol一覧・レア度・Fragment表示画面(Phase C)
+│   ├ environments.js       Research Environment6種の定義データ(id/name/description/effects)
+│   ├ environmentManager.js RUN開始時に選ぶEnvironmentの状態管理＋Detection画面の描画(3ファイル構成の都合上、状態とUIを1ファイルに統合)
+│   ├ environmentArchive.js 発見済み/未発見Environment一覧画面
+│   └ endless.js         RUN全体の統括（画面遷移・スコア計算・アップグレード/Event/Boss/Protocol/Environment反映）
 ├ data/
 │ ├ puzzles.json      パズル本体（id, size, rowHints, columnHints, answer, parSeconds,
 │ │                    generatedDifficulty, generatorStats, seed）
@@ -87,7 +99,7 @@ logic-color-game/
 └ README.md
 ```
 
-`index.html` は `<script>` タグを直接並べる方式（ESモジュール不使用）で `src/*.js` を読み込む。理由は `file://` で開いた場合でもESモジュールのCORS制限を受けずに動作させるため。各ファイルは `window.LogicColor` 名前空間にクラス/関数を登録することでファイル間の依存を解決している。読み込み順は `board→solver→difficulty→seed→generator→puzzleManager→score→progress→stage→tutorial→game→theme→animation→sound→debug→endless/map→endless/endlessSave→endless/upgrades→endless/rareUpgrades→endless/upgradeManager→endless/boss→endless/events→endless/eventManager→endless/endlessGame→endless/endlessResult→endless/researchLab→endless/endless→ui→main` （依存する側を後に置く）。`theme.js`/`animation.js`/`sound.js`/`debug.js`はゲームロジック側のモジュールに依存しない独立モジュールで、`ui.js`/`main.js`が消費する。`src/endless/`配下は`board`/`game`/`generator`/`puzzleManager`/`score`（既存モジュール）を利用するが、既存モジュール側からは`src/endless/`への依存は一切無い。
+`index.html` は `<script>` タグを直接並べる方式（ESモジュール不使用）で `src/*.js` を読み込む。理由は `file://` で開いた場合でもESモジュールのCORS制限を受けずに動作させるため。各ファイルは `window.LogicColor` 名前空間にクラス/関数を登録することでファイル間の依存を解決している。読み込み順は `board→solver→difficulty→seed→generator→puzzleManager→score→progress→stage→tutorial→game→theme→animation→sound→debug→endless/map→endless/endlessSave→endless/upgrades→endless/rareUpgrades→endless/upgradeManager→endless/protocols→endless/protocolSignals→endless/protocolSynergy→endless/protocolManager→endless/protocolUnlock→endless/protocolFragment→endless/environments→endless/boss→endless/events→endless/eventManager→endless/endlessGame→endless/endlessResult→endless/researchLab→endless/protocolSelect→endless/protocolSignal→endless/protocolArchive→endless/environmentManager→endless/environmentArchive→endless/endless→ui→main` （依存する側を後に置く）。`theme.js`/`animation.js`/`sound.js`/`debug.js`はゲームロジック側のモジュールに依存しない独立モジュールで、`ui.js`/`main.js`が消費する。`src/endless/`配下は`board`/`game`/`generator`/`puzzleManager`/`score`（既存モジュール）を利用するが、既存モジュール側からは`src/endless/`への依存は一切無い。
 
 ## ゲームルール仕様
 
@@ -847,3 +859,324 @@ jsdom + 実際のHTML/JSを用いた統合テスト（Node.js上で本セクシ�
 - Event Nodeは専用の画面を持たずトースト通知のみで完結させている。LEVEL UP演出のような専用オーバーレイを設ける拡張が考えられる。
 - Boss Puzzleは疎密度を通常と同じ0.82に統一し、時間倍率のみで難易度差を付けている。将来的にランタイム生成をWeb Worker化できれば、より疎密度の低い（本当に難しい）Boss構成にも安全に対応できる可能性がある。
 - 9×9以上のサイズはまだ実測較正されておらず、Boss Puzzleでも8×8止まりにしている。より大きな盤面をBoss専用に導入する場合は、既存のステージ拡張・Phase1と同様の疎密度実測が必要。
+
+---
+
+# Protocolシステム Phase A追加（このセクションは今回の変更点のまとめ）
+
+ENDLESS RESEARCHに、RUN開始時に研究方針（Protocol）を1つ選び、そのRUN専用の効果を適用する仕組みを追加した。**既存のステージ制・Endless基本フロー（Depth進行・制限時間・Life管理）・問題生成・Score計算式の基本部分・Research Lab（Upgrade選択）・Event Node・Boss Puzzle・Rare Upgrade・Upgrade Evolutionは一切変更していない。** Protocolは既存のUpgradeとは別のRUN限定メモリ状態（`protocolManager.js`、RUN開始/終了で必ずreset）として実装しており、LocalStorageには一切保存しない。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `protocols.js` — Protocol 3種（Explorer / Analyst / Overclock）の定義データ（id/name/description/effects）
+- `protocolManager.js` — RUN中に選択されたProtocolを管理し、`getLifeBonus()`/`getScoreMultiplier()`/`getPerfectBonusMultiplier()`/`getComboBonusMultiplier()`/`getDifficultyTierOffset()`で効果を参照させる。`upgradeManager.js`と同じ「RUN限定・reset()で必ずクリア」の設計に揃えている
+- `protocolSelect.js` — RUN開始直後に表示するProtocol Select画面（3枚のカードから1つを選ぶ、`researchLab.js`と同じ実装パターン）
+
+**部分修正**:
+- `src/endless/map.js` — `getDifficultyForDepth(depth, tierOffset)`に第2引数を追加。Overclock Protocol用に目標Difficulty Tierを指定段階分だけ引き上げる（末尾Tierを超える分はクランプ）。`tierOffset`省略時（既存の全呼び出し）は完全に従来通りの挙動
+- `src/endless/endlessGame.js` — コンストラクタに`protocolManager`を追加（省略可）し、`start(depth)`でBoss以外の場合に`protocolManager.getDifficultyTierOffset()`を`EndlessMap.getDifficultyForDepth()`へ渡すよう変更
+- `src/endless/endless.js` — `startRun()`を「Protocol Select画面を表示するだけ」に変更し、選択確定後（`_handleProtocolSelected`）に旧`startRun()`本体だった`_initializeRun()`を呼ぶ2段階のフローにした。`_initializeRun()`でExplorerのライフボーナスを`maxLife`へ反映。`_handleRoundClear()`のスコア計算にAnalystのPERFECT/コンボボーナス倍率、Explorer/Overclockの総合スコア倍率を適用。`_endRun()`/`exitRun()`/`_exitToTitle()`で`protocolManager.reset()`を追加し、Protocol選択状態がRUNをまたいで残らないようにした
+- `src/ui.js` — `showScreen()`が扱う画面一覧に`protocolSelect: #screen-protocolselect`を追加
+- `index.html` — MODE SELECTとGAMEの間に新規画面`#screen-protocolselect`（Protocol Selectカード3枚+MODE SELECTへ戻るボタン）を追加、GAME画面の`#endlessHud`に現在選択中のProtocol名を表示する`#endlessProtocolValue`を追加、`src/endless/protocols.js`/`protocolManager.js`/`protocolSelect.js`の`<script>`タグを追加
+
+## Protocolデータ
+
+| 名前 | 効果 |
+| --- | --- |
+| Explorer | ライフ+1 / 獲得スコア×0.9 |
+| Analyst | PERFECTボーナス+50% / コンボボーナス+20% |
+| Overclock | 目標Difficulty Tier+1段階 / 獲得スコア×1.5 |
+
+いずれも`effects`オブジェクトの汎用キー（`lifeBonus`/`scoreMultiplier`/`perfectBonusMultiplier`/`comboBonusMultiplier`/`difficultyTierOffset`）で表現しており、未選択時・対象外キーは`protocolManager.js`側で「効果なし」（倍率なら1、加算なら0）を返す。
+
+## Flow変更
+
+```
+Before: START → Puzzle
+After:  START → Protocol Select → RUN Initialize → Puzzle
+```
+
+MODE SELECTの「START RUN」を押すと、まずPROTOCOL SELECT画面（3枚のカード）が表示される。1つを選ぶとその場で`protocolManager.select(id)`により確定し、以後RUN終了までそのまま（Phase Aでは交換不可）。RETRY（RESULT画面から）も毎回このProtocol Selectから始まる。
+
+## Protocol Manager
+
+`upgradeManager.js`と対になる設計だが、Upgradeが「複数所持・重複スタック」を許すのに対し、Protocolは「RUN開始時に1つだけ選択し、RUN終了までそのまま」という単純な状態のみを持つ。
+- 選択Protocol保存: `select(id)`/`getSelectedId()`/`getSelected()`
+- 効果適用: `getLifeBonus()`等のgetterをendless.js/endlessGame.js側から呼び出す形（Upgradeの`getEffectTotal(type)`と同じ「参照される」設計に統一）
+- RUN終了時リセット: `reset()`を`_endRun()`・`exitRun()`・`_exitToTitle()`・`startRun()`（次のRUNのProtocol Select表示直前）から呼び出し、Protocol選択状態がRUNをまたいで残らないようにしている
+
+## UI
+
+- **Protocol Select画面**（`#screen-protocolselect`）: Research Labと同じ`lab-card`ベースの見た目に、識別用のグリーンアクセント（`.protocol-card`）を加えた3枚のカード。MODE SELECTへ戻るボタンも用意（Phase Aでは「選ばずにRUNを開始する」導線は無い＝必ず1つ選択する）
+- **ゲーム中HUD**: `#endlessHud`に「PROTOCOL」項目を追加し、現在選択中のProtocol名を常時表示する
+
+## 注意（Phase Aで実装していないこと）
+
+> **Phase B（後述セクション参照）で「Protocol交換」「シナジー」は実装済み。** 以下はPhase A時点（本セクション作成時）の記録として残す。
+
+- Protocol交換（RUN中の切り替え）→ **Phase Bで実装**（Protocol Signal経由のMerge/Replace）
+- Protocol解放（初期状態で3種とも常時選択可能。解放条件なし）→ Phase Bでも未実装のまま
+- シナジー（Protocol同士・Protocol×Upgradeの組み合わせ効果）→ **Phase Bで実装**（Protocol同士のシナジー4種。Protocol×Upgradeは引き続き未実装）
+- Season Modifier → Phase Bでも未実装のまま
+
+## テスト
+
+jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施、`node --check`で全新規/変更ファイルの構文確認も実施済み）で以下を検証した:
+
+- [x] Protocol選択できる（MODE SELECT→START RUNでPROTOCOL SELECT画面が表示され、GAME画面へは遷移しないこと。3枚のカード[Explorer/Analyst/Overclock]が表示され、いずれかをクリックするとGAME画面へ遷移しRUNが開始することを確認）
+- [x] 効果が反映される（Explorer選択時に開始時ライフが3→4になること、Overclock選択時にDepth1の生成盤面が5×5(easy tier)ではなく7×7(normal tier)になること＝Difficulty Tierが実際に1段階引き上がっていることを、生成された盤面のマス数で直接確認。Score倍率・Analystのボーナス倍率は`protocolManager.js`単体の計算ロジックとして個別に検証（Explorer→×0.9、Analyst→PERFECTボーナス×1.5/コンボボーナス×1.2、Overclock→×1.5がそれぞれ正しく返ることを確認）
+- [x] Endless以外へ影響しない（TITLE→STAGE SELECT→TUTORIALの通常フローが今回の変更後も問題なく動作し、GAME画面の`#endlessHud`が非表示のまま・盤面が3×3のまま生成されることを確認。`map.js`の`getDifficultyForDepth()`は第2引数省略時に既存呼び出しと完全に同じ値を返すため、Endless内の非Protocol経路（Boss Puzzle等）にも影響が無い）
+- [x] RUN終了/中断（GAME画面の「‹ BACK」で中断した場合、Protocol選択状態がリセットされ次にSTART RUNを押すと再度Protocol Selectから始まることを確認）
+
+## 今後の拡張余地
+
+- Phase Aは「1RUNにつき1つのProtocolを選ぶだけ」に留めている。Protocol解放条件（例: 特定のBoss撃破やDepth到達で新Protocolが使用可能になる）を設ければ、Rare Upgradeと同様の進行報酬として機能させられる。
+- Protocol×Upgrade、Protocol×Protocol（複数選択）のシナジーは意図的に対象外にした。組み合わせ数が増えるとバランス調整・表示の複雑さが跳ね上がるため、Phase Aでは各Protocolの効果を独立かつシンプルに保っている。
+- Season Modifier（期間限定のRUN全体への追加効果）は、Protocol Select画面に4枚目のカード的な要素として将来追加しやすい設計（`protocols.js`のデータ形式をそのまま流用できる）にしてある。
+
+（**上記2点はPhase Bで実装した**。Protocol×Protocolのシナジーは後述の4種、複数所持もProtocol Slot(最大2)として追加。Season Modifierは引き続き未実装）
+
+---
+
+# Protocolシステム Phase B追加（このセクションは今回の変更点のまとめ）
+
+Phase A（[[Protocolシステム Phase A追加]]セクション参照。RUN開始時に単一Protocolを1つ選ぶだけだった）を拡張し、RUN中に複数Protocolを組み合わせて「ビルド」を構築できるようにした。**既存のENDLESS基本フロー・Research Lab・Event Node・Boss Puzzle・Rare Upgrade・Upgrade Evolution・Phase Aの基本3Protocol（Explorer/Analyst/Overclock）自体の効果値は一切変更していない。** Phase Bの追加はいずれも新規ファイル＋`protocolManager.js`の単一→複数管理への置き換えとして実装しており、既存のUpgrade/Boss/Event側のロジックには触れていない。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `protocolSignals.js` — Protocol Signalでのみ提示される追加Protocol4種（Oracle/Precision/Chaos/Minimal）の定義データ。`protocols.js`（RUN開始時のProtocol Selectで提示される基本3種）とは別ファイル・別プールとして扱う（`upgrades.js`/`rareUpgrades.js`の関係と同じ設計）。RUN開始時点では選べず、Signal経由でのみ組み込める
+- `protocolSynergy.js` — 2つの特定Protocolが同時にActiveな時だけ追加で発動するSynergy4種（Navigator/Perfect Engine/Critical System/Mad Scientist）の定義データと、Active中のid配列から発動中Synergyを判定する`findActive(activeIds)`
+- `protocolSignal.js` — Depth5ごとに出現するProtocol Signal画面（researchLab.jsと同じ役割分担のUIコントローラ）。候補Protocolを1つ提示し、MERGE/REPLACE/IGNOREの選択肢をその場の所持状況に応じて動的に表示する
+
+**部分修正**:
+- `src/endless/protocolManager.js` — `selectedId`（単一）を`activeProtocols`（配列、最大`MAX_SLOTS=2`）へ全面的に置き換え。`select(id)`（RUN開始時用、空きスロットへ追加）はそのまま維持しつつ、`merge(id)`（Signal用、実質selectと同じ）・`replace(oldId,newId)`（Signal用、指定スロットの入れ替え）・`getActiveSynergies()`を新設。効果計算（`getLifeBonus()`等の外部APIは名前・戻り値の意味を維持）の内部実装を「Active中の全Protocol＋発動中の全Synergyのeffectsをまとめて合算する」方式に変更（後述）
+- `src/endless/endless.js` — `_afterRoundEnd()`にProtocol Signalの出現判定（Research Lab→Protocol Signal→Event Nodeの優先順）を追加。`_handleProtocolSignal(action,def,targetId)`を新設しMerge/Replace/Ignoreを処理。`_recalculateMaxLife()`を新設し、Protocol構成が変わるたび（Signal決定直後）に最大ライフを再計算・現在ライフをクランプする（ChaosをMergeしても即ダメージにはならない設計、詳細は`endless.js`のコメント参照）。`_renderProtocolBadge()`をActive中のProtocol名（複数）＋発動中Synergyの表示に対応。`_handleRoundClear()`のPERFECT判定にOracleの`hasPerfectImmuneToHint()`を追加
+- `src/ui.js` — `showScreen()`が扱う画面一覧に`protocolSignal: #screen-protocolsignal`を追加
+- `index.html` — 新規画面`#screen-protocolsignal`（Protocol Signal、候補カード+MERGE/REPLACE/IGNOREボタン群）を追加、GAME画面の`#endlessHud`直下に`#endlessSynergyBadge`（発動中Synergy表示、未発動時hidden）を追加、`endlessProtocolValue`は複数Protocol名（` + `区切り）を表示するよう文言更新、`src/endless/protocolSignals.js`/`protocolSynergy.js`/`protocolSignal.js`の`<script>`タグを追加
+
+## Protocol Slot
+
+`protocolManager.js`の`activeProtocols`配列（最大`MAX_SLOTS=2`個）として実装。RUN開始時のProtocol Select（Phase Aの画面をそのまま流用、変更無し）で1個目が埋まり、以後はProtocol Signal経由でしか増減しない。
+
+## Protocol Signal
+
+Depth5ごと（`depth % 5 === 0`）に出現。`protocolSignals.js`の4種（Oracle/Precision/Chaos/Minimal）から、まだActiveでないものをランダムに1つ提示する（既に4種ともActive化不可能な状況、つまり最大2枠のうち残りの候補が無い場合は画面を出さず自動的にIGNORE扱いとする）。選択肢は所持状況に応じて動的に変わる:
+- **MERGE**（組み込む）: 空きスロットがある時だけ表示。空きスロットへそのまま追加する
+- **REPLACE**（入れ替える）: 所持中のProtocolの数だけボタンを表示する（例: 2個所持中なら「REPLACE: Explorer → Oracle」「REPLACE: Overclock → Oracle」の2つ）。押した方のスロットが新Protocolに置き換わる
+- **IGNORE**（見送る）: 常に表示。何も変化しない
+
+## Protocol Manager変更（単一→複数管理）
+
+Phase Aの`selectedId`（文字列1つ）を`activeProtocols`（id配列、最大2個）へ置き換えた。`_getDef(id)`は`protocols.js`（基本3種）と`protocolSignals.js`（Signal限定4種）の両プールから検索する。外部から呼ばれる効果取得系のメソッド名・シグネチャ（`getLifeBonus()`/`getScoreMultiplier()`/`getPerfectBonusMultiplier()`/`getComboBonusMultiplier()`/`getDifficultyTierOffset()`）はPhase Aと完全に同じに保っており、`endlessGame.js`側（Difficulty Tierの参照箇所）は**Phase B対応のための変更が一切不要**だった（内部の集計方法だけがPhase Aの「1つの値をそのまま返す」から「Active中の全Protocol+Synergyを合算する」に変わった）。
+
+## Effect計算
+
+効果の性質によって合算方法を分けている（`protocolManager.js`の`_sumEffect(key)`/`_productEffect(key)`/`_hasBooleanEffect(key)`）:
+- **加算**: `lifeBonus`・`difficultyTierOffset`（例: Explorer+1とChaos-1を両方所持 → 0）
+- **乗算**: `scoreMultiplier`・`perfectBonusMultiplier`・`comboBonusMultiplier`（例: Explorer×0.9とOverclock×1.5を両方所持 → 0.9×1.5=1.35）
+- **OR（真偽値）**: `perfectImmuneToHint`（Oracle所持時、1つでも所持していれば有効）
+
+発動中のSynergyのeffectsも、所持中Protocol自身のeffectsと**全く同列で**この合算に加わる（Synergyだけ特別扱いする分岐は無い）。Protocol Slotが最大2個のため、合算対象は常に「Protocol最大2個＋Synergy最大1個」の最大3ソースに収まる。
+
+`Explorer + Overclock`の場合: `Life +1`（Explorerのみ）、`Score ×1.35`（0.9×1.5、両方の積）、`Difficulty +1`（Overclockのみ）となり、要求仕様の例と一致する。
+
+## Synergy
+
+`protocolIds`（順不同の2つのid）が両方Active中の時にだけ、追加のeffectsが上記の合算に加わる。
+
+| Synergy名 | 組み合わせ | 追加効果 |
+| --- | --- | --- |
+| Navigator | Explorer + Oracle | ライフ+1、獲得スコア×1.1 |
+| Perfect Engine | Analyst + Precision | PERFECTボーナス×1.2 |
+| Critical System | Overclock + Chaos | 獲得スコア×1.2、目標Difficulty Tier+1 |
+| Mad Scientist | Minimal + Chaos | コンボボーナス×1.3 |
+
+Protocol Slotが最大2個のため、同時に発動しうるSynergyは常に0個か1個（3つ以上のProtocolを同時所持できないため、異なる2組のペアが同時に揃うことは無い）。
+
+**Oracle/Precision/Chaos/Minimalの効果値およびSynergy4種の効果値は、要求仕様に具体的な数値の指定が無かったため実装時にユーザーへ確認を取り、既存Protocol3種の設計（1〜2つのeffectキー・トレードオフのある効果）に沿う形でこちらから提案・承認を得た値を採用している**（Oracle: HINT使用時もPERFECT扱い/Score×0.95、Precision: PERFECTボーナス+30%/Score×0.95、Chaos: Score×1.3/Life-1、Minimal: Difficulty Tier-1/コンボボーナス+10%。Synergy4種の効果は上表の通り）。
+
+## UI
+
+- **Active Protocol表示**: `#endlessProtocolValue`（GAME画面ENDLESS HUD内、Phase Aから継続使用）がActive中の全Protocol名を` + `区切りで表示する（例: `Explorer + Oracle`）
+- **Synergy状態表示**: `#endlessSynergyBadge`（ENDLESS HUD直下、新設）が発動中のSynergy名を`⚡ SYNERGY: Navigator`の形式でグリーン発光表示する。発動していない間は`hidden`クラスで非表示（DOM自体は残すが幅を取らない）
+- **Protocol Signal画面**（`#screen-protocolsignal`）: Research Labと同じ`lab-card`ベースの候補カード（クリック不可、情報表示専用）＋動的に生成されるMERGE（グリーン）/REPLACE（ゴールド、所持数分）/IGNORE（グレー）のボタン列
+
+## テスト
+
+jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施。`main.js`が`new EndlessMode(...)`する瞬間のインスタンスをテスト専用のフックで捕まえ、実際のDOM・実際の本番コードに対して直接検証する形を取った。本番コード自体には一切変更を加えていない）で以下27項目を検証し、全てPASSした（詳細な検証ログはテスト実行時のセッションに記録済み。テスト後jsdomはscratchpadから削除済み）:
+
+- [x] 2Protocol保持できる（RUN開始でExplorerを選択→Protocol Signal(Depth5)でOracleをMERGE→`activeProtocols`が`['explorer','oracle']`になり、Protocol Slot上限の2個を実際に保持できることを確認。満杯状態ではMERGEボタン自体が表示されないことも確認）
+- [x] Replaceできる（2個所持で満杯の状態でProtocol Signal(Depth10)にChaosが提示された時、所持数分（2つ）のREPLACEボタンが表示され、Oracle用のボタンを押すと`activeProtocols`が`['explorer','oracle']`→`['explorer','chaos']`へ正しく入れ替わることを確認）
+- [x] Mergeできる（上記の通り、空きスロットがある状態でMERGEボタンを押すと1個→2個に増えることを確認）
+- [x] 効果が合算される（Explorer×Chaos所持時に実際に`_handleRoundClear()`（本番のスコア計算ロジック）を呼び、獲得スコアが手計算の期待値（`Math.round(220 × 0.9 × 1.3) = 257`）と完全一致することを確認。乗算合成が実際のゲーム進行経路で正しく機能していることを検証）
+- [x] Synergy発動する（Explorer+Oracle所持時に`getActiveSynergies()`が`Navigator`を返すこと、HUDの`#endlessSynergyBadge`が実際に`Navigator`を表示すること、`maxLife`にNavigatorのライフ+1が正しく加算されること（3+Explorer1+Navigator1=5）を確認。Explorer+Chaos等、定義の無い組み合わせでは0件のままであることも確認）
+- [x] Endless以外に影響しない（Phase A同様、TITLE→STAGE SELECT→TUTORIALの通常フローが問題なく動作し、`#endlessHud`非表示・盤面3×3のままであることを確認）
+- [x] （追加確認）IGNOREを選んだ場合は`activeProtocols`が一切変化しないこと、GAME画面「‹ BACK」でRUNを中断すると`activeProtocols`が完全に空配列へリセットされることも確認済み
+
+## 今後の拡張余地
+
+- Protocol解放条件（特定のBoss撃破・Depth到達で新しいSignal候補が使用可能になる等）はPhase Bでも未実装。現状は`protocolSignals.js`の4種が常に対等な確率で提示される → **Phase Cで実装**（後述セクション参照）
+- Protocol Slotの上限（現在2）を将来的にRUN内で拡張できるようにする（例: 特定のRare Upgrade取得でSlot+1）拡張は、`protocolManager.js`の`MAX_SLOTS`を定数からインスタンスプロパティ化すれば対応しやすい設計にしてある
+- Synergyは現在「特定の2Protocol」の組み合わせのみに対応（4種）。3Protocol以上の組み合わせや、Protocol×Upgradeのシナジーは、Protocol Slot自体の拡張と合わせて検討の余地がある
+- Season Modifier（期間限定のRUN全体への追加効果）はPhase Cでも引き続き未実装のまま
+
+---
+
+# Protocolシステム Phase C追加（このセクションは今回の変更点のまとめ）
+
+Phase A/B（RUN限定でProtocolを選ぶ/組み合わせる仕組み）に対し、Phase Cは「Protocolを発見・収集して長期プレイの目標を作る」ための**RUNをまたいだ永続的な進行要素**を追加した。**既存のENDLESS基本フロー・Research Lab・Event Node・Boss Puzzle・Rare Upgrade・Upgrade Evolution・Phase A/BのProtocol選択/Slot/Signal/Synergyの仕組み自体・既存7Protocol（Explorer/Analyst/Overclock/Oracle/Precision/Chaos/Minimal）の効果値は一切変更していない。** 追加したのは「未解放のProtocolはSignal候補にもならない」というフィルタと、解放条件を満たすたびに発見演出を出しつつ`logicColor.endless.v1`へ永続化する仕組みのみ。
+
+## 追加したファイル
+
+**新規追加**（`src/endless/`）:
+- `protocolUnlock.js` — `protocols.js`/`protocolSignals.js`の各定義に埋め込んだ`unlock:{type,value}`フィールドを読み取るだけの、状態を持たない解放条件判定モジュール（boss.js/map.js等と同じ「データ＋小さいヘルパー」構成）。`findNewlyUnlockable(snapshot, unlockedIds)`が中心API
+- `protocolFragment.js` — 「Protocol Fragment」（収集要素としての生涯累計リソース、Phase C時点では消費先は未実装）の獲得量を定義。Boss撃破+3、Event Node発生+1、Depth10ごとの到達+1
+- `protocolArchive.js` — MODE SELECTから開けるArchive画面のUIコントローラ。解放済みは通常表示、未解放は`???`＋解放条件のヒントのみを表示する（researchLab.js/protocolSelect.jsと同じ「状態を持たず都度saveを読んで再描画する」設計）
+
+**部分修正**:
+- `src/endless/protocols.js` / `protocolSignals.js` — 各定義に`rarity`（'common'|'rare'|'legendary'）と`unlock`（`{type:'always'}`または`{type, value}`の閾値条件）を追加。`protocolSignals.js`には新規Protocol「Quantum」（`unlock:{type:'bestDepthEver',value:30}`、デメリット無しでScore×1.2/PERFECTボーナス+20%、rarity:'legendary'）を追加し5種構成に
+- `src/endless/protocolManager.js` — 変更なし（Phase Bのまま）。解放状態はProtocolManagerではなくendlessSave.js（永続化）とendless.js（判定タイミング）側の責務として追加した
+- `src/endless/protocolSignal.js` — 候補選定(`_pickCandidate`)に「未解放でないこと」の条件を追加（`save.isProtocolUnlocked(id)`）。コンストラクタに`save`依存を追加
+- `src/endless/endlessSave.js` — `unlockedProtocols`（初期値`['explorer','analyst','overclock']`）・`protocolFragments`・`discoveredProtocolCount`・`totalEventCount`・`totalPerfectCount`を`logicColor.endless.v1`へ追加。`unlockProtocol(id)`は即時保存（発見演出のタイミングと合わせるため、`recordRun()`のRUN終了時バッチ処理とは別経路）、Fragment/Event/Perfectの生涯累計は既存の`totalBossClear`/`memoryFragments`と同じく`recordRun()`でRUN終了時にまとめて加算する
+- `src/endless/endless.js` — RUN内カウンタ`eventCountThisRun`/`protocolFragmentsThisRun`/`_life1AtDepth20ThisRun`を追加。`_checkProtocolUnlocks()`を新設し、Depth進行時(`_advance`)・Event発生時(`_triggerEvent`)・クリア時(`_handleRoundClear`)の3箇所で呼び出す。Protocol Fragmentの獲得（Boss撃破/Event発生/Depthマイルストーン）もこれらの箇所に追加。MODE SELECTからArchiveを開く導線(`protocolArchiveBtn`)を追加
+- `src/animation.js` / `src/ui.js` — 既存のLEVEL UP演出（`showLevelUp`）と同じ構造の`showDiscovery`/`showProtocolDiscovery`を追加し、新規Protocol発見時に流用する
+- `index.html` — 新規画面`#screen-protocolarchive`（Archiveカード一覧）、発見演出用オーバーレイ`#discoveryOverlay`、MODE SELECTに「PROTOCOL ARCHIVE」ボタンを追加。レア度別（common/rare/legendary）のカード装飾CSS、`src/endless/protocolUnlock.js`/`protocolFragment.js`/`protocolArchive.js`の`<script>`タグを追加。既存の「FRAGMENTS」表示はMemory FragmentとProtocol Fragmentの混同を避けるため「MEMORY FRAGMENTS」に改称
+
+## Protocol Archive
+
+MODE SELECT画面の「PROTOCOL ARCHIVE」ボタンから開く。表示内容:
+- ヘッダー: `DISCOVERED n / 8`（解放済み数/全Protocol数）、`PROTOCOL FRAGMENTS`所持数
+- 全8Protocol（基本3種+Signal限定5種）を1枚ずつカード表示。**解放済み**は名前・効果説明・レア度をそのまま表示、**未解放**は名前を`???`に伏せ、レア度と解放条件（例:「Boss撃破 5回」）だけをヒントとして表示する
+
+## Unlock System
+
+初期解放済み（`protocols.js`の基本3種、`unlock:{type:'always'}`）: Explorer / Analyst / Overclock
+
+追加解放条件（`protocolSignals.js`）:
+
+| Protocol | 解放条件 | レア度 |
+| --- | --- | --- |
+| Oracle | Boss撃破 生涯5回 | RARE |
+| Precision | PERFECTクリア 生涯100回 | RARE |
+| Chaos | Event Node発生 生涯10回 | RARE |
+| Minimal | ライフ1の状態でDepth20以上に到達（1回でも） | RARE |
+| Quantum | Depth30以上に到達（1回でも） | LEGENDARY |
+
+判定は「保存済みの過去分（`save.getTotalBossClear()`等） + 今RUNでの分（RUN内カウンタ）」を都度合算した値で行うため、**今まさにプレイ中のRUNで条件を満たした瞬間にも即座に反応する**（例: Boss4回撃破済みの状態で始めたRUNで5回目を撃破した瞬間にOracleが解放される）。一度解放されたProtocolは`unlockedProtocols`に永続化され、二度と条件判定の対象にならない。
+
+## Discovery
+
+条件を満たした瞬間、`endless.js`の`_checkProtocolUnlocks()`が`endlessSave.js`へ即時保存（`unlockProtocol(id)`）した上で、LEVEL UP演出と同じ構造の専用オーバーレイ（`#discoveryOverlay`）でProtocol名・レア度を表示する（1.8秒後に自動で消える）。Archiveへの登録は保存と同時に完了しているため、演出中でもMODE SELECTのArchiveを開けば即座に反映されている。
+
+## Fragment
+
+`protocolFragment.js`で定義した3つの獲得元:
+
+| 獲得元 | 量 |
+| --- | --- |
+| Boss撃破 | +3 |
+| Event Node発生（種類問わず） | +1 |
+| Depth10ごとの到達（Depth10/20/30…） | +1 |
+
+Phase C時点ではFragmentの消費先（交換・強化等）は未実装で、生涯累計を伸ばすこと自体が収集要素として機能する（今後の拡張余地参照）。
+
+## Save
+
+`logicColor.endless.v1`へ以下を追加（既存フィールドは無変更）:
+- `unlockedProtocols` — 解放済みProtocol idの配列（初期値3件）
+- `protocolFragments` — Protocol Fragment生涯累計
+- `discoveredProtocolCount` — `unlockedProtocols.length`のミラー（Archive表示用に都度同期）
+- `totalEventCount` / `totalPerfectCount` — Chaos/Precisionの解放条件判定に使う生涯累計カウンタ
+
+## テスト
+
+jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施。Phase Bと同じく`main.js`が`new EndlessMode(...)`する瞬間のインスタンスをフックで捕まえ、実DOM・実本番コードに対して直接検証した）で以下35項目を検証し、全てPASSした:
+
+- [x] Protocol解放される（Boss撃破5回でOracle、Event発生10回でChaos、Depth30到達でQuantum、ライフ1でDepth20到達でMinimal、PERFECTクリア100回でPrecisionの5条件全てを、実際の本番コード経路（`_handleRoundClear`/`_triggerEvent`/`_advance`）を通して個別に検証。「save側に事前の進捗がある状態から、今RUンでの1回分が閾値をまたぐ瞬間」まで再現して確認）
+- [x] Archive表示される（未RUN時点でも開けること、解放済み3件/未解放5件が正しい件数で表示されること、未解放カードが`???`＋解放条件ヒントになっていること、全8種解放後は`8/8`表示・未解放カード0件になることを確認）
+- [x] Fragment保存される（Boss撃破で+3、Event発生10回で+10されることを`protocolFragmentsThisRun`で確認）
+- [x] 新規発見演出が出る（`#discoveryOverlay`の`hidden`クラスが解除され、Protocol名・レア度が正しく表示されることを確認）
+- [x] 通常ゲームへ影響しない（TITLE→STAGE SELECT→TUTORIALの通常フローが問題なく動作し、`#endlessHud`非表示・盤面3×3のままであることを確認）
+- [x] （追加確認）解放済みProtocolのみがProtocol Signalの候補になること、RUNを中断してもendlessSave側の解放状態（永続）とprotocolManager側のActive状態（RUN限定）が正しく別々に扱われることも確認済み
+
+## 今後の拡張余地
+
+- Protocol Fragmentは収集要素として実装したのみで、消費先（Protocol強化・追加Slot解放・Season Modifier購入等）は未実装。Fragment所持数を活かす二次的な仕組みは今後の検討課題
+- Discovery演出はLEVEL UP演出のオーバーレイ構造を流用した簡易版。専用のアニメーション・サウンドを追加する余地がある
+- 解放条件（Boss5回・Event10回・PERFECT100回・Depth30・ライフ1でDepth20）は初期バランスであり、実プレイでの調整余地が大きい（特にPERFECT100回はやり込み前提のかなり高い閾値）
+- Quantumの効果（デメリット無しでScore×1.2/PERFECTボーナス+20%）はレア度がlegendaryに見合うよう他Protocolよりやや強めに設計したが、実プレイでのバランス調整が必要な可能性がある
+
+---
+
+# Research Environmentシステム追加（このセクションは今回の変更点のまとめ）
+
+ENDLESS RESEARCHに、RUNごとに異なる環境条件（Research Environment）を1つ選ぶ仕組みを追加した。目的は「同じProtocol構成でも、選んだEnvironment次第で毎回違う攻略を要求される」こと。**既存のENDLESS基本フロー・Research Lab・Event Node・Boss Puzzle・Protocol Phase A〜C（Select/Slot/Signal/Synergy/Archive/Unlock/Fragment）は一切変更していない。** Environmentは既存のスコア計算・Difficulty Tier計算・Event発生判定・Fragment獲得計算の各所に、Protocolとは独立した「もう1つの効果ソース」として追加で乗り入れているだけで、既存の計算式・既存Protocol7種の効果値には手を加えていない。
+
+## 追加したファイル
+
+要求仕様のファイル構成（3ファイル: `environments.js`/`environmentManager.js`/`environmentArchive.js`）に合わせ、Protocol系が`protocols.js`(データ)/`protocolManager.js`(状態)/`protocolSelect.js`(UI)の3ファイルに分かれているのに対し、Environmentは「RUN開始時に1つ選ぶだけ」という単純な状態のため、**状態管理とDetection画面のUI描画を`environmentManager.js`1ファイルに統合**している。
+
+**新規追加**（`src/endless/`）:
+- `environments.js` — Environment6種（Normal Signal/Blue Spectrum/Signal Noise/Critical Logic/Deep Research/Unstable System）の定義データ（id/name/description/effects）
+- `environmentManager.js` — RUN開始時（Protocol Select完了直後）に表示するEnvironment Detection画面のDOM描画と、選択されたEnvironmentの効果参照（`getDifficultyTierOffset()`等、protocolManager.jsと同名の効果取得メソッドを持つ）。Unstable Systemのみ、選択時に他5種からランダムに1つを内部的に「解決先」として選び直す特殊処理を持つ
+- `environmentArchive.js` — MODE SELECTから開ける発見済み/未発見Environment一覧画面（researchLab.js/protocolArchive.jsと同じ「状態を持たず都度saveを読んで再描画する」設計）。Environmentには解放条件が無く、一度選んでRUNを開始すれば発見済みになる
+
+**部分修正**:
+- `src/endless/endless.js` — `_handleProtocolSelected()`がRUN初期化へ直行するのをやめ、`environmentManager.show()`（Environment Detection画面）を挟むよう変更。`_handleEnvironmentSelected()`を新設。スコア計算・Difficulty Tier計算・Event発生判定・Fragment獲得計算の各所にEnvironmentの効果を追加（後述）
+- `src/endless/endlessGame.js` — コンストラクタに`environmentManager`を追加。Difficulty Tierの算出をProtocol分+Environment分の合計に変更。`_generateWithRetry()`にBlue Spectrum用の「複数候補からBLUE比率が最も高いものを選ぶ」ロジックを追加（**generator.js/solver.js自体は一切変更していない**。既存のリトライ機構をそのまま使った事後選抜による実現）
+- `src/endless/eventManager.js` — `shouldTrigger()`に省略可能な`rateMultiplier`引数を追加（Signal Noise用。省略時は既存と完全に同じ挙動）
+- `src/endless/endlessSave.js` — `logicColor.endless.v1`へ`unlockedEnvironments`（要求仕様の`unlockedEnvironment`を、既存の`unlockedProtocols`と表記を揃えて複数形にしたもの）・`discoveredEnvironmentCount`を追加
+- `index.html` — 新規画面`#screen-environmentdetect`（Environment Detection、6枚のカード）・`#screen-environmentarchive`（Archive）、MODE SELECTに「ENVIRONMENT ARCHIVE」ボタン、GAME画面の`#endlessHud`に現在のEnvironmentを表示する`#endlessEnvironmentValue`を追加。`src/endless/environments.js`/`environmentManager.js`/`environmentArchive.js`の`<script>`タグを追加
+
+## Environment（初期実装6種）
+
+| 名前 | 効果 |
+| --- | --- |
+| Normal Signal | 効果なし |
+| Blue Spectrum | 生成される問題がBLUEの多い構成に偏る。BLUEマスの割合が高いほど獲得スコアが最大+30% |
+| Signal Noise | Event Nodeの発生率が+30% |
+| Critical Logic | PERFECTボーナスが×2。その代わりミス（タイムアップ）時に失うライフが2倍 |
+| Deep Research | 目標Difficulty Tierが+1段階。その代わりProtocol Fragmentの獲得量が×2 |
+| Unstable System | RUN開始時、他5種からランダムに1つの効果を借用する（開始するまで何が出るか分からない） |
+
+いずれもProtocolの効果（`protocolManager.js`）とは完全に独立した「もう1系統の効果ソース」として計算に加わる。加算/乗算の合成ルールもProtocol側と共通（difficultyTierOffset等は加算、scoreMultiplier系は乗算）で、例えばOverclock Protocol（Tier+1）とDeep Research Environment（Tier+1）を両方選べば目標Tierは合計+2される。
+
+## Flow変更
+
+```
+START → Protocol Select → Environment Detection → RUN開始
+```
+
+Protocol Selectでの選択完了後、続けてEnvironment Detection画面が表示され、6枚のカードから1つを選ぶとRUNが開始する。Environment Detectionの「‹ PROTOCOL SELECT」ボタンで前段のProtocol Selectへ戻ることもでき、その際は選び直しでActive Protocolが重複しないよう`protocolManager`を一度リセットしてから戻る。
+
+## Archive
+
+`environmentArchive.js`がMODE SELECTの「ENVIRONMENT ARCHIVE」ボタンから開く。`DISCOVERED n / 6`のヘッダーと、解放条件を持たないシンプルな一覧を表示する。発見済みは名前・効果説明をそのまま表示、未発見は`???`のみ（Protocol Archiveと異なり解放条件のヒントは無い＝選べば誰でもすぐ発見できるため）。
+
+## Save
+
+`logicColor.endless.v1`へ以下を追加（既存フィールドは無変更）:
+- `unlockedEnvironments` — 一度でも選んでRUNを開始したことがあるEnvironment id一覧（初期値は空配列）
+- `discoveredEnvironmentCount` — `unlockedEnvironments.length`のミラー（Archive表示用）
+
+保存タイミングはProtocol Archiveの`unlockProtocol()`と同じく即時（RUN開始時点で、選んだEnvironment・Unstable Systemが実際に解決した先の両方を記録する）。
+
+## テスト
+
+jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上で本セクション作成時に実施。Phase A〜Cと同じフック手法で本番の`EndlessMode`インスタンスを直接検証した）で以下31項目を検証し、全てPASSした:
+
+- [x] Environment生成（START RUN→Protocol Select→Environment Detectionの順で画面が遷移し、6枚のカードが表示されること。Detection画面の「戻る」でProtocol Selectへ戻った際にActive Protocolが重複しないことを確認）
+- [x] 効果反映（Overclock Protocol+Deep Research EnvironmentのDifficulty Tier合算(+2)、Deep ResearchでのFragment獲得量2倍、Analyst Protocol×Critical Logic EnvironmentでのPERFECTボーナス合成計算(実際のスコア424と手計算値の完全一致)、Critical Logicでのミス時ライフ損失2倍、Blue Spectrumでの生成問題BLUE比率バイアス（6回試行の平均でバイアス無しを明確に上回ることを統計的に確認）、Unstable Systemのランダム解決とHUD表示を個別に検証）
+- [x] Archive表示される（発見済み/未発見の件数、`???`表示、`save.getUnlockedEnvironments()`との整合を確認）
+- [x] 保存される（Environment選択時に`unlockedEnvironments`/`discoveredEnvironmentCount`が即時更新されることを確認）
+- [x] Protocolと併用できる（同一RUN中にProtocol（Analyst）とEnvironment（Critical Logic）の両方がActiveであり、両者の効果が同じスコア計算に同時に（乗算で）反映されることを確認）
+- [x] （追加確認）RUN中断でEnvironment状態（`selectedId`/`resolvedId`）がリセットされること、Endless以外（通常STAGE/TUTORIAL）のフローに影響が無いことも確認済み
+
+## 今後の拡張余地
+
+- Environmentには解放条件が無く6種とも初回から選択可能にした。Protocol Phase Cのような「発見でアンロック」ではなく「発見（＝選択した記録）を集める」だけのコレクション要素として設計している。将来的にProtocol同様の解放条件を持たせる拡張も可能（`unlock`フィールドをprotocols.jsと同じ形式で追加するだけで対応できる設計にしてある）
+- Environment×Protocolのシナジー（特定の組み合わせで追加ボーナス）は今回実装していない。Protocol Synergy（`protocolSynergy.js`）と同じ仕組みを転用しやすい設計にはしてある
+- Blue Spectrumの「BLUEの多い構成に偏る」は、generator.js自体を変更せず既存のリトライ生成から事後選抜する方式で実現した。既存のmaxAttempts=5の枠内で行っているため生成速度への影響は小さいが、より強いバイアスをかけたい場合は候補数を増やす調整の余地がある
+- Unstable Systemが選んだ結果（`resolvedId`）はHUDに表示されるのみで、Environment Archiveでは「Unstable Systemを選んだ」という記録と「実際に解決したEnvironment」の両方がそれぞれ独立に発見済みとして記録される。この挙動は意図的（運が良ければ1回のUnstable選択で2つ発見できる）だが、仕様として明記されていなかったため実装時の判断である旨をここに記載する
