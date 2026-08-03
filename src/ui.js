@@ -50,6 +50,7 @@
           environmentDetect: document.getElementById('screen-environmentdetect'),
           environmentArchive: document.getElementById('screen-environmentarchive'),
           map: document.getElementById('screen-map'),
+          researchMap: document.getElementById('screen-researchmap'),
           researchLab: document.getElementById('screen-researchlab'),
           endlessResult: document.getElementById('screen-endlessresult')
         },

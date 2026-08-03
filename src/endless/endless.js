@@ -48,7 +48,7 @@
     ProtocolManager, ProtocolSelect, ProtocolSignal, ProtocolArchive,
     ProtocolUnlock, ProtocolFragment,
     EnvironmentManager, EnvironmentArchive,
-    MapGenerator, MapUI, DifficultyManager
+    MapGenerator, MapUI, DifficultyManager, ResearchMapScreen
   } = G;
 
   const STARTING_LIFE = 3;
@@ -102,8 +102,16 @@
       this.environmentArchive = new EnvironmentArchive({ ui, save: this.save });
       this.mapUI = new MapUI({ ui, protocolManager: this.protocolManager });
       this.mapUI.onSelect = node => this._handleMapNodeSelected(node);
+      this.researchMap = new ResearchMapScreen({ ui });
+      this.researchMap.onResume = () => this.ui.showScreen('map');
+      this.researchMap.onExit = () => {
+        if (global.confirm('RUNを中断してMODE SELECTへ戻りますか？（このRUNの記録は残りません）')) {
+          this.exitRun();
+        }
+      };
       this.eventManager = new EventManager();
 
+      this.visitedNodes = []; // 今RUNで実際に通ってきたNode（リサーチマップ画面の表示用、RUNごとにリセット）
       this.depth = 0;
       this.score = 0;
       this.maxLife = STARTING_LIFE;
@@ -138,6 +146,8 @@
         endlessTotalRuns: document.getElementById('endlessTotalRuns'),
         endlessTotalBossClear: document.getElementById('endlessTotalBossClear'),
         endlessMemoryFragments: document.getElementById('endlessMemoryFragments'),
+
+        mapOverviewBtn: document.getElementById('mapOverviewBtn'),
 
         endlessHud: document.getElementById('endlessHud'),
         endlessProtocolValue: document.getElementById('endlessProtocolValue'),
@@ -179,6 +189,25 @@
       if (this.el.environmentArchiveBackBtn) {
         this.el.environmentArchiveBackBtn.addEventListener('click', () => this.showModeSelect());
       }
+      if (this.el.mapOverviewBtn) {
+        this.el.mapOverviewBtn.addEventListener('click', () => this._showResearchMap());
+      }
+    }
+
+    /** MAP画面の🗺️ボタンから呼ばれる。現在のRUN状況をリサーチマップ画面に渡して表示する */
+    _showResearchMap() {
+      this.researchMap.show({
+        depth: this.depth,
+        life: this.life,
+        maxLife: this.maxLife,
+        score: this.score,
+        fragments: this.save.getProtocolFragments() + this.protocolFragmentsThisRun,
+        visitedNodes: this.visitedNodes,
+        ownedUpgrades: this.upgradeManager.getOwnedList(),
+        activeProtocols: this.protocolManager.getActiveDefs(),
+        activeSynergies: this.protocolManager.getActiveSynergies(),
+        puzzleHistory: this.save.getPuzzleHistory()
+      });
     }
 
     /** ---------------- 画面遷移 ---------------- */
@@ -247,6 +276,7 @@
     _initializeRun() {
       clearTimeout(this._advanceTimer);
       this.upgradeManager.reset();
+      this.visitedNodes = [];
       this.depth = 0;
       this.score = 0;
       // Explorer Protocol所持時、開始時の最大ライフに反映する（Environment側にライフ効果は無い）
@@ -424,6 +454,9 @@
         this._enterNode(node.resolvedNode);
         return;
       }
+
+      // リサーチマップ画面表示用に、実際に確定したNode種類をこのDepthの記録として残す
+      this.visitedNodes.push({ depth: this.depth, type: node.type, name: node.name, icon: node.icon });
 
       switch (node.type) {
         case 'elite':

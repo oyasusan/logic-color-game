@@ -1351,3 +1351,16 @@ jsdom + 実サーバー配信のHTML/JSを用いた統合テスト（Node.js上�
 - 11×11以上のサイズ対応には、generator.jsの生成アルゴリズム自体の改良（現在の「ランダム完成盤面→掘り出し」方式以外のアプローチ、あるいはWeb Worker化による非同期生成でタイムアウト制約を緩和する等）が必要
 - Tier3以降のPuzzle Modifier付与確率（30%）や、Elite撃破ボーナス（スコア×1.5・Fragment+2）は初期バランスであり、実プレイでの調整余地が大きい
 - Modifier同士の相性・シナジー（Protocol Synergyのような組み合わせボーナス）は今回実装していない
+
+## リサーチマップ画面追加
+
+ENDLESS RESEARCHのMAP画面（分岐候補から次の1歩を選ぶ既存画面）に🗺️ボタンを追加し、現在のRUNの進行状況を俯瞰できる読み取り専用の「リサーチマップ」画面（`src/endless/researchMap.js`、`#screen-researchmap`）を新設した。
+
+- レイヤー構成はDepth 0-10/11-25/26-50/51+の4層（Surface Research/Data Archive/Deep Analysis/Unknown Core）で固定。この境界は`puzzleTier.js`のTier1-4境界および`boss.js`のBOSS_DEPTHS(10/25/50)と完全に一致させている（レイヤーを跨ぐには実際にそのDepthのBoss Nodeを突破する既存仕様と自然に噛み合うため）
+- 表示するNodeは実際に選んだ結果（`endless.js`が`_enterNode()`で記録する`visitedNodes`、RUNごとにリセット）のみを使い、未来の分岐は予測表示しない。現在Depthより先・現在より深いレイヤーは一律「未到達」としてロック表示する（Map Generation Systemが1歩ずつ分岐を生成する既存設計に対して誠実な表示にするための判断）
+- 現在地は`YOU ARE HERE`ラベル＋パルスアニメーションで強調。右側にDepthスケール（0/10/25/50/50+の目盛り、現在地ドット付き）を配置
+- ノードタップで種類・risk/reward・説明のポップアップを表示。凡例は`nodeTypes.js`の8種定義をそのまま流用し、表示の二重管理を避けている
+- 画面下部に5つのナビボタン（研究開始/リサーチマップ/アップグレード/プロトコル/メニュー）を配置。「研究開始」はMAP（分岐選択）画面へ戻るだけ、「アップグレード」「プロトコル」は所持アップグレード・アクティブProtocol/Synergyを一覧表示するパネルを開くだけ、右上の📋ボタンは`puzzleHistory`（直近の挑戦記録）を表示するだけで、いずれも既存の画面遷移・タイマー状態には触れない設計にした。「メニュー」だけは`window.confirm`で確認したうえで既存の`exitRun()`（RUN中断、記録は残らない）を呼ぶ
+- 進行中のタイマーがある`screen-game`（Puzzle出題中）からは開けない設計（分岐選択中の`screen-map`からのみ🗺️ボタンで開く）にすることで、タイマー競合やRUN状態の不整合を避けている
+
+jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除した）。RUN開始からProtocol Select→Environment Detection→複数Depth分のNode選択（実際のPuzzle/Eliteは`round.puzzle.answer`通りに盤面をタップしてクリアさせた）→リサーチマップを開いて4レイヤー表示・現在地マーカー・凡例9種・ノード詳細ポップアップ・未到達エリア表示・アップグレード/プロトコル/履歴パネル・ナビボタンでの画面遷移・RUN中断までの24項目を検証し、全項目PASSした。
