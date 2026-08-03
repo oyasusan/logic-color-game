@@ -25,7 +25,14 @@
         best: document.getElementById('endlessResultBest'),
         newBest: document.getElementById('endlessResultNewBest'),
         retryBtn: document.getElementById('endlessRetryBtn'),
-        titleBtn: document.getElementById('endlessResultTitleBtn')
+        titleBtn: document.getElementById('endlessResultTitleBtn'),
+
+        // STEP27: AI Analysis Risk/Reward System
+        deepestLayer: document.getElementById('endlessResultLayer'),
+        researchData: document.getElementById('endlessResultResearchData'),
+        protocolsFound: document.getElementById('endlessResultProtocolsFound'),
+        riskChain: document.getElementById('endlessResultRiskChain'),
+        unknownAnalysis: document.getElementById('endlessResultUnknownAnalysis')
       };
 
       if (this.el.retryBtn) {
@@ -37,7 +44,9 @@
     }
 
     /**
-     * @param {{depth:number, score:number, perfectCount:number}} runStats
+     * @param {{depth:number, score:number, perfectCount:number, researchData?:number,
+     *   deepestLayer?:number, protocolsFound?:number, riskChainMultiplier?:number,
+     *   unknownAnalysisCount?:number}} runStats
      * @param {{bestDepth:number, isNewBestDepth:boolean, isNewBestScore:boolean}} saveInfo
      */
     render(runStats, saveInfo) {
@@ -49,6 +58,13 @@
       if (this.el.newBest) {
         this.el.newBest.classList.toggle('hidden', !(saveInfo.isNewBestDepth || saveInfo.isNewBestScore));
       }
+
+      // STEP27: AI Analysis Risk/Reward System（RESEARCH REPORT）
+      if (this.el.deepestLayer) this.el.deepestLayer.textContent = `L${runStats.deepestLayer || 1}`;
+      if (this.el.researchData) this.el.researchData.textContent = String(runStats.researchData || 0);
+      if (this.el.protocolsFound) this.el.protocolsFound.textContent = String(runStats.protocolsFound || 0);
+      if (this.el.riskChain) this.el.riskChain.textContent = `x${(runStats.riskChainMultiplier || 1).toFixed(1)}`;
+      if (this.el.unknownAnalysis) this.el.unknownAnalysis.textContent = String(runStats.unknownAnalysisCount || 0);
     }
   }
 

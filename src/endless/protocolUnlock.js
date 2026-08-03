@@ -70,6 +70,7 @@
       case 'eventTotal': return `Event発生 ${condition.value}回`;
       case 'perfectTotal': return `PERFECTクリア ${condition.value}回`;
       case 'life1AtDepth20': return 'ライフ1でDEPTH 20到達';
+      case 'metaRank': return `Research Rank ${condition.value} 到達`; // STEP28: Meta Progression
       default: return '???';
     }
   }

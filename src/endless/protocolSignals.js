@@ -60,6 +60,14 @@
       effects: { scoreMultiplier: 1.2, perfectBonusMultiplier: 1.2 },
       rarity: 'legendary',
       unlock: { type: 'bestDepthEver', value: 30 }
+    },
+    {
+      id: 'neural_link',
+      name: 'Neural Link',
+      description: 'コンボボーナスが+20%になる。その代わりライフ上限が-1される（STEP28: Meta ProgressionのResearch Rank2到達で解放）',
+      effects: { comboBonusMultiplier: 1.2, lifeBonus: -1 },
+      rarity: 'rare',
+      unlock: { type: 'metaRank', value: 2 }
     }
   ];
 

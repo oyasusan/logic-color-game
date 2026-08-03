@@ -680,6 +680,33 @@
     color: var(--gold);
   }
 
+  /* ---------- NODE RESULT (Recovery/Event等、盤面を介さないNodeの結果表示) ---------- */
+  .node-result-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 220px;
+  }
+
+  .node-result-icon { font-size: 40px; }
+
+  .node-result-title {
+    font-weight: 800;
+    letter-spacing: 2px;
+    font-size: 15px;
+    color: var(--gold);
+  }
+
+  .node-result-message {
+    font-size: 13px;
+    color: var(--text);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .node-result-card .primary-btn { margin-top: 6px; padding: 10px 32px; }
+
   #clearTitle {
     font-size: 20px;
     font-weight: 800;
@@ -1316,7 +1343,27 @@
 
   /* ---------- RESEARCH MAP (進行状況の俯瞰画面) ---------- */
   #screen-map .lab-header { position: relative; }
-  .map-overview-btn { position: absolute; left: 0; top: 0; }
+
+  .map-overview-btn {
+    position: absolute;
+    left: 0;
+    top: -2px;
+    width: 54px;
+    height: 46px;
+    flex-direction: column;
+    gap: 1px;
+    border-color: var(--blue);
+    box-shadow: 0 0 10px rgba(41, 224, 255, 0.3);
+  }
+
+  .map-overview-btn .map-overview-icon { font-size: 22px; line-height: 1; }
+
+  .map-overview-btn .map-overview-label {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--blue);
+  }
 
   .research-map-screen { padding-bottom: calc(var(--safe-bottom) + 14px); }
 
@@ -1329,11 +1376,11 @@
     font-weight: 700;
   }
 
-  .rm-stat { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+  .rm-stat { display: flex; align-items: center; gap: 4px; font-size: 15px; }
 
   .rm-objective {
     text-align: center;
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-dim);
     margin-bottom: 10px;
   }
@@ -1349,7 +1396,7 @@
   .rm-current-layer-name {
     font-weight: 800;
     letter-spacing: 1px;
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .rm-current-layer-name.l1 { color: var(--blue); }
@@ -1358,7 +1405,7 @@
   .rm-current-layer-name.l4 { color: var(--red); }
 
   .rm-current-depth {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-dim);
     margin: 2px 0 8px;
   }
@@ -1404,9 +1451,9 @@
     margin-bottom: 8px;
   }
 
-  .rm-layer-title { font-weight: 800; font-size: 12px; letter-spacing: 0.5px; }
-  .rm-layer-range { font-size: 10px; color: var(--text-dim); }
-  .rm-layer-status { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-dim); }
+  .rm-layer-title { font-weight: 800; font-size: 14px; letter-spacing: 0.5px; }
+  .rm-layer-range { font-size: 12px; color: var(--text-dim); }
+  .rm-layer-status { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--text-dim); }
   .rm-layer.current .rm-layer-status { color: var(--gold); }
   .rm-layer.completed .rm-layer-status { color: var(--green); }
 
@@ -1418,15 +1465,15 @@
   }
 
   .rm-node {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: 1px solid var(--line);
     background: var(--panel-2);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text);
     flex-shrink: 0;
   }
@@ -1446,7 +1493,7 @@
   }
 
   .rm-here-label {
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.5px;
     color: var(--gold);
@@ -1455,9 +1502,9 @@
   }
 
   .rm-node-pending {
-    width: 18px;
-    height: 18px;
-    font-size: 10px;
+    width: 19px;
+    height: 19px;
+    font-size: 12px;
     color: var(--text-dim);
     background: transparent;
     border-style: dashed;
@@ -1473,7 +1520,7 @@
     color: var(--text-dim);
   }
 
-  .rm-node-more { color: var(--text-dim); font-size: 16px; }
+  .rm-node-more { color: var(--text-dim); font-size: 18px; }
 
   .rm-depthscale {
     width: 40px;
@@ -1484,7 +1531,7 @@
   }
 
   .rm-depthscale-label {
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 1px;
     color: var(--text-dim);
     margin-bottom: 6px;
@@ -1503,7 +1550,7 @@
     position: absolute;
     left: 10px;
     transform: translateY(-50%);
-    font-size: 9px;
+    font-size: 11px;
     color: var(--text-dim);
     white-space: nowrap;
   }
@@ -1542,17 +1589,18 @@
     border-radius: 8px;
     background: var(--panel-2);
     border: 1px solid var(--line);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-dim);
   }
 
-  .rm-legend-icon { font-size: 12px; }
+  .rm-legend-icon { font-size: 14px; }
 
   .rm-nav {
     display: flex;
     justify-content: space-around;
-    border-top: 1px solid var(--line);
-    padding-top: 10px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .rm-nav-btn {
@@ -1564,12 +1612,12 @@
     background: transparent;
     border: none;
     color: var(--text-dim);
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 0.5px;
     padding: 4px 2px;
   }
 
-  .rm-nav-btn span { font-size: 16px; }
+  .rm-nav-btn span { font-size: 18px; }
   .rm-nav-btn.active { color: var(--blue); }
   .rm-nav-btn:active { transform: scale(0.94); }
 
@@ -1581,12 +1629,12 @@
     overflow-y: auto;
   }
 
-  .rm-node-detail-icon { font-size: 32px; }
-  .rm-node-detail-name { font-weight: 800; font-size: 15px; }
-  .rm-node-detail-meta { font-size: 11px; color: var(--gold); }
-  .rm-node-detail-desc { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .rm-node-detail-icon { font-size: 34px; }
+  .rm-node-detail-name { font-weight: 800; font-size: 17px; }
+  .rm-node-detail-meta { font-size: 13px; color: var(--gold); }
+  .rm-node-detail-desc { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
 
-  .rm-panel-card h3 { margin: 0 0 4px; font-size: 14px; letter-spacing: 1px; }
+  .rm-panel-card h3 { margin: 0 0 4px; font-size: 16px; letter-spacing: 1px; }
 
   .rm-panel-list { display: flex; flex-direction: column; gap: 6px; text-align: left; }
 
@@ -1602,9 +1650,369 @@
 
   .rm-panel-item.failed { border-color: var(--red); }
   .rm-panel-item.rm-synergy-item { border-color: var(--gold); }
-  .rm-panel-item-name { font-weight: 700; font-size: 12px; }
-  .rm-panel-item-desc { font-size: 11px; color: var(--text-dim); }
-  .rm-panel-empty { font-size: 12px; color: var(--text-dim); text-align: center; padding: 10px 0; }
+  .rm-panel-item-name { font-weight: 700; font-size: 14px; }
+  .rm-panel-item-desc { font-size: 13px; color: var(--text-dim); }
+  .rm-panel-empty { font-size: 14px; color: var(--text-dim); text-align: center; padding: 10px 0; }
+
+  /* ---------- STEP27: AI Analysis Risk/Reward System ---------- */
+
+  .map-extract-btn {
+    position: absolute;
+    right: 0;
+    top: -2px;
+    width: 54px;
+    height: 46px;
+    flex-direction: column;
+    gap: 1px;
+    border-color: var(--red);
+    box-shadow: 0 0 10px rgba(255, 63, 107, 0.3);
+  }
+
+  .map-extract-btn .map-overview-icon { font-size: 22px; line-height: 1; }
+
+  .map-extract-btn .map-overview-label {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--red);
+  }
+
+  /* AI Analysis Panel（Node選択カード内のSIGNAL DETECTED表示） */
+  .ai-panel { padding-top: 30px; text-align: left; }
+
+  .ai-signal-label {
+    display: block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--blue);
+    text-shadow: 0 0 6px rgba(41, 224, 255, 0.5);
+    margin-bottom: 2px;
+  }
+
+  .ai-analysis-block {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 6px 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+  }
+
+  .ai-analysis-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .ai-analysis-key { font-size: 10px; color: var(--text-dim); letter-spacing: 0.5px; }
+  .ai-analysis-value { font-size: 12px; font-weight: 800; }
+
+  .ai-analysis-value.threat-0, .ai-analysis-value.threat-1 { color: var(--green); }
+  .ai-analysis-value.threat-2                                { color: var(--blue); }
+  .ai-analysis-value.threat-3                                { color: var(--gold); }
+  .ai-analysis-value.threat-4, .ai-analysis-value.threat-5 {
+    color: var(--red);
+    text-shadow: 0 0 8px rgba(255, 63, 107, 0.5);
+  }
+
+  .ai-analysis-value.confidence-high   { color: var(--green); }
+  .ai-analysis-value.confidence-medium { color: var(--gold); }
+  .ai-analysis-value.confidence-low    { color: var(--text-dim); }
+
+  .ai-recommendation {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--blue);
+    margin-bottom: 6px;
+  }
+
+  .ai-panel-unknown {
+    border-color: var(--line);
+    background: repeating-linear-gradient(135deg, var(--panel), var(--panel) 8px, var(--panel-2) 8px, var(--panel-2) 16px);
+  }
+
+  .ai-unknown-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .ai-analyze-btn, .ai-ignore-btn {
+    flex: 1;
+    padding: 10px 4px;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .ai-analyze-btn {
+    border: 1px solid var(--blue);
+    background: var(--blue);
+    color: #04101c;
+  }
+
+  .ai-ignore-btn {
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text-dim);
+  }
+
+  /* Risk Chain（GAME画面のENDLESS HUD直下、endless.jsが更新する） */
+  .endless-risk-chain-badge {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 5px 10px;
+    margin: 0 auto 4px;
+    width: fit-content;
+    border-radius: 10px;
+    border: 1px solid var(--red);
+    color: var(--red);
+    box-shadow: 0 0 10px rgba(255, 63, 107, 0.3);
+  }
+
+  .endless-risk-chain-badge.hidden { display: none; }
+
+  .endless-hud-value.endless-research-data { color: var(--gold); }
+
+  /* Reward Choice（Elite Nodeクリア後の3択報酬） */
+  .reward-choice-card-outer { max-width: 340px; }
+  .reward-choice-title { font-size: 16px; font-weight: 800; letter-spacing: 2px; text-align: center; }
+  .reward-choice-subtitle { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; text-align: center; margin-bottom: 12px; }
+
+  .reward-choice-card {
+    position: relative;
+    padding-left: 40px;
+    text-align: left;
+    margin-bottom: 8px;
+    width: 100%;
+  }
+
+  .reward-choice-index {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--gold);
+  }
+
+  /* Extract System */
+  .extract-card { max-width: 320px; text-align: left; }
+  .extract-title { font-size: 16px; font-weight: 800; letter-spacing: 2px; text-align: center; margin-bottom: 12px; }
+
+  .extract-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+
+  .extract-key { color: var(--text-dim); }
+  .extract-value { font-weight: 800; color: var(--gold); }
+
+  .extract-recommendation {
+    margin-top: 10px;
+    font-size: 12px;
+    text-align: center;
+    color: var(--blue);
+  }
+
+  .extract-recommendation span { font-weight: 800; }
+
+  .extract-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+
+  /* RESEARCH REPORT（Result画面、STEP27追加分） */
+  .research-report-title {
+    margin: 14px 0 8px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-align: center;
+    color: var(--text-dim);
+  }
+
+  .research-report-grid { grid-template-columns: repeat(2, 1fr); }
+
+  .archive-updated-badge {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--green);
+    margin-top: 10px;
+  }
+
+  /* ---------- STEP28: NEURAL RESEARCH LAB (Meta Progression / Permanent Research System) ---------- */
+
+  #neuralLabModeSelectBtn { border-color: var(--gold); color: var(--gold); }
+
+  .neurallab-welcome {
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .neurallab-stats {
+    display: flex;
+    justify-content: space-around;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    margin-bottom: 14px;
+  }
+
+  .neurallab-stat { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .neurallab-stat-label { font-size: 9px; letter-spacing: 1px; color: var(--text-dim); }
+  .neurallab-stat-value { font-size: 15px; font-weight: 800; color: var(--gold); }
+
+  .neurallab-section-title {
+    margin: 16px 0 8px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+  }
+
+  .neurallab-category {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+
+  .neurallab-category-title { font-weight: 800; font-size: 13px; letter-spacing: 1px; color: var(--blue); }
+  .neurallab-category-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+
+  .neurallab-upgrade-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .neurallab-upgrade-item {
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+  }
+
+  .neurallab-upgrade-item.maxed { opacity: 0.7; border-color: var(--green); }
+
+  .neurallab-upgrade-name { font-weight: 700; font-size: 13px; }
+  .neurallab-upgrade-level { font-size: 10px; color: var(--text-dim); font-weight: 400; }
+  .neurallab-upgrade-desc { font-size: 11px; color: var(--text-dim); margin: 3px 0 8px; }
+
+  .neurallab-upgrade-maxed {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--green);
+  }
+
+  .neurallab-buy-btn, .neurallab-evolve-btn {
+    width: 100%;
+    padding: 8px 4px;
+    border-radius: 8px;
+    border: 1px solid var(--blue);
+    background: var(--blue);
+    color: #04101c;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  .neurallab-buy-btn:disabled, .neurallab-evolve-btn:disabled {
+    border-color: var(--line);
+    background: var(--panel-2);
+    color: var(--text-dim);
+  }
+
+  .neurallab-evolution-list, .neurallab-unlock-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .neurallab-evolution-item {
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+
+  .neurallab-evolution-name { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+  .neurallab-evolution-stage { font-size: 10px; color: var(--gold); font-weight: 400; }
+
+  .neurallab-unlock-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-size: 12px;
+  }
+
+  .neurallab-unlock-item.locked { opacity: 0.45; }
+  .neurallab-unlock-item.unlocked { border-color: var(--green); }
+  .neurallab-unlock-rank { font-weight: 800; color: var(--purple); font-size: 10px; letter-spacing: 1px; }
+
+  .neurallab-archive-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    margin-bottom: 14px;
+  }
+
+  .neurallab-archive-row { display: flex; justify-content: space-between; font-size: 12px; }
+  .neurallab-archive-row span:last-child { color: var(--gold); font-weight: 700; }
+
+  .neurallab-empty { font-size: 12px; color: var(--text-dim); text-align: center; padding: 10px 0; }
+
+  .neurallab-nav { display: flex; gap: 10px; margin: 10px 0; }
+  .neurallab-nav .ghost-btn, .neurallab-nav .primary-btn { flex: 1; }
+
+  /* Surface Arrival演出 */
+  .surface-arrival-card { max-width: 300px; text-align: center; }
+  .surface-arrival-title { font-size: 16px; font-weight: 800; letter-spacing: 3px; color: var(--blue); }
+  .surface-arrival-message { font-size: 12px; color: var(--text-dim); margin: 10px 0; }
+
+  .surface-arrival-progress-track {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    overflow: hidden;
+  }
+
+  .surface-arrival-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    transition: width 1.2s ease-out;
+  }
+
+  .surface-arrival-new-tech {
+    margin-top: 12px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--gold);
+    text-shadow: 0 0 8px rgba(255, 213, 74, 0.5);
+  }
+
+  /* Technology Installed演出 */
+  .tech-installed-card { text-align: center; }
+  .tech-installed-title { font-size: 15px; font-weight: 800; letter-spacing: 2px; color: var(--green); }
+  .tech-installed-name { font-size: 16px; font-weight: 800; margin: 8px 0; color: var(--text); }
+  .tech-installed-status { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); }
 
   /* ---------- スマホ最適化: レスポンシブ調整 ---------- */
 
@@ -1692,6 +2100,7 @@
       <div class="endless-stat"><span class="endless-stat-label">MEMORY FRAGMENTS</span><span id="endlessMemoryFragments" class="endless-stat-value">0</span></div>
     </div>
     <button type="button" id="endlessStartBtn" class="primary-btn">START RUN</button>
+    <button type="button" id="neuralLabModeSelectBtn" class="ghost-btn">🧪 NEURAL RESEARCH LAB</button>
     <button type="button" id="protocolArchiveBtn" class="ghost-btn">PROTOCOL ARCHIVE</button>
     <button type="button" id="environmentArchiveBtn" class="ghost-btn">ENVIRONMENT ARCHIVE</button>
   </section>
@@ -1759,9 +2168,16 @@
   <!-- ============ MAP (分岐するNode候補から次の1歩を選ぶ) ============ -->
   <section id="screen-map" class="screen">
     <div class="lab-header">
-      <button type="button" id="mapOverviewBtn" class="icon-btn map-overview-btn" aria-label="リサーチマップ">🗺️</button>
+      <button type="button" id="mapOverviewBtn" class="icon-btn map-overview-btn" aria-label="リサーチマップ">
+        <span class="map-overview-icon">🗺️</span>
+        <span class="map-overview-label">MAP</span>
+      </button>
       <h2 class="lab-title">MAP</h2>
       <div id="mapDepthLabel" class="lab-subtitle">DEPTH 1</div>
+      <button type="button" id="mapExtractBtn" class="icon-btn map-extract-btn" aria-label="EXTRACT">
+        <span class="map-overview-icon">🚀</span>
+        <span class="map-overview-label">EXIT</span>
+      </button>
     </div>
     <p class="lab-instruction">進む先を1つ選択する（Node種類ごとにrisk/rewardが異なる）</p>
     <div id="mapNodeCards" class="map-node-cards"></div>
@@ -1773,6 +2189,14 @@
       <button type="button" id="researchMapBackBtn" class="ghost-btn">‹ MAP</button>
       <h2>リサーチマップ</h2>
       <button type="button" id="researchMapArchiveBtn" class="icon-btn" aria-label="研究記録">📋</button>
+    </div>
+
+    <div class="rm-nav">
+      <button type="button" id="rmNavStart" class="rm-nav-btn"><span>⚔️</span>研究開始</button>
+      <button type="button" class="rm-nav-btn active"><span>🗺️</span>リサーチマップ</button>
+      <button type="button" id="rmNavUpgrade" class="rm-nav-btn"><span>🔬</span>アップグレード</button>
+      <button type="button" id="rmNavProtocol" class="rm-nav-btn"><span>📡</span>プロトコル</button>
+      <button type="button" id="rmNavMenu" class="rm-nav-btn"><span>☰</span>メニュー</button>
     </div>
 
     <div class="rm-stats-bar">
@@ -1804,14 +2228,6 @@
     </div>
 
     <div id="rmLegend" class="rm-legend"></div>
-
-    <div class="rm-nav">
-      <button type="button" id="rmNavStart" class="rm-nav-btn"><span>⚔️</span>研究開始</button>
-      <button type="button" class="rm-nav-btn active"><span>🗺️</span>リサーチマップ</button>
-      <button type="button" id="rmNavUpgrade" class="rm-nav-btn"><span>🔬</span>アップグレード</button>
-      <button type="button" id="rmNavProtocol" class="rm-nav-btn"><span>📡</span>プロトコル</button>
-      <button type="button" id="rmNavMenu" class="rm-nav-btn"><span>☰</span>メニュー</button>
-    </div>
 
     <!-- ノード詳細ポップアップ -->
     <div id="rmNodeDetail" class="overlay hidden">
@@ -1849,6 +2265,67 @@
         <h3>研究記録（直近）</h3>
         <div id="rmHistoryList" class="rm-panel-list"></div>
         <button type="button" id="rmHistoryPanelClose" class="ghost-btn">閉じる</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STEP28: NEURAL RESEARCH LAB (Meta Progression / Permanent Research System) ============ -->
+  <section id="screen-neurallab" class="screen neurallab-screen">
+    <div class="select-header">
+      <button type="button" id="neuralLabBackBtn" class="ghost-btn">‹ BACK</button>
+      <h2>NEURAL RESEARCH LAB</h2>
+      <span style="width:56px"></span>
+    </div>
+
+    <div class="neurallab-welcome">WELCOME BACK</div>
+
+    <div class="neurallab-stats">
+      <div class="neurallab-stat">
+        <span class="neurallab-stat-label">Research Data</span>
+        <span id="neuralLabDataValue" class="neurallab-stat-value">0</span>
+      </div>
+      <div class="neurallab-stat">
+        <span class="neurallab-stat-label">Research Level</span>
+        <span id="neuralLabRankValue" class="neurallab-stat-value">Lv.1 Observer</span>
+      </div>
+      <div class="neurallab-stat">
+        <span class="neurallab-stat-label">Available Research</span>
+        <span id="neuralLabAvailableValue" class="neurallab-stat-value">0</span>
+      </div>
+    </div>
+
+    <div id="neuralLabCategories" class="neurallab-categories"></div>
+
+    <h3 class="neurallab-section-title">PROTOCOL EVOLUTION</h3>
+    <div id="neuralLabEvolutionList" class="neurallab-evolution-list"></div>
+
+    <h3 class="neurallab-section-title">PERMANENT UNLOCKS</h3>
+    <div id="neuralLabUnlockList" class="neurallab-unlock-list"></div>
+
+    <h3 class="neurallab-section-title">RESEARCH ARCHIVE</h3>
+    <div id="neuralLabArchiveSummary" class="neurallab-archive-summary"></div>
+
+    <div class="neurallab-nav">
+      <button type="button" id="neuralLabExitBtn" class="ghost-btn">BACK TO TITLE</button>
+      <button type="button" id="neuralLabStartRunBtn" class="primary-btn">START NEW RESEARCH</button>
+    </div>
+
+    <!-- Surface Arrival演出（RUN終了後の帰還直後、一時的に表示） -->
+    <div id="surfaceArrivalOverlay" class="overlay hidden">
+      <div class="clear-card surface-arrival-card">
+        <div class="surface-arrival-title">SURFACE ARRIVAL</div>
+        <div class="surface-arrival-message">Uploading Research Data...</div>
+        <div class="surface-arrival-progress-track"><div id="surfaceArrivalProgressFill" class="surface-arrival-progress-fill"></div></div>
+        <div id="surfaceArrivalNewTech" class="surface-arrival-new-tech hidden">NEW TECHNOLOGY AVAILABLE</div>
+      </div>
+    </div>
+
+    <!-- Technology Installed演出（Research Tree購入・Protocol Evolution時） -->
+    <div id="technologyInstalledOverlay" class="overlay hidden">
+      <div class="clear-card tech-installed-card">
+        <div class="tech-installed-title">TECHNOLOGY INSTALLED</div>
+        <div id="techInstalledName" class="tech-installed-name"></div>
+        <div class="tech-installed-status">Activated</div>
       </div>
     </div>
   </section>
@@ -1894,9 +2371,15 @@
           <span class="endless-hud-label">TIME</span>
           <span id="endlessTimeValue" class="endless-hud-value endless-time">00:00</span>
         </div>
+        <div class="endless-hud-item">
+          <span class="endless-hud-label">DATA</span>
+          <span id="endlessResearchDataValue" class="endless-hud-value endless-research-data">0</span>
+        </div>
       </div>
       <!-- 発動中のProtocol Synergy表示（endless.jsが更新する。未発動の間はhidden） -->
       <div id="endlessSynergyBadge" class="endless-synergy-badge hidden"></div>
+      <!-- STEP27: Risk Chain（高危険Node連続選択時の警告）表示。chainCount=0の間はhidden -->
+      <div id="endlessRiskChainBadge" class="endless-risk-chain-badge hidden"></div>
       <!-- 取得済みアップグレードのバッジ一覧（endless.jsが更新する。無い間は空のまま） -->
       <div id="endlessUpgradeList" class="endless-upgrade-list"></div>
       <div id="statusBar">
@@ -1954,6 +2437,33 @@
           <span id="endlessResultBest" class="endless-result-value">0</span>
         </div>
       </div>
+
+      <!-- STEP27: RESEARCH REPORT（AI Analysis Risk/Reward System） -->
+      <h3 class="research-report-title">RESEARCH REPORT</h3>
+      <div class="endless-result-grid research-report-grid">
+        <div class="endless-result-item">
+          <span class="endless-result-label">DEEPEST LAYER</span>
+          <span id="endlessResultLayer" class="endless-result-value">L1</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">RESEARCH DATA</span>
+          <span id="endlessResultResearchData" class="endless-result-value">0</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">PROTOCOLS FOUND</span>
+          <span id="endlessResultProtocolsFound" class="endless-result-value">0</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">RISK CHAIN</span>
+          <span id="endlessResultRiskChain" class="endless-result-value">x1.0</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">UNKNOWN ANALYSIS</span>
+          <span id="endlessResultUnknownAnalysis" class="endless-result-value">0</span>
+        </div>
+      </div>
+      <div class="archive-updated-badge">ARCHIVE UPDATED</div>
+
       <div class="endless-result-buttons">
         <button type="button" id="endlessResultTitleBtn" class="ghost-btn">TITLE</button>
         <button type="button" id="endlessRetryBtn" class="primary-btn">RETRY</button>
@@ -1992,6 +2502,40 @@
     </div>
   </div>
 
+  <!-- ============ NODE RESULT (Recovery/Eventなど、盤面を介さず即座に解決するNodeの結果表示) ============ -->
+  <div id="nodeResultOverlay" class="overlay hidden">
+    <div class="clear-card node-result-card">
+      <span id="nodeResultIcon" class="node-result-icon"></span>
+      <div id="nodeResultTitle" class="node-result-title"></div>
+      <div id="nodeResultMessage" class="node-result-message"></div>
+      <button type="button" id="nodeResultContinueBtn" class="primary-btn">つづける</button>
+    </div>
+  </div>
+
+  <!-- ============ STEP27: REWARD CHOICE (Elite Nodeクリア直後の3択報酬) ============ -->
+  <div id="rewardChoiceOverlay" class="overlay hidden">
+    <div class="clear-card reward-choice-card-outer">
+      <div class="reward-choice-title">RESEARCH COMPLETE</div>
+      <div class="reward-choice-subtitle">SELECT REWARD</div>
+      <div id="rewardChoiceCards" class="lab-cards"></div>
+    </div>
+  </div>
+
+  <!-- ============ STEP27: EXTRACT (Research途中で自主的にRUNを終了する) ============ -->
+  <div id="extractOverlay" class="overlay hidden">
+    <div class="clear-card extract-card">
+      <div class="extract-title">EXTRACT ANALYSIS</div>
+      <div class="extract-row"><span class="extract-key">Current Data</span><span id="extractCurrentData" class="extract-value">0</span></div>
+      <div class="extract-row"><span class="extract-key">Potential Reward</span><span id="extractPotentialReward" class="extract-value">+0</span></div>
+      <div class="extract-row"><span class="extract-key">Failure Probability</span><span id="extractFailureProbability" class="extract-value">0%</span></div>
+      <div class="extract-recommendation">AI Recommendation: <span id="extractRecommendation">RETURN</span></div>
+      <div class="extract-buttons">
+        <button type="button" id="extractContinueBtn" class="ghost-btn">CONTINUE RESEARCH</button>
+        <button type="button" id="extractReturnBtn" class="primary-btn">RETURN TO SURFACE</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script src="src/board.js"></script>
@@ -2011,6 +2555,8 @@
   <script src="src/debug.js"></script>
   <script src="src/endless/map.js"></script>
   <script src="src/endless/endlessSave.js"></script>
+  <script src="src/endless/researchTree.js"></script>
+  <script src="src/endless/metaProgression.js"></script>
   <script src="src/endless/upgrades.js"></script>
   <script src="src/endless/rareUpgrades.js"></script>
   <script src="src/endless/upgradeManager.js"></script>
@@ -2026,6 +2572,7 @@
   <script src="src/endless/puzzleModifier.js"></script>
   <script src="src/endless/difficultyManager.js"></script>
   <script src="src/endless/boss.js"></script>
+  <script src="src/endless/aiAnalysis.js"></script>
   <script src="src/endless/mapGenerator.js"></script>
   <script src="src/endless/events.js"></script>
   <script src="src/endless/eventManager.js"></script>
@@ -2039,6 +2586,11 @@
   <script src="src/endless/environmentArchive.js"></script>
   <script src="src/endless/mapUI.js"></script>
   <script src="src/endless/researchMap.js"></script>
+  <script src="src/endless/riskChain.js"></script>
+  <script src="src/endless/unknownEvents.js"></script>
+  <script src="src/endless/rewardChoice.js"></script>
+  <script src="src/endless/extractManager.js"></script>
+  <script src="src/endless/neuralLab.js"></script>
   <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>

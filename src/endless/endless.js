@@ -48,7 +48,9 @@
     ProtocolManager, ProtocolSelect, ProtocolSignal, ProtocolArchive,
     ProtocolUnlock, ProtocolFragment,
     EnvironmentManager, EnvironmentArchive,
-    MapGenerator, MapUI, DifficultyManager, ResearchMapScreen
+    MapGenerator, MapUI, DifficultyManager, ResearchMapScreen,
+    AIAnalysis, RiskChain, UnknownEvents, RewardChoice, ExtractManager,
+    MetaProgression, NeuralLab
   } = G;
 
   const STARTING_LIFE = 3;
@@ -57,10 +59,13 @@
   const COMBO_REWARD_PER_STACK = 20;    // コンボ数×この値を加点（2連続なら+40、3連続なら+60…）
   const SPEED_BONUS_PER_SECOND = 5;     // parSecondsより1秒速くクリアするごとに加点
   const ADVANCE_DELAY_MS = 900;         // クリア/ミス演出とトーストを見る間を置いてから次の問題へ進む
+  const NODE_RESULT_AUTO_ADVANCE_MS = 2200; // Recovery/Event結果オーバーレイの自動送り時間（「つづける」タップでも即座に進める）
   const RECOVERY_BASE_INTERVAL = 3;     // Recovery Protocol未所持時は回復しない。所持時の基準クリア間隔
   const ELITE_SCORE_MULTIPLIER = 1.5;   // Elite Node撃破時の総獲得スコア倍率
   const ELITE_FRAGMENT_BONUS = 2;       // Elite Node撃破時に追加で獲得するProtocol Fragment数
   const RECOVERY_NODE_LIFE_AMOUNT = 1;  // Recovery Nodeで回復するライフ量
+  const RESEARCH_DATA_RATIO = 0.1;      // STEP27: 1クリアごとのReward獲得額のうちResearch Dataへ回る割合
+  const AI_WARNING_CHAIN_THRESHOLD = 2; // STEP27: Risk Chainがこのレベル以上になった瞬間にAI Warningトーストを出す
 
   class EndlessMode {
     /**
@@ -75,7 +80,13 @@
       this.save = new EndlessSaveStore();
       this.upgradeManager = new UpgradeManager();
       this.protocolManager = new ProtocolManager();
-      this.environmentManager = new EnvironmentManager({ ui });
+
+      // ---- STEP28: Meta Progression / Permanent Research System ----
+      // environmentManager/mapUIより先に作る（Rank解放Environmentのフィルタ・
+      // Advanced Analysisの解析確率に参照させるため）
+      this.metaProgression = new MetaProgression({ save: this.save });
+
+      this.environmentManager = new EnvironmentManager({ ui, metaProgression: this.metaProgression });
       this.round = new EndlessRoundController({
         ui, puzzleManager,
         upgradeManager: this.upgradeManager,
@@ -83,9 +94,12 @@
         environmentManager: this.environmentManager
       });
       this.result = new EndlessResultScreen({
-        onRetry: () => this.startRun(),
+        onRetry: () => this._showNeuralLab(true),
         onTitle: () => this._exitToTitle()
       });
+      this.neuralLab = new NeuralLab({ ui, save: this.save, metaProgression: this.metaProgression });
+      this.neuralLab.onStartRun = () => this.startRun();
+      this.neuralLab.onExit = () => this.showModeSelect();
       this.researchLab = new ResearchLab({ ui, upgradeManager: this.upgradeManager });
       this.researchLab.onSelect = def => this._handleUpgradeSelected(def);
       this.protocolSelect = new ProtocolSelect({ ui });
@@ -100,7 +114,7 @@
         this.protocolSelect.show();
       };
       this.environmentArchive = new EnvironmentArchive({ ui, save: this.save });
-      this.mapUI = new MapUI({ ui, protocolManager: this.protocolManager });
+      this.mapUI = new MapUI({ ui, protocolManager: this.protocolManager, metaProgression: this.metaProgression });
       this.mapUI.onSelect = node => this._handleMapNodeSelected(node);
       this.researchMap = new ResearchMapScreen({ ui });
       this.researchMap.onResume = () => this.ui.showScreen('map');
@@ -111,7 +125,20 @@
       };
       this.eventManager = new EventManager();
 
+      // ---- STEP27: AI Analysis Risk/Reward System ----
+      this.riskChain = new RiskChain();
+      this.rewardChoice = new RewardChoice();
+      this.rewardChoice.onSelect = opt => this._handleRewardChoiceSelected(opt);
+      this.extractManager = new ExtractManager();
+      this.extractManager.onReturn = bonus => this._handleExtractReturn(bonus);
+      this.extractManager.onContinue = () => { /* オーバーレイを閉じるだけ。MAP画面はそのまま */ };
+      this._pendingEliteReward = false; // Elite Nodeクリア直後、次のMAPへ戻る前にReward Choiceを挟むフラグ
+      this._firstMissConsumedThisRun = false; // STEP28: Emergency Recovery（初回ミス軽減）を使用済みか
+
       this.visitedNodes = []; // 今RUNで実際に通ってきたNode（リサーチマップ画面の表示用、RUNごとにリセット）
+      this.researchData = 0;          // STEP27: Extract Systemで使う蓄積リソース（RUNごとにリセット）
+      this.unknownAnalysisCount = 0;  // STEP27: このRUNでUnknown NodeをANALYZEした回数
+      this.maxRiskMultiplierThisRun = 1; // STEP27: このRUNで到達した最大Risk Chain倍率（Result画面表示用）
       this.depth = 0;
       this.score = 0;
       this.maxLife = STARTING_LIFE;
@@ -141,6 +168,7 @@
         protocolArchiveBackBtn: document.getElementById('protocolArchiveBackBtn'),
         environmentArchiveBtn: document.getElementById('environmentArchiveBtn'),
         environmentArchiveBackBtn: document.getElementById('environmentArchiveBackBtn'),
+        neuralLabBtn: document.getElementById('neuralLabModeSelectBtn'),
         endlessBestDepth: document.getElementById('endlessBestDepth'),
         endlessBestScore: document.getElementById('endlessBestScore'),
         endlessTotalRuns: document.getElementById('endlessTotalRuns'),
@@ -148,6 +176,7 @@
         endlessMemoryFragments: document.getElementById('endlessMemoryFragments'),
 
         mapOverviewBtn: document.getElementById('mapOverviewBtn'),
+        mapExtractBtn: document.getElementById('mapExtractBtn'),
 
         endlessHud: document.getElementById('endlessHud'),
         endlessProtocolValue: document.getElementById('endlessProtocolValue'),
@@ -158,7 +187,9 @@
         endlessScoreValue: document.getElementById('endlessScoreValue'),
         endlessComboValue: document.getElementById('endlessComboValue'),
         endlessTimeValue: document.getElementById('endlessTimeValue'),
-        endlessUpgradeList: document.getElementById('endlessUpgradeList')
+        endlessUpgradeList: document.getElementById('endlessUpgradeList'),
+        endlessResearchDataValue: document.getElementById('endlessResearchDataValue'),
+        endlessRiskChainBadge: document.getElementById('endlessRiskChainBadge')
       };
 
       this._bindEvents();
@@ -189,9 +220,40 @@
       if (this.el.environmentArchiveBackBtn) {
         this.el.environmentArchiveBackBtn.addEventListener('click', () => this.showModeSelect());
       }
+      if (this.el.neuralLabBtn) {
+        this.el.neuralLabBtn.addEventListener('click', () => this._showNeuralLab(false));
+      }
       if (this.el.mapOverviewBtn) {
         this.el.mapOverviewBtn.addEventListener('click', () => this._showResearchMap());
       }
+      if (this.el.mapExtractBtn) {
+        this.el.mapExtractBtn.addEventListener('click', () => this._showExtract());
+      }
+    }
+
+    /** STEP27: MAP画面の🚀EXTRACTボタンから呼ばれる。現在の蓄積状況をExtract確認画面に渡す */
+    _showExtract() {
+      this.extractManager.show({
+        researchData: this.researchData,
+        life: this.life,
+        maxLife: this.maxLife,
+        riskChainLevel: this.riskChain.getChainLevel()
+      });
+    }
+
+    /** Extract確認画面で「RETURN TO SURFACE」を選んだ時。ボーナスを加算してRUNを正常終了させる */
+    _handleExtractReturn(bonus) {
+      this.researchData += bonus;
+      this._endRun();
+    }
+
+    /**
+     * STEP28: NEURAL RESEARCH LAB画面を表示する。
+     * @param {boolean} showArrival RUN終了直後の帰還時のみtrue（Surface Arrival演出を出す）。
+     *   MODE SELECTから直接開く場合はfalse
+     */
+    _showNeuralLab(showArrival) {
+      this.neuralLab.show(showArrival);
     }
 
     /** MAP画面の🗺️ボタンから呼ばれる。現在のRUN状況をリサーチマップ画面に渡して表示する */
@@ -228,7 +290,9 @@
       this.upgradeManager.reset();
       this.protocolManager.reset();
       this.environmentManager.reset();
+      this.riskChain.reset();
       this._renderUpgrades();
+      this._renderRiskChainBadge();
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
       this.app.showTitle();
@@ -242,7 +306,9 @@
       this.upgradeManager.reset();
       this.protocolManager.reset();
       this.environmentManager.reset();
+      this.riskChain.reset();
       this._renderUpgrades();
+      this._renderRiskChainBadge();
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
       this.showModeSelect();
@@ -277,6 +343,13 @@
       clearTimeout(this._advanceTimer);
       this.upgradeManager.reset();
       this.visitedNodes = [];
+      this.riskChain.reset();
+      this._pendingEliteReward = false;
+      this._firstMissConsumedThisRun = false;
+      this.researchData = 0;
+      this.unknownAnalysisCount = 0;
+      this.maxRiskMultiplierThisRun = 1;
+      this._renderRiskChainBadge();
       this.depth = 0;
       this.score = 0;
       // Explorer Protocol所持時、開始時の最大ライフに反映する（Environment側にライフ効果は無い）
@@ -376,7 +449,8 @@
         bossClearTotal: this.save.getTotalBossClear() + this.bossClearCount,
         eventTotal: this.save.getTotalEventCount() + this.eventCountThisRun,
         perfectTotal: this.save.getTotalPerfectCount() + this.perfectCount,
-        life1AtDepth20: this._life1AtDepth20ThisRun ? 1 : 0
+        life1AtDepth20: this._life1AtDepth20ThisRun ? 1 : 0,
+        metaRank: this.metaProgression.getRankNumber() // STEP28: Meta Progression経由の解放（Neural Link等）
       };
 
       const newlyUnlockable = ProtocolUnlock.findNewlyUnlockable(snapshot, this.save.getUnlockedProtocols());
@@ -421,7 +495,10 @@
     /** 次のDepth（this.depth+1）の分岐候補を生成し、Map画面で提示する */
     _showMapChoices() {
       const nextDepth = this.depth + 1;
-      const choices = MapGenerator.generateChoices(nextDepth, this.protocolManager, this.environmentManager);
+      // STEP28: Deep Scan（researchTree.js）の所持レベルに応じて分岐候補数が増える
+      const choices = MapGenerator.generateChoices(
+        nextDepth, this.protocolManager, this.environmentManager, this.metaProgression.getExtraMapChoices()
+      );
       this.mapUI.show(nextDepth, choices);
     }
 
@@ -444,19 +521,20 @@
     }
 
     /**
-     * 選ばれたNodeの種類ごとに実処理へ振り分ける。Unknown Nodeは
-     * mapGenerator.js側で事前に決めておいた`resolvedNode`（実際の中身）へ
-     * 差し替えてから再帰的に振り分ける。
+     * 選ばれたNodeの種類ごとに実処理へ振り分ける。Unknown Nodeのみ
+     * `_resolveUnknownNode()`（STEP27 Unknown Node Event System）へ委譲する。
      */
     _enterNode(node) {
-      if (node.type === 'unknown' && node.resolvedNode) {
-        this.ui.showToast(`UNKNOWN NODE → ${node.resolvedNode.name}`);
-        this._enterNode(node.resolvedNode);
+      if (node.type === 'unknown') {
+        this._resolveUnknownNode(node);
         return;
       }
 
       // リサーチマップ画面表示用に、実際に確定したNode種類をこのDepthの記録として残す
       this.visitedNodes.push({ depth: this.depth, type: node.type, name: node.name, icon: node.icon });
+
+      // STEP27: このNodeの脅威度をRisk Chainへ反映する（Elite/Boss選択が連続するとスコア倍率が上がる）
+      this._registerRiskChain((AIAnalysis.analyze(node)).threatLevel);
 
       switch (node.type) {
         case 'elite':
@@ -467,7 +545,8 @@
           this._renderNodeIndicator();
           break;
         case 'event':
-          this.ui.showScreen('game');
+          // Puzzleを介さずその場で結果が確定するNodeのため、'game'画面へは遷移しない
+          // （遷移すると直前のPuzzle盤面が一瞬見えてしまう）。結果はオーバーレイで示す
           this._triggerEvent();
           break;
         case 'research_lab':
@@ -477,7 +556,6 @@
           this.protocolSignal.show(this.depth); // 内部でui.showScreen('protocolSignal')する
           break;
         case 'recovery':
-          this.ui.showScreen('game');
           this._handleRecoveryNode();
           break;
         default:
@@ -488,21 +566,189 @@
       }
     }
 
-    /** Recovery Node: パズルを介さず即座にライフを回復し、次のMap選択へ進む */
+    /** ---------------- STEP27: AI Analysis Risk/Reward System ---------------- */
+
+    /**
+     * Unknown Node Event System。旧来の「事前に決めたresolvedNodeへ即座に
+     * 差し替えるだけ」の単純解決を置き換え、ANALYZEしたAIが7種類のイベント
+     * （unknownEvents.js）のいずれかを検出する体験にする。mapGenerator.jsが
+     * 生成する`node.resolvedNode`自体は引き続き存在するが、Oracle Protocolの
+     * 事前表示（mapUI.js）専用の値として残すのみで、実際の解決処理はここが担う。
+     */
+    _resolveUnknownNode(node) {
+      // STEP28: Meta ProgressionのResearch Rankに応じて、Rank解放イベント(Temporal Echo等)も抽選対象になる
+      const event = UnknownEvents.pickEvent(this.metaProgression.getRankNumber());
+      this.unknownAnalysisCount++;
+      this.save.recordUnknownEvent(event.id);
+
+      if (event.effect.type === 'eliteShift') {
+        // Elite Signal Shift: 既存のElite Node処理へそのまま合流させる（visitedNodes記録・
+        // Risk Chain反映・round.start等はelite側の通常処理が担うため、ここではNode自体を
+        // 作り直して再帰するだけでよい）
+        this.ui.showToast(`UNKNOWN SIGNAL → ${event.name}`);
+        this._enterNode(MapGenerator.buildNode('elite', this.depth));
+        return;
+      }
+
+      this.visitedNodes.push({ depth: this.depth, type: 'unknown', name: 'DEEP UNKNOWN SIGNAL', icon: '❓' });
+      // Eliteへ変質しなかった場合のUnknown解析そのものは安全側として扱い、Risk Chainをリセットする
+      this._registerRiskChain(null);
+
+      const message = event.effect.type === 'bossShortcut'
+        ? this._applyBossShortcut()
+        : this._applyUnknownEvent(event);
+
+      this._renderHud();
+      this.ui.showNodeResult({
+        icon: '❓',
+        title: 'UNKNOWN SIGNAL ANALYSIS COMPLETE',
+        message: `Result: ${event.name} — ${message}`,
+        onContinue: () => this._afterUnknownResolved(),
+        autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS
+      });
+    }
+
+    /** Unknown解決後、System Corruption(lifeLoss)でライフが尽きていればRUN終了、それ以外はMAPへ戻る */
+    _afterUnknownResolved() {
+      if (this.life <= 0) {
+        this._endRun();
+      } else {
+        this._showMapChoices();
+      }
+    }
+
+    /** @returns {string} トースト/オーバーレイ表示用の効果結果メッセージ */
+    _applyUnknownEvent(event) {
+      switch (event.effect.type) {
+        case 'rareUpgrade': {
+          const candidates = (G.RareUpgrades ? G.RareUpgrades.ALL : []).filter(u => !this.upgradeManager.isMaxed(u.id));
+          if (candidates.length === 0) return 'No Rare Upgrade available';
+          const picked = candidates[Math.floor(Math.random() * candidates.length)];
+          this.upgradeManager.acquire(picked.id);
+          return `Rare Upgrade acquired: ${picked.name}`;
+        }
+        case 'protocolFragment':
+          this._gainProtocolFragments(event.effect.value);
+          return `Protocol Fragment +${event.effect.value}`;
+        case 'researchData':
+          this.researchData += event.effect.value;
+          return `Research Data +${event.effect.value}`;
+        case 'lifeLoss':
+          this.life = Math.max(0, this.life - event.effect.value);
+          return `Life -${event.effect.value}`;
+        case 'secretRoom': {
+          const fragmentBonus = 3;
+          const dataBonus = 100;
+          this._gainProtocolFragments(fragmentBonus);
+          this.researchData += dataBonus;
+          // STEP28: Archive Expansion「Secrets」カウント対象として記録する
+          this.save.recordSecretDiscovery('secret_room');
+          return `Protocol Fragment +${fragmentBonus}, Research Data +${dataBonus}`;
+        }
+        case 'temporalEcho': {
+          // STEP28: Meta ProgressionのResearch Rank4到達で解放される追加イベント
+          this._gainProtocolFragments(event.effect.fragmentValue);
+          this.researchData += event.effect.dataValue;
+          return `Protocol Fragment +${event.effect.fragmentValue}, Research Data +${event.effect.dataValue}`;
+        }
+        default:
+          return '';
+      }
+    }
+
+    /** @returns {string} 次のBoss Depthへ短絡接続する。既に全Bossを超えている場合は代替報酬を渡す */
+    _applyBossShortcut() {
+      const bossDepths = Object.keys(G.Boss.BOSS_DEPTHS).map(Number).filter(d => d > this.depth).sort((a, b) => a - b);
+      if (bossDepths.length === 0) {
+        this.researchData += 200;
+        return 'No BOSS ahead to shortcut — Research Data +200 instead';
+      }
+      this.depth = bossDepths[0] - 1; // 次にMAP選択を表示するdepth+1が丁度Boss Depthになるよう合わせる
+      return `Route shortcut to DEPTH ${bossDepths[0]} BOSS`;
+    }
+
+    /**
+     * Risk Chain System: 選ばれた（あるいは確定した）Nodeの脅威度をRiskChainへ反映し、
+     * HUDバッジを更新する。連続して閾値以上に達した瞬間だけAI Warningトーストを出す
+     * （毎回出すとうるさいため、レベルが上昇した瞬間のみに限定する）。
+     */
+    _registerRiskChain(threatLevel) {
+      const before = this.riskChain.getChainLevel();
+      this.riskChain.registerSelection(threatLevel);
+      const after = this.riskChain.getChainLevel();
+      this.maxRiskMultiplierThisRun = Math.max(this.maxRiskMultiplierThisRun, this.riskChain.getMultiplier());
+      this._renderRiskChainBadge();
+
+      if (after > before && after >= AI_WARNING_CHAIN_THRESHOLD) {
+        this.ui.showToast(`⚠ RESEARCH INSTABILITY Lv.${after} — Reward x${this.riskChain.getMultiplier().toFixed(1)} (System stability decreasing)`);
+      }
+    }
+
+    _renderRiskChainBadge() {
+      if (!this.el.endlessRiskChainBadge) return;
+      const level = this.riskChain.getChainLevel();
+      if (level > 0) {
+        this.el.endlessRiskChainBadge.textContent = `⚠ INSTABILITY Lv.${level} ×${this.riskChain.getMultiplier().toFixed(1)}`;
+        this.el.endlessRiskChainBadge.classList.remove('hidden');
+      } else {
+        this.el.endlessRiskChainBadge.textContent = '';
+        this.el.endlessRiskChainBadge.classList.add('hidden');
+      }
+    }
+
+    /** Reward Choice画面での選択（rewardChoice.onSelect経由）。Elite Nodeクリア直後にのみ表示される */
+    _handleRewardChoiceSelected(opt) {
+      const message = this._applyRewardChoiceEffect(opt);
+      this.ui.showToast(`REWARD SELECTED: ${opt.name} — ${message}`);
+      this._renderHud();
+      this._showMapChoices();
+    }
+
+    _applyRewardChoiceEffect(opt) {
+      switch (opt.effect.type) {
+        case 'rareUpgrade': {
+          const candidates = (G.RareUpgrades ? G.RareUpgrades.ALL : []).filter(u => !this.upgradeManager.isMaxed(u.id));
+          if (candidates.length === 0) return 'No Rare Upgrade available';
+          const picked = candidates[Math.floor(Math.random() * candidates.length)];
+          this.upgradeManager.acquire(picked.id);
+          return `${picked.name}を獲得`;
+        }
+        case 'protocolFragment':
+          this._gainProtocolFragments(opt.effect.value);
+          return `Protocol Fragment +${opt.effect.value}`;
+        case 'researchData':
+          this.researchData += opt.effect.value;
+          return `Research Data +${opt.effect.value}`;
+        default:
+          return '';
+      }
+    }
+
+    /** Recovery Node: パズルを介さず即座にライフを回復し、結果をオーバーレイで示してから次のMap選択へ進む */
     _handleRecoveryNode() {
       const before = this.life;
       this.life = Math.min(this.maxLife, this.life + RECOVERY_NODE_LIFE_AMOUNT);
       const recovered = this.life - before;
-      this.ui.showToast(recovered > 0 ? `RECOVERY NODE: ライフ+${recovered}` : 'RECOVERY NODE: ライフは満タン');
       this._renderHud();
 
       clearTimeout(this._advanceTimer);
-      this._advanceTimer = setTimeout(() => this._showMapChoices(), ADVANCE_DELAY_MS);
+      this.ui.showNodeResult({
+        icon: '❤️',
+        title: 'RECOVERY',
+        message: recovered > 0 ? `ライフが${recovered}回復した` : 'ライフはすでに満タンだった',
+        onContinue: () => this._showMapChoices(),
+        autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS
+      });
     }
 
-    /** Deep Research Environment所持時、Protocol Fragmentの獲得量に倍率をかけて加算する */
+    /**
+     * Deep Research Environment所持時、Protocol Fragmentの獲得量に倍率をかけて加算する。
+     * STEP28: Protocol Synthesis（researchTree.js）の永続倍率もEnvironment側とは独立に乗算する
+     */
     _gainProtocolFragments(amount) {
-      this.protocolFragmentsThisRun += Math.round(amount * this.environmentManager.getFragmentMultiplier());
+      this.protocolFragmentsThisRun += Math.round(
+        amount * this.environmentManager.getFragmentMultiplier() * this.metaProgression.getFragmentGainMultiplier()
+      );
     }
 
     /** Boss/Elite Puzzle出現時、GAME画面のラベル・ENDLESS HUDの見た目を切り替える */
@@ -534,8 +780,15 @@
      * 導入により、Research Lab/Protocol Signal/Event Nodeの自動判定はここでは
      * 行わない（それぞれ独立したMap Nodeとしてプレイヤーが選ぶ対象になったため）。
      * 単純に次のDepthのMap選択画面を表示するだけになった。
+     * STEP27: Elite Nodeクリア直後は`_pendingEliteReward`が立っており、
+     * 通常のMap選択より先にReward Choice画面（3択報酬）を挟む。
      */
     _afterRoundEnd() {
+      if (this._pendingEliteReward) {
+        this._pendingEliteReward = false;
+        this.rewardChoice.show();
+        return;
+      }
       this._showMapChoices();
     }
 
@@ -544,7 +797,6 @@
     _triggerEvent() {
       const event = this.eventManager.pickEvent();
       const resultMessage = this._applyEvent(event);
-      this.ui.showToast(`EVENT: ${event.name} — ${resultMessage}`);
 
       // Phase C: Event Node発生そのものでProtocol Fragmentを獲得し、
       // Chaosの解放条件(Event発生10回)の進捗としてもカウントする
@@ -555,7 +807,13 @@
       this._renderHud();
 
       clearTimeout(this._advanceTimer);
-      this._advanceTimer = setTimeout(() => this._showMapChoices(), ADVANCE_DELAY_MS);
+      this.ui.showNodeResult({
+        icon: (G.NodeTypes.getType('event') || {}).icon || '✨',
+        title: `EVENT: ${event.name}`,
+        message: resultMessage,
+        onContinue: () => this._showMapChoices(),
+        autoAdvanceMs: NODE_RESULT_AUTO_ADVANCE_MS
+      });
     }
 
     /** @returns {string} トースト表示用の効果結果メッセージ */
@@ -597,6 +855,7 @@
       this.el.endlessDepthValue.textContent = String(this.depth);
       this.el.endlessScoreValue.textContent = String(this.score);
       this.el.endlessComboValue.textContent = this.combo > 0 ? `x${this.combo}` : '-';
+      if (this.el.endlessResearchDataValue) this.el.endlessResearchDataValue.textContent = String(this.researchData);
       this._renderLife();
       this._renderUpgrades();
     }
@@ -700,9 +959,22 @@
         // スコア倍率とProtocol Fragmentのボーナスを得る
         reward = Math.round(reward * ELITE_SCORE_MULTIPLIER);
         this._gainProtocolFragments(ELITE_FRAGMENT_BONUS);
+        // STEP27: Elite Nodeクリア後は通常のMap選択より先にReward Choice（3択報酬）を挟む
+        this._pendingEliteReward = true;
       }
 
+      // STEP27: Risk Chain倍率（高危険Node連続選択のボーナス）を、Boss/Elite固有の倍率とは
+      // 独立してさらに乗算する
+      reward = Math.round(reward * this.riskChain.getMultiplier());
+      // STEP28: Protocol Evolution（NEURAL RESEARCH LABで進化させたProtocol）による
+      // 追加ボーナス。所持中Protocolの進化段階の合計に応じて上乗せされる（未進化なら0）
+      const activeProtocolIds = this.protocolManager.getActiveDefs().map(d => d.id);
+      reward = Math.round(reward * (1 + this.metaProgression.getProtocolEvolutionScoreBonus(activeProtocolIds)));
+
       this.score += reward;
+      // STEP27: Research Data（Extract Systemで使う蓄積リソース）は総獲得スコアの一部として
+      // クリアのたびに少量加算される
+      this.researchData += Math.max(1, Math.round(reward * RESEARCH_DATA_RATIO));
 
       const recovered = this._tickLifeRegen();
       this._checkProtocolUnlocks();
@@ -757,7 +1029,12 @@
     /** 制限時間切れ（ミス）時（endlessGame.jsのonTimeout経由） */
     _handleRoundTimeout(stats) {
       // Critical Logic Environment所持時、ミスで失うライフが倍加する
-      const lifeLoss = Math.max(1, Math.round(1 * this.environmentManager.getMissPenaltyMultiplier()));
+      let lifeLoss = Math.max(1, Math.round(1 * this.environmentManager.getMissPenaltyMultiplier()));
+      // STEP28: Emergency Recovery（researchTree.js）所持時、RUN中最初のミスに限り軽減する
+      if (!this._firstMissConsumedThisRun) {
+        this._firstMissConsumedThisRun = true;
+        lifeLoss = Math.max(0, lifeLoss - this.metaProgression.getFirstMissLifeReduction());
+      }
       this.life -= lifeLoss;
       // Backup Memoryアップグレード: ミスしてもコンボを維持する
       if (!this.upgradeManager.hasEffectType('keepComboOnMiss')) {
@@ -826,6 +1103,10 @@
       this._renderProtocolBadge();
       this.environmentManager.reset();
       this._renderEnvironmentBadge();
+      // STEP27: Risk ChainもRUN限定の状態のため、結果確定後にリセットする
+      const finalRiskChainMultiplier = this.maxRiskMultiplierThisRun;
+      this.riskChain.reset();
+      this._renderRiskChainBadge();
 
       const saveResult = this.save.recordRun({
         depth: this.depth,
@@ -834,10 +1115,22 @@
         memoryFragmentsGained: this.memoryFragmentsThisRun,
         eventCountGained: this.eventCountThisRun,
         perfectCountGained: this.perfectCount,
-        protocolFragmentsGained: this.protocolFragmentsThisRun
+        protocolFragmentsGained: this.protocolFragmentsThisRun,
+        researchDataGained: this.researchData,
+        riskChainMultiplierThisRun: finalRiskChainMultiplier,
+        unknownAnalysisCountThisRun: this.unknownAnalysisCount
       });
       this.result.render(
-        { depth: this.depth, score: this.score, perfectCount: this.perfectCount },
+        {
+          depth: this.depth,
+          score: this.score,
+          perfectCount: this.perfectCount,
+          researchData: this.researchData,
+          deepestLayer: G.PuzzleTier ? G.PuzzleTier.getTierNumber(this.depth) : 1,
+          protocolsFound: this.save.getUnlockedProtocols().length,
+          riskChainMultiplier: finalRiskChainMultiplier,
+          unknownAnalysisCount: this.unknownAnalysisCount
+        },
         {
           bestDepth: this.save.getBestDepth(),
           isNewBestDepth: saveResult.isNewBestDepth,

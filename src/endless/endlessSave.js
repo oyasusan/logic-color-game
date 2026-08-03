@@ -39,11 +39,26 @@
       discoveredEnvironmentCount: 0, // unlockedEnvironments.lengthのミラー（Archive表示用）
 
       // ---- Puzzle Evolution System: Puzzle Archive（履歴保存） ----
-      puzzleHistory: [] // 直近PUZZLE_HISTORY_LIMIT件のPuzzle挑戦記録（新しい順ではなく古い順に追加、上限超過分は先頭から破棄）
+      puzzleHistory: [], // 直近PUZZLE_HISTORY_LIMIT件のPuzzle挑戦記録（新しい順ではなく古い順に追加、上限超過分は先頭から破棄）
+
+      // ---- STEP27: AI Analysis Risk/Reward System ----
+      discoveredUnknownEvents: [],   // ANALYZEで一度でも遭遇したUnknown Event id一覧（unknownEvents.js参照）
+      researchDataTotal: 0,          // Research Dataの生涯累計EARNED（減らない。統計/Rank計算用）
+      maxRiskChainMultiplierEver: 1, // 生涯で到達した最大Risk Chain倍率
+      totalUnknownAnalysisCount: 0,  // 生涯のUnknown Node ANALYZE回数
+      researchHistory: [],           // 直近RESEARCH_HISTORY_LIMIT件のRUNサマリー（古い順に追加）
+
+      // ---- STEP28: Meta Progression / Permanent Research System ----
+      permanentResearchData: 0,   // 現在の使用可能残高（researchDataTotalとは別で、購入すると減る）
+      researchTreeLevels: {},     // { [researchTree.jsのid]: 購入済みレベル(0〜maxLevel) }
+      unlockedTechnologies: [],   // Permanent Unlock Systemで解放済みの技術id一覧（metaProgression.js RANK_GATES参照）
+      protocolEvolution: {},      // { [protocol id]: 進化段階(0=Basic/1=Advanced/2=Quantum) }
+      secretsDiscovered: []       // Archive Expansion「Secrets」カウント用の発見済みsecret id一覧
     };
   }
 
-  const PUZZLE_HISTORY_LIMIT = 100; // 無制限に増え続けないよう、直近100件のみ保持する
+  const PUZZLE_HISTORY_LIMIT = 100;    // 無制限に増え続けないよう、直近100件のみ保持する
+  const RESEARCH_HISTORY_LIMIT = 50;   // STEP27: RUNサマリーの保持件数上限
 
   class EndlessSaveStore {
     constructor() {
@@ -74,7 +89,8 @@
     /**
      * 1回のRUN終了時に記録する。
      * @param {{depth:number, score:number, bossClearCount?:number, memoryFragmentsGained?:number,
-     *   eventCountGained?:number, perfectCountGained?:number, protocolFragmentsGained?:number}} result
+     *   eventCountGained?:number, perfectCountGained?:number, protocolFragmentsGained?:number,
+     *   researchDataGained?:number, riskChainMultiplierThisRun?:number, unknownAnalysisCountThisRun?:number}} result
      * @returns {{isNewBestDepth:boolean, isNewBestScore:boolean}}
      */
     recordRun(result) {
@@ -94,6 +110,31 @@
       this.data.totalEventCount += result.eventCountGained || 0;
       this.data.totalPerfectCount += result.perfectCountGained || 0;
       this.data.protocolFragments += result.protocolFragmentsGained || 0;
+
+      // ---- STEP27: AI Analysis Risk/Reward System ----
+      const researchDataGained = result.researchDataGained || 0;
+      const riskChainMultiplierThisRun = result.riskChainMultiplierThisRun || 1;
+      const unknownAnalysisCountThisRun = result.unknownAnalysisCountThisRun || 0;
+
+      this.data.researchDataTotal += researchDataGained;
+      // STEP28: 使用可能残高（Research Tree購入・Protocol Evolutionに使う）へも積み増す
+      this.data.permanentResearchData += researchDataGained;
+      if (riskChainMultiplierThisRun > this.data.maxRiskChainMultiplierEver) {
+        this.data.maxRiskChainMultiplierEver = riskChainMultiplierThisRun;
+      }
+      this.data.totalUnknownAnalysisCount += unknownAnalysisCountThisRun;
+
+      this.data.researchHistory.push({
+        depth: result.depth,
+        score: result.score,
+        researchData: researchDataGained,
+        riskChainMax: riskChainMultiplierThisRun,
+        unknownAnalysisCount: unknownAnalysisCountThisRun,
+        timestamp: Date.now()
+      });
+      if (this.data.researchHistory.length > RESEARCH_HISTORY_LIMIT) {
+        this.data.researchHistory.splice(0, this.data.researchHistory.length - RESEARCH_HISTORY_LIMIT);
+      }
 
       this.save();
       return { isNewBestDepth, isNewBestScore };
@@ -144,6 +185,12 @@
 
     getProtocolFragments() {
       return this.data.protocolFragments;
+    }
+
+    /** STEP28: Protocol Evolutionのコストとして消費する（残高不足の判定はmetaProgression.js側の責務） */
+    spendProtocolFragments(amount) {
+      this.data.protocolFragments = Math.max(0, this.data.protocolFragments - amount);
+      this.save();
     }
 
     getDiscoveredProtocolCount() {
@@ -204,6 +251,100 @@
     /** @returns {Array<Object>} 直近の記録から新しい順（配列末尾が最新のため反転して返す） */
     getPuzzleHistory() {
       return this.data.puzzleHistory.slice().reverse();
+    }
+
+    /** ---------------- STEP27: AI Analysis Risk/Reward System ---------------- */
+
+    /**
+     * Unknown NodeでANALYZEした結果のイベントidを発見済みとして記録する
+     * （unlockProtocol/unlockEnvironmentと同じく、RUN中でも都度即時保存する）。
+     */
+    recordUnknownEvent(id) {
+      if (this.data.discoveredUnknownEvents.indexOf(id) === -1) {
+        this.data.discoveredUnknownEvents.push(id);
+      }
+      this.save();
+    }
+
+    getDiscoveredUnknownEvents() {
+      return this.data.discoveredUnknownEvents.slice();
+    }
+
+    getResearchDataTotal() {
+      return this.data.researchDataTotal;
+    }
+
+    getMaxRiskChainMultiplierEver() {
+      return this.data.maxRiskChainMultiplierEver;
+    }
+
+    getTotalUnknownAnalysisCount() {
+      return this.data.totalUnknownAnalysisCount;
+    }
+
+    /** @returns {Array<Object>} 直近のRUNサマリーから新しい順 */
+    getResearchHistory() {
+      return this.data.researchHistory.slice().reverse();
+    }
+
+    /** ---------------- STEP28: Meta Progression / Permanent Research System ---------------- */
+
+    getPermanentResearchData() {
+      return this.data.permanentResearchData;
+    }
+
+    spendPermanentResearchData(amount) {
+      this.data.permanentResearchData = Math.max(0, this.data.permanentResearchData - amount);
+      this.save();
+    }
+
+    getResearchTreeLevel(id) {
+      return this.data.researchTreeLevels[id] || 0;
+    }
+
+    incrementResearchTreeLevel(id) {
+      this.data.researchTreeLevels[id] = this.getResearchTreeLevel(id) + 1;
+      this.save();
+    }
+
+    getResearchTreeLevels() {
+      return Object.assign({}, this.data.researchTreeLevels);
+    }
+
+    isTechnologyUnlocked(id) {
+      return this.data.unlockedTechnologies.indexOf(id) !== -1;
+    }
+
+    unlockTechnology(id) {
+      if (this.isTechnologyUnlocked(id)) return false;
+      this.data.unlockedTechnologies.push(id);
+      this.save();
+      return true;
+    }
+
+    getUnlockedTechnologies() {
+      return this.data.unlockedTechnologies.slice();
+    }
+
+    getProtocolEvolutionStage(protocolId) {
+      return this.data.protocolEvolution[protocolId] || 0;
+    }
+
+    setProtocolEvolutionStage(protocolId, stage) {
+      this.data.protocolEvolution[protocolId] = stage;
+      this.save();
+    }
+
+    /** @returns {boolean} 新規発見の場合true（Archive Expansion「Secrets」カウント用） */
+    recordSecretDiscovery(id) {
+      if (this.data.secretsDiscovered.indexOf(id) !== -1) return false;
+      this.data.secretsDiscovered.push(id);
+      this.save();
+      return true;
+    }
+
+    getSecretsDiscoveredCount() {
+      return this.data.secretsDiscovered.length;
     }
   }
 

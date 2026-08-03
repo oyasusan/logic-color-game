@@ -1364,3 +1364,77 @@ ENDLESS RESEARCHのMAP画面（分岐候補から次の1歩を選ぶ既存画面
 - 進行中のタイマーがある`screen-game`（Puzzle出題中）からは開けない設計（分岐選択中の`screen-map`からのみ🗺️ボタンで開く）にすることで、タイマー競合やRUN状態の不整合を避けている
 
 jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除した）。RUN開始からProtocol Select→Environment Detection→複数Depth分のNode選択（実際のPuzzle/Eliteは`round.puzzle.answer`通りに盤面をタップしてクリアさせた）→リサーチマップを開いて4レイヤー表示・現在地マーカー・凡例9種・ノード詳細ポップアップ・未到達エリア表示・アップグレード/プロトコル/履歴パネル・ナビボタンでの画面遷移・RUN中断までの24項目を検証し、全項目PASSした。
+
+### 改修: MAPアイコンの視認性向上、Recovery/Event Nodeの結果表示の分かりやすさ改善
+
+公開後のフィードバックで2点の改修を行った。
+
+- **MAPアイコンが小さく分かりにくい問題**: `screen-map`ヘッダーの🗺️ボタン（`mapOverviewBtn`）を34px→54×46pxに拡大し、アイコン単体だった表示を「アイコン＋"MAP"テキストラベル」の2段構成に変更、青系の枠線・グローを追加して押せるボタンだと分かりやすくした
+- **Recovery/Event Node選択時に「一瞬パズルが表示されてすぐ次画面に切り替わる」問題**: 原因は、これらのNodeは盤面操作を伴わないにもかかわらず`_enterNode()`が`this.ui.showScreen('game')`を呼んでいたため、直前にクリアした（または初期状態の）Puzzle盤面が一瞬だけ表示され、その直後にトースト表示→`ADVANCE_DELAY_MS`(900ms)後に強制的にMAP画面へ戻る、という流れが「何が起きたか分からないまま切り替わる」体験になっていたこと。
+  - 修正として、Recovery/Event Nodeでは`showScreen('game')`を呼ぶのをやめ、代わりに専用の**Node Resultオーバーレイ**（`#nodeResultOverlay`、`ui.js`の`showNodeResult()`/`hideNodeResult()`）を新設した。アイコン・タイトル・結果メッセージを表示しつつ`position:fixed`で画面全体を覆うため、裏の画面が何であっても（MAP画面の古い候補カードが残っていても）紛れない
+  - 自動送り（`NODE_RESULT_AUTO_ADVANCE_MS`=2200ms、以前の900msより長く読める時間を確保）と「つづける」ボタンによる即時スキップの両方に対応。ボタンを押せばすぐ次のMap選択画面へ進める
+  - Research Lab/Protocol Signal Nodeはもともと専用画面（`screen-researchlab`/`screen-protocolsignal`）へ遷移する設計で、盤面が一瞬映る問題は無かったため変更していない
+- jsdom統合テストで、MAPボタンのアイコン/ラベルspan、Recovery Node選択時に`screen-game`へ遷移しないこと・オーバーレイの内容・「つづける」ボタンでの復帰、Event Node選択時のオーバーレイ内容・自動送りタイマーでの復帰、の計16項目を検証し全項目PASSした
+
+### 改修2: リサーチマップ画面の文字サイズ拡大、ナビゲーションを画面上部へ移動
+
+さらなるフィードバックを受けて、リサーチマップ画面（`#screen-researchmap`）の視認性を追加改善した。
+
+- 画面内の文字サイズを全項目で2〜3px拡大（ステータスバー・目標テキスト・現在地バナー・レイヤー見出し/範囲/状態・ノードアイコン・凡例・下部ナビ・ノード詳細ポップアップ・各種パネルのテキスト等、`.rm-*`クラス全般）
+- 5つのナビボタン（研究開始/リサーチマップ/アップグレード/プロトコル/メニュー）を画面最下部からヘッダー直下（画面最上部）へ移動。画面最下部はスマホのブラウザUIのバー等と被ってタップしづらいという指摘のための変更で、`ui.js`側のロジック（`getElementById`でDOM位置に依存しない）は無変更のまま、HTML内の配置とCSS（`border-top`→`border-bottom`）のみを変更した
+
+## STEP27: AI Analysis Risk / Reward System
+
+Research MapのNode選択に「AI研究施設が未知の論理領域を解析する」体験を追加する要求仕様（STEP27）に基づき、既存のMap Generation System（`mapGenerator.js`/`mapUI.js`、1歩ずつ2〜3枚の分岐候補を生成する仕組み）を維持したまま、AI Analysis Panel・Unknown Node Event System・Reward Choice System・Risk Chain System・Extract Systemを追加した。
+
+**新規ファイル**:
+- `src/endless/aiAnalysis.js` — Node種類ごとの基準値+node.idから決定的に導く変動幅で、threatLevel(0-5、Unknownはnull)/rewardPrediction(0-100)/confidenceLevel(HIGH/MEDIUM/LOW)/recommendationを計算する状態を持たないモジュール。同じnode.idなら常に同じ結果になるため、再描画で数値がちらつかない
+- `src/endless/riskChain.js` — Threat Level3以上（高危険/Elite/Extreme）のNode選択が連続するとスコア倍率(1→1.2→1.5→1.8→2.2→2.6)が段階的に上昇し、Threat Level2以下の安全なNode選択でリセットされる`RiskChain`クラス。RUNごとにreset()されるメモリ上の状態のみ
+- `src/endless/unknownEvents.js` — Unknown NodeでANALYZEした際に発生する7種類のイベント（Rare Upgrade/Protocol Fragment/Research Data Surge/System Corruption(ライフ減少)/Elite Signal Shift/Secret Room/Boss Shortcut）の定義データ
+- `src/endless/rewardChoice.js` — Elite Nodeクリア直後に表示する3択報酬画面（Rare Upgrade/Protocol Fragment x2/Research Data +300の固定3枠）。専用の`.screen`は増やさずoverlay(`#rewardChoiceOverlay`)として実装
+- `src/endless/extractManager.js` — Research途中で自主的にRUNを終了し蓄積を確定させる「Extract」確認画面。overlay(`#extractOverlay`)として実装。Failure Probabilityは実際の判定に使わないAI演出専用の数値であることをコード上も明示している
+
+**既存ファイルの変更**:
+- `mapGenerator.js`: `buildNode()`の末尾で`AIAnalysis.analyze(node)`の結果をNodeへ付与する。Unknown Node自身の`resolvedNode`（既存のOracle Protocol事前表示用データ）にも自動的に解析結果が乗るため、Oracle所持時はresolvedNodeの本当の脅威度/報酬期待値まで覗き見できるようになった（既存の「resolvedNode.nameを覗く」機能はそのまま維持した上での追加）
+- `mapUI.js`: 通常Nodeカードは「RISK/REWARD」の代わりに「SIGNAL DETECTED」ラベル+Threat★+Reward Prediction%+AI Confidence+AI Recommendationを表示するAI Analysis Panelに変更。Unknown Nodeのみ専用パネル（"DEEP UNKNOWN SIGNAL"+???表示+ANALYZE/IGNOREの2ボタン）にした（button-in-buttonを避けるため外枠はbuttonではなくdivにしている）
+- `endless.js`: Unknown Node解決を`node.resolvedNode`への単純差し替えから`_resolveUnknownNode()`（7種イベント抽選）へ完全に置き換えた。Elite Signal Shift時は`MapGenerator.buildNode('elite', depth)`で新しいElite Nodeを作り`_enterNode()`へ再帰させることで、Risk Chain反映・visitedNodes記録・Reward Choice表示まで既存のElite処理にそのまま合流させている。Boss Shortcutは次のBoss Depthの直前まで`this.depth`を進めるだけで、既存の「Boss Depthでは分岐せず単独ノードになる」仕組みにそのまま乗せている
+- `endlessSave.js`: `discoveredUnknownEvents`/`researchDataTotal`/`maxRiskChainMultiplierEver`/`totalUnknownAnalysisCount`/`researchHistory`（直近50件のRUNサマリー）を追加
+- `endlessResult.js`: RESEARCH REPORTとしてDEEPEST LAYER/RESEARCH DATA/PROTOCOLS FOUND/RISK CHAIN/UNKNOWN ANALYSISを追加表示
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- 「Research Lab Experiment Choice」（要求仕様セクション6）は、既存の`researchLab.js`（3択からUpgradeを1つ選ぶ、Phase1から実装済み）が実質的に同じ体験を既に提供しているため、新規実装をせず既存機能をそのまま採用した。エントリーカードのAI Analysis Panel表示は他のNode種類と統一的に適用される
+- Research Data（Extract Systemで使う蓄積リソース）は、Elite Reward Choice/Unknown Event以外に、毎回のPuzzleクリア時にも獲得スコアの10%相当が少量加算されるようにした。Extract Systemに常に一定の意味を持たせるための設計判断
+- Risk Chainのスコア倍率は、既存のBoss/Elite固有倍率（`ELITE_SCORE_MULTIPLIER`等）とは独立してさらに乗算される。Unknown Node解析（Elite Shift以外の結果）は安全側としてChainをリセットする
+- AI Warningトースト（要求仕様セクション8）は、Risk Chainレベルが上昇した瞬間のみ表示する（毎回表示すると煩雑なため）。持続的な状態は既存の`endlessSynergyBadge`と同じパターンのHUDバッジ（`#endlessRiskChainBadge`）で表現する
+- STEP27のUIは既存のネオンテーマ（`--blue`/`--green`/`--gold`/`--red`/`--purple`）をそのまま踏襲し、継続的なスキャンアニメーション等の重い演出は追加していない（過去のフィードバックで「重いアニメーションは避ける」方針が既に確認されているため）
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを2本実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除した）。
+1. 通常プレイフロー: AIAnalysis/RiskChain/UnknownEventsの単体計算12項目、RUN開始→MAP画面のAI Analysis Panel表示確認、Risk Chainバッジの表示/非表示切り替え、Extract System（CONTINUE RESEARCH/RETURN TO SURFACE両方、Result画面への反映）、既存のSTAGE SELECT等への無影響、の計30項目
+2. Unknown Node 7種イベント個別検証: `UnknownEvents.pickEvent`を各イベントIDに一時的に固定し`_resolveUnknownNode()`を直接叩くことで、Rare Upgrade/Protocol Fragment/Research Data Surge/System Corruption（ライフ減少、0になった場合のRUN終了まで含む）/Secret Room/Boss Shortcut（次のBoss Depthへの短絡接続、Map候補がBoss単独になることまで確認）/Elite Signal Shift（実際にPuzzleが開始されクリア後Reward Choiceが出ることまで確認）の全7種を実際のコード経路で検証、計22項目
+全52項目PASS、ランタイムエラー無し。
+
+## STEP28: Meta Progression / Permanent Research System
+
+Endless Researchで獲得したResearch DataをRUNをまたいで恒久的な探索能力へ変換する、長期進行ループを追加する要求仕様（STEP28）に基づき実装した。既存のENDLESS RESEARCHのゲームループ（Protocol Select→Environment Detection→MAP→Puzzle→…→RUN終了）は完全に維持し、RUN終了後の帰還先として新画面「NEURAL RESEARCH LAB」を追加している。
+
+**新規ファイル**:
+- `src/endless/researchTree.js` — Research Tree（Analysis System/Protocol Development/Exploration System/Survival Systemの4カテゴリ、各1種の恒久アップグレード）の静的定義。コスト計算式`baseCost × (1 + currentLevel × 0.8)`は要求仕様に数値指定が無かったため設計した
+- `src/endless/metaProgression.js` — permanentResearchData（使用可能残高）・Research Tree購入・Research Rank計算・Permanent Unlock判定・Protocol Evolutionをまとめて扱う管理クラス。永続化はendlessSave.jsへ完全に委譲し、自身は状態を持たない
+- `src/endless/neuralLab.js` — 「NEURAL RESEARCH LAB」画面（`#screen-neurallab`）のDOM描画・購入イベント配線。Surface Arrival演出・Technology Installed演出もここで担当する
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `permanentResearchData`（使用可能残高。研究データの生涯累計`researchDataTotal`＝統計用とは別で、購入すると減る）・`researchTreeLevels`・`unlockedTechnologies`・`protocolEvolution`・`secretsDiscovered`を追加。既存の`load()`が`Object.assign(defaultData(), JSON.parse(raw))`で欠損項目を初期値補完する仕組みを流用しているため、STEP28で要求された「不足項目は初期値で補完する」Save Migrationは追加コード無しで自動的に満たされている
+- `protocolUnlock.js`: 汎用的な`unlock.type`判定の仕組み（`snapshot[type] >= value`）はそのままに、`metaRank`という新しい条件タイプを1行追加しただけで、Research Rank到達によるProtocol解放を実現した（既存のPhase C解放条件と全く同じ経路で動く）
+- `protocolSignals.js`/`environments.js`/`unknownEvents.js`: Permanent Unlock Systemの実例として、Research Rank2/3/4でそれぞれ1つずつ新規コンテンツ（Protocol「Neural Link」/Environment「Quantum Flux」/Unknown Event「Temporal Echo」）を追加。効果はいずれも各Managerが既存でサポートしている効果キーのみを使い、新しい合算ロジックの追加は不要にした
+- `environmentManager.js`: `_renderChoices()`/Unstable Systemの`_rollRandom()`をRank未達のEnvironmentを除外するようフィルタ（既存6種は`unlock`フィールドが無いため無影響）
+- `mapGenerator.js`: `generateChoices()`に`extraChoices`引数を追加（Deep Scan用、上限6枚にクランプ）
+- `mapUI.js`: Unknown Nodeの解析確率にAdvanced Analysis（researchTree.js）のロール判定を追加（Oracle Protocolと同じ表示経路を共有）
+- `endless.js`: metaProgression/neuralLabの生成・配線、Protocol Fragment獲得倍率・Risk Chain後の追加スコア倍率（Protocol Evolution）・Emergency Recoveryの初回ミス軽減・Research Rankのsnapshot反映・RUN終了後のSurface Arrival→Neural Lab遷移を追加
+
+**重要な設計判断（要求仕様に無く、こちらで決めた点）**:
+- Research Rank計算式（要求仕様に数値指定が無かったため設計）: `研究データ生涯累計÷500 + 購入Upgrade数×3 + 到達最深Layer×4 + Archive完成率(Protocols+Events平均)×15`のスコアをRANK_THRESHOLDS `[0,8,20,35,55,85]`と比較して0(Observer)〜5(Neural Architect=MAX)を判定する
+- 「Secret Layer」（Rank5解放）は、新たな探索深度帯を丸ごと追加する大規模拡張になるため、今回は「実績フラグ」として実装（`unlockedTechnologies`に記録、NEURAL RESEARCH LAB/Archiveに表示するのみ）に留めた。新規Protocol/Environment/Unknown Eventの3つは実際にゲームプレイへ反映される本物のコンテンツとして実装済み
+- Protocol Evolution（Basic→Advanced→Quantum）は、要求仕様の条件（Research Data・Fragment・Archive進行度）をそのまま採用しつつ、効果は「所持中Protocolの進化段階合計×10%のスコア倍率ボーナス」というシンプルな形にした（Protocol毎に異なる効果へ個別加算する設計は既存のprotocolManager.jsの合算ロジックへの侵襲が大きいため見送った）
+- RUN終了フローの変更は、RESULT画面の「TITLE」ボタンは既存通り即座にタイトルへ戻れるようにし（用事が済んだプレイヤーへの摩擦を増やさないため）、「RETRY」ボタンのみSurface Arrival→NEURAL RESEARCH LABを経由するよう変更した。MODE SELECT画面にも🧪ボタンを追加し、RUNを挟まずいつでもNEURAL RESEARCH LABを開けるようにしている
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テストを実施（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除した）。要求仕様セクション13の完了確認フロー（①RUN開始→②Puzzleクリア→③Research Data取得→④Extract→⑤Research Lab到達→⑥Upgrade購入→⑦Save→⑧次回Runで効果確認）を実際のコード経路で通し、旧セーブからのマイグレーション、Research Rank計算とPermanent Unlock（Protocol/Environment/Unknown Eventの3種すべて）、Protocol Evolution、MODE SELECTからの直接アクセス、既存のSTAGE SELECT等への無影響を含めて計46項目を検証、全項目PASS・ランタイムエラー無し。

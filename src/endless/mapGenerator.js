@@ -25,7 +25,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { NodeTypes, Boss, PuzzleTier, PuzzleModifier } = G;
+  const { NodeTypes, Boss, PuzzleTier, PuzzleModifier, AIAnalysis } = G;
 
   const CHOICE_COUNT = 3;
   const LAB_EVERY_DEPTH = 3;    // researchLab.jsのAPPEAR_EVERY_DEPTHと合わせる
@@ -45,23 +45,28 @@
     chaos: { key: 'unknown', multiplier: 2.5 }       // Unknown増加
   };
 
+  const MAX_CHOICE_COUNT = 6; // STEP28: Deep Scanで候補が増えても画面が破綻しないための上限
+
   /**
    * @param {number} depth これから挑む予定のDepth
    * @param {Object} [protocolManager] 所持Protocolに応じた重み補正に使う（省略可）
    * @param {Object} [environmentManager] Signal Noise Environmentによる重み補正に使う（省略可）
+   * @param {number} [extraChoices] STEP28: Deep Scan（researchTree.js）による追加候補数（省略可、0扱い）
    * @returns {Array<Object>} 選択可能なMap Nodeの配列（Boss出現Depthでは要素1つ）
    */
-  function generateChoices(depth, protocolManager, environmentManager) {
+  function generateChoices(depth, protocolManager, environmentManager, extraChoices) {
     if (Boss && Boss.isBossDepth(depth)) {
       return [buildNode('boss', depth)];
     }
+
+    const targetCount = Math.min(MAX_CHOICE_COUNT, CHOICE_COUNT + Math.max(0, extraChoices || 0));
 
     const choices = [];
     if (depth > 0 && depth % LAB_EVERY_DEPTH === 0) choices.push(buildNode('research_lab', depth));
     if (depth > 0 && depth % SIGNAL_EVERY_DEPTH === 0) choices.push(buildNode('protocol_signal', depth));
 
     const weights = getWeights(depth, protocolManager, environmentManager);
-    while (choices.length < CHOICE_COUNT) {
+    while (choices.length < targetCount) {
       choices.push(buildNode(weightedPick(weights), depth));
     }
 
@@ -146,6 +151,12 @@
       const resolvedTypeId = resolvable[Math.floor(Math.random() * resolvable.length)];
       node.resolvedNode = buildNode(resolvedTypeId, depth); // resolvableにunknown自身は含まれないため無限再帰しない
     }
+
+    // STEP27: AI Analysis Risk/Reward System。threatLevel/rewardPrediction/
+    // confidenceLevel等をNodeデータへ付与する。unknown自身はnull/LOW（???表示）に
+    // なるが、上でbuildNode()した`resolvedNode`は実際の種類として解析済みのため、
+    // Oracle Protocol所持時はそちらの解析結果をmapUI.js側が事前表示に使える
+    if (AIAnalysis) Object.assign(node, AIAnalysis.analyze(node));
 
     return node;
   }

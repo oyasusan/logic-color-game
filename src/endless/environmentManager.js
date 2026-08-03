@@ -10,10 +10,15 @@
  * RUNごとにreset()されるメモリ上の状態のみを持ち、効果自体はLocalStorageに
  * 保存しない（保存されるのは「発見済みEnvironment一覧」のみ。endlessSave.js参照）。
  *
- * Unstable System: 選択された時点でRUN開始時に他5種からランダムに1つを内部的に
- * 「解決先(resolved)」として選び直す。selectedId（プレイヤーが選んだ表示上の
+ * Unstable System: 選択された時点でRUN開始時に他のEnvironmentからランダムに1つを
+ * 内部的に「解決先(resolved)」として選び直す。selectedId（プレイヤーが選んだ表示上の
  * Environment＝常にUnstable System）と、resolvedId（実際に効果を持つEnvironment）を
  * 分けて保持する（他のEnvironmentではselectedId===resolvedId）。
+ *
+ * STEP28: Meta ProgressionのResearch Rankで解放されるEnvironment（`unlock`フィールド
+ * 付きの定義、現時点ではQuantum Flux 1種）は、metaProgression未到達の間は候補にも
+ * Unstable Systemの抽選対象にも出さない（既存6種は`unlock`フィールドが無いため常に
+ * 対象のまま、後方互換）。
  */
 (function (global) {
   'use strict';
@@ -25,9 +30,11 @@
     /**
      * @param {Object} deps
      * @param {Object} deps.ui 既存UIインスタンス（showScreenを再利用する）
+     * @param {Object} [deps.metaProgression] STEP28: Rank解放Environmentのフィルタに使う（省略可）
      */
-    constructor({ ui }) {
+    constructor({ ui, metaProgression }) {
       this.ui = ui;
+      this.metaProgression = metaProgression || null;
       this.onSelect = null; // (resolvedDef) => {} RUN初期化のトリガー
       this.selectedId = null;  // プレイヤーが選んだEnvironment id
       this.resolvedId = null;  // 実際に効果を持つEnvironment id（Unstable System以外はselectedIdと同じ）
@@ -57,12 +64,19 @@
       this.ui.showScreen('environmentDetect');
     }
 
+    /** @param {Object} def @returns {boolean} Rank未到達で見送るべきEnvironmentならfalse */
+    _isRankUnlocked(def) {
+      if (!def.unlock) return true;
+      const rank = this.metaProgression ? this.metaProgression.getRankNumber() : 0;
+      return rank >= def.unlock.value;
+    }
+
     _renderChoices() {
       const container = this.el.cards;
       if (!container) return;
       container.innerHTML = '';
 
-      Environments.ALL.forEach(def => {
+      Environments.ALL.filter(def => this._isRankUnlocked(def)).forEach(def => {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'lab-card environment-card';
@@ -85,9 +99,9 @@
       if (this.onSelect) this.onSelect(this.getResolved());
     }
 
-    /** Unstable System専用: 自分自身を除く他5種から1つをランダムに選ぶ */
+    /** Unstable System専用: 自分自身とRank未解放分を除く他のEnvironmentから1つをランダムに選ぶ */
     _rollRandom() {
-      const candidates = Environments.ALL.filter(def => def.id !== 'unstable_system');
+      const candidates = Environments.ALL.filter(def => def.id !== 'unstable_system' && this._isRankUnlocked(def));
       const picked = candidates[Math.floor(Math.random() * candidates.length)];
       return picked.id;
     }

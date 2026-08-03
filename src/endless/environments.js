@@ -56,8 +56,15 @@
     {
       id: 'unstable_system',
       name: 'Unstable System',
-      description: 'RUN開始時、他5種のEnvironmentから1つがランダムに選ばれ、その効果がこのRUNに適用される（開始するまで何が出るか分からない）',
+      description: 'RUN開始時、他のEnvironmentから1つがランダムに選ばれ、その効果がこのRUNに適用される（開始するまで何が出るか分からない）',
       effects: null
+    },
+    {
+      id: 'quantum_flux',
+      name: 'Quantum Flux',
+      description: 'PERFECTボーナスが+50%になる。その代わりミス（タイムアップ）時に失うライフが1.5倍になる（STEP28: Meta ProgressionのResearch Rank3到達で解放）',
+      effects: { perfectBonusMultiplier: 1.5, missPenaltyMultiplier: 1.5 },
+      unlock: { type: 'metaRank', value: 3 }
     }
   ];
 

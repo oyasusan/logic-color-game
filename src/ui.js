@@ -52,6 +52,7 @@
           map: document.getElementById('screen-map'),
           researchMap: document.getElementById('screen-researchmap'),
           researchLab: document.getElementById('screen-researchlab'),
+          neuralLab: document.getElementById('screen-neurallab'),
           endlessResult: document.getElementById('screen-endlessresult')
         },
 
@@ -106,6 +107,13 @@
         discoveryName: document.getElementById('discoveryName'),
         discoveryRarity: document.getElementById('discoveryRarity'),
 
+        // Node Result overlay（Recovery/Event等、盤面を介さないNodeの結果表示）
+        nodeResultOverlay: document.getElementById('nodeResultOverlay'),
+        nodeResultIcon: document.getElementById('nodeResultIcon'),
+        nodeResultTitle: document.getElementById('nodeResultTitle'),
+        nodeResultMessage: document.getElementById('nodeResultMessage'),
+        nodeResultContinueBtn: document.getElementById('nodeResultContinueBtn'),
+
         toast: document.getElementById('toast')
       };
 
@@ -137,6 +145,12 @@
         this.hideClear();
         this.cb.onStageSelectFromClear && this.cb.onStageSelectFromClear();
       });
+
+      if (this.el.nodeResultContinueBtn) {
+        this.el.nodeResultContinueBtn.addEventListener('click', () => {
+          if (this._nodeResultContinue) this._nodeResultContinue();
+        });
+      }
     }
 
     /** サウンドON/OFFトグル（TITLE・GAME両方のボタンを同じ状態に同期させる） */
@@ -544,6 +558,36 @@
       toast.classList.add('show');
       clearTimeout(this._toastTimer);
       this._toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+    }
+
+    /**
+     * Recovery/Event等、盤面遷移を伴わずその場で結果が確定するNodeの結果を、
+     * 現在の画面の上にオーバーレイ表示する（トースト+screen('game')への一時遷移
+     * だと、直前のPuzzle盤面が一瞬見えてから即トースト→次のMap画面に切り替わり、
+     * 何が起きたか分かりにくいという問題があったため導入）。
+     * @param {{icon:string, title:string, message:string, onContinue?:Function, autoAdvanceMs?:number}} opts
+     */
+    showNodeResult({ icon, title, message, onContinue, autoAdvanceMs }) {
+      if (!this.el.nodeResultOverlay) { if (onContinue) onContinue(); return; }
+      this.el.nodeResultIcon.textContent = icon || '';
+      this.el.nodeResultTitle.textContent = title || '';
+      this.el.nodeResultMessage.textContent = message || '';
+      this.el.nodeResultOverlay.classList.remove('hidden');
+
+      clearTimeout(this._nodeResultTimer);
+      this._nodeResultContinue = () => {
+        clearTimeout(this._nodeResultTimer);
+        this.hideNodeResult();
+        if (onContinue) onContinue();
+      };
+      if (autoAdvanceMs) {
+        this._nodeResultTimer = setTimeout(this._nodeResultContinue, autoAdvanceMs);
+      }
+    }
+
+    hideNodeResult() {
+      clearTimeout(this._nodeResultTimer);
+      if (this.el.nodeResultOverlay) this.el.nodeResultOverlay.classList.add('hidden');
     }
   }
 
