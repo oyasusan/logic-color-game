@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug, EndlessMode } = G;
+  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug, EndlessMode, StoryMode } = G;
 
   class App {
     constructor() {
@@ -52,6 +52,11 @@
       // Puzzleとは独立したコントローラで、GAME画面の盤面操作は this.mode==='endless'
       // の時だけ下記の各handle*メソッドから委譲される（既存モードの処理は無変更）
       this.endless = EndlessMode ? new EndlessMode({ ui: this.ui, puzzleManager: this.puzzleManager, app: this }) : null;
+
+      // STEP32: Story Scenario Framework（src/endless/配下）。ENDLESS RESEARCHとは分離した
+      // モードだが、save/AI Director/Environment描画はthis.endless側を再利用するため、
+      // 必ずthis.endlessの生成より後にここで生成する（storyMode.js冒頭のコメント参照）
+      this.storyMode = (StoryMode && this.endless) ? new StoryMode({ ui: this.ui, puzzleManager: this.puzzleManager, app: this }) : null;
 
       // デバッグモード(?debug=true)の時だけ、答え表示トグルを盤面へ反映する
       if (Debug) {
@@ -169,6 +174,10 @@
         this.endless.exitRun();
         return;
       }
+      if (this.mode === 'story' && this.storyMode) {
+        this.storyMode.exitScenario();
+        return;
+      }
       this.showStageSelect();
     }
 
@@ -244,9 +253,17 @@
         this._handleTutorialClear();
       } else if (this.mode === 'daily') {
         this._handleDailyClear();
+      } else if (this.mode === 'story') {
+        this._handleStoryClear();
       } else {
         this._handleStageClear();
       }
+    }
+
+    /** STEP32: Story Scenario Framework。Puzzle/Boss Nodeクリア時、通常のCLEARオーバーレイ
+     * （星評価等）は表示せず、storyMode側のNode Result表示（続けるとScenario進行）へ委ねる */
+    _handleStoryClear() {
+      if (this.storyMode) this.storyMode.handleNodeClear(this.game);
     }
 
     /**

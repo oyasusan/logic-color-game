@@ -71,6 +71,11 @@
       case 'perfectTotal': return `PERFECTクリア ${condition.value}回`;
       case 'life1AtDepth20': return 'ライフ1でDEPTH 20到達';
       case 'metaRank': return `Research Rank ${condition.value} 到達`; // STEP28: Meta Progression
+      // STEP36: color_analyzerはChapter3 Layer11到達でも解放されるようになったため、
+      // 表示ラベルへ2つ目の経路を追記する（他のscenarioReward系Protocolは従来どおり）
+      case 'scenarioReward':
+        if (def.id === 'color_analyzer') return `STORY RESEARCH ${String(condition.value).toUpperCase()} クリア報酬 または Chapter3 Layer11到達`;
+        return `STORY RESEARCH ${String(condition.value).toUpperCase()} クリア報酬`; // STEP32: Story Scenario Framework
       default: return '???';
     }
   }

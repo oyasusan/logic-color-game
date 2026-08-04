@@ -63,6 +63,14 @@
       id: 'boss', name: 'Boss', icon: '💀',
       risk: 'VERY_HIGH', reward: '大量スコア + Protocol Fragment',
       description: '固定Depthに出現する強大なBoss Puzzle。避けて通れない'
+    },
+    // STEP32: Story Scenario Framework セクション7。Puzzleを介さず、施設に眠る
+    // 物語の断片に触れる安全地帯（STORY RESEARCH各CASEの正史とは独立した、
+    // Endless RESEARCH世界線側の断片。storyNode.js参照）
+    story: {
+      id: 'story', name: 'Story', icon: '📖',
+      risk: 'NONE', reward: '物語の断片',
+      description: '施設に眠る、まだ語られていない記録の断片に触れる安全地帯'
     }
   };
 

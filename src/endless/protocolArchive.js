@@ -6,6 +6,11 @@
  * protocolUnlock.js（protocols.js/protocolSignals.jsの`unlock`フィールド）を
  * そのまま参照するだけで、Archive自体は状態を持たない（都度show()時に
  * 最新のsaveデータを読んで再描画する）。
+ *
+ * 【STEP33追記】他のArchive系クラス（memoryArchiveUI.js等）と同じ`onBack`プロパティを
+ * 追加した。ARCHIVE HUB（従来の入口）とRESEARCH ARCHIVE（STEP33で新設した5カテゴリ
+ * まとめ画面）の両方からこの画面を開けるようにするため、「戻る」の行き先を呼び出し側が
+ * 動的に指定できるようにする必要があった。
  */
 (function (global) {
   'use strict';
@@ -24,6 +29,7 @@
     constructor({ ui, save }) {
       this.ui = ui;
       this.save = save;
+      this.onBack = null; // () => {}
 
       this.el = {
         fragments: document.getElementById('archiveFragments'),

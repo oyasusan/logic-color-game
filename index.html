@@ -739,6 +739,31 @@
 
   .node-result-card .primary-btn { margin-top: 6px; padding: 10px 32px; }
 
+  /* STEP32: Story Scenario Framework - CHOICE型Story Eventの2択ボタン */
+  .story-choice-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin-top: 6px;
+  }
+  .story-choice-btn { width: 100%; padding: 10px 16px; }
+
+  /* STEP32-2: Dialogue System */
+  .dialogue-overlay { cursor: pointer; }
+  .dialogue-card {
+    display: flex; flex-direction: column; gap: 8px;
+    min-width: 260px; max-width: 90vw; align-items: flex-start;
+  }
+  .dialogue-speaker { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: var(--gold); }
+  .dialogue-text { font-size: 15px; color: var(--text); line-height: 1.6; white-space: pre-line; min-height: 3em; }
+  .dialogue-next-indicator {
+    align-self: flex-end; font-size: 12px; color: var(--text-dim);
+    letter-spacing: 1px; animation: dialogueNextBlink 1.2s ease-in-out infinite;
+  }
+  .dialogue-next-indicator.hidden { display: none; }
+  @keyframes dialogueNextBlink { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
   #clearTitle {
     font-size: 22px;
     font-weight: 800;
@@ -1299,6 +1324,24 @@
     font-size: 18px;
     font-weight: 800;
   }
+
+  /* STEP32: Story Scenario Framework - Scenario Select カード */
+  .scenario-card { width: 100%; }
+  .scenario-card-locked { opacity: 0.55; }
+  .scenario-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; gap: 8px;
+  }
+  .scenario-card-title { font-size: 17px; font-weight: 800; }
+  .scenario-card-status {
+    font-size: 11px; font-weight: 800; letter-spacing: 1px;
+    padding: 2px 8px; border-radius: 8px; border: 1px solid var(--line);
+  }
+  .scenario-status-clear     { color: var(--green); border-color: var(--green); }
+  .scenario-status-available { color: var(--blue); border-color: var(--blue); }
+  .scenario-status-locked    { color: var(--text-dim); }
+  .scenario-card-difficulty { font-size: 13px; color: var(--gold); letter-spacing: 1px; }
+  .scenario-card-desc { font-size: 13px; color: var(--text-dim); line-height: 1.4; }
 
   .lab-card-desc {
     font-size: 14px;
@@ -2205,6 +2248,17 @@
     width: 100%; max-width: 360px; margin: 0 auto 10px; padding: 8px 14px;
     border-radius: 12px; border: 1px solid var(--world-env-color); background: var(--panel);
   }
+
+  /* STEP32-1: Story Framework Base System - MAP画面のStory進行表示 */
+  .map-story-status {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    width: 100%; max-width: 360px; margin: 0 auto 8px; padding: 6px 14px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--panel);
+  }
+  .map-story-status.hidden { display: none; }
+  .map-story-label { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--gold); }
+  .map-story-chapter { font-size: 12px; font-weight: 700; color: var(--text); flex: 1; }
+  .map-story-layer { font-size: 11px; color: var(--text-dim); }
   .eh-summary-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
   .eh-layer { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim); }
   .eh-env-name { font-size: 13px; font-weight: 800; color: var(--world-env-color); flex: 1; }
@@ -2417,6 +2471,47 @@
   .story-entry-content { font-size: 13px; color: var(--text); margin-top: 4px; line-height: 1.5; }
   .story-entry-desc { font-size: 12px; color: var(--text-dim); }
 
+  /* STEP32-3: Memory Fragment System - MEMORY ARCHIVE */
+  .memory-archive-list { display: flex; flex-direction: column; gap: 8px; }
+  .memory-card {
+    width: 100%; max-width: 360px; margin: 0 auto; padding: 10px 14px;
+    border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column; gap: 4px; text-align: left;
+  }
+  .memory-card.locked { opacity: 0.5; flex-direction: row; align-items: center; justify-content: space-between; }
+  .memory-card-header { display: flex; align-items: center; justify-content: space-between; }
+  .memory-card-title { font-size: 14px; font-weight: 800; color: var(--gold); }
+  .memory-card-status { font-size: 11px; font-weight: 800; color: var(--green); letter-spacing: 1px; }
+  .memory-card.locked .memory-card-status { color: var(--text-dim); }
+  .memory-card-character { font-size: 11px; color: var(--blue); letter-spacing: 1px; }
+  .memory-card-content { font-size: 13px; color: var(--text); line-height: 1.5; }
+
+  /* STEP32-4: Character Relationship System - CHARACTER ARCHIVE */
+  .character-archive-list { display: flex; flex-direction: column; gap: 10px; }
+  .character-card {
+    width: 100%; max-width: 360px; margin: 0 auto; padding: 12px 16px;
+    border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column; gap: 4px; text-align: left;
+  }
+  .character-card-name { font-size: 16px; font-weight: 800; color: var(--gold); margin-bottom: 2px; }
+  .character-card-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+  .character-card-label { color: var(--text-dim); letter-spacing: 1px; }
+  .character-card-value { color: var(--text); font-weight: 700; }
+
+  /* STEP33: Research Archive System - STORY ARCHIVE */
+  .chapter-archive-list { display: flex; flex-direction: column; gap: 10px; }
+  .chapter-archive-card {
+    width: 100%; max-width: 360px; margin: 0 auto; padding: 12px 16px;
+    border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column; gap: 4px; text-align: left;
+  }
+  .chapter-archive-card.locked { opacity: 0.5; flex-direction: row; align-items: center; justify-content: space-between; }
+  .chapter-archive-header { display: flex; align-items: center; justify-content: space-between; }
+  .chapter-archive-title { font-size: 15px; font-weight: 800; color: var(--gold); }
+  .chapter-archive-status { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--green); }
+  .chapter-archive-card.locked .chapter-archive-status { color: var(--text-dim); }
+  .chapter-archive-layer { font-size: 12px; color: var(--text-dim); }
+
   /* Surface Arrival演出 */
   .surface-arrival-card { max-width: 300px; text-align: center; }
   .surface-arrival-title { font-size: 18px; font-weight: 800; letter-spacing: 3px; color: var(--blue); }
@@ -2496,6 +2591,7 @@
     <div id="titleLevelLabel">LOGIC LEVEL Lv.1</div>
     <button type="button" id="titleStartBtn" class="primary-btn">STAGE SELECT</button>
     <button type="button" id="titleEndlessBtn" class="primary-btn endless-btn">ENDLESS RESEARCH</button>
+    <button type="button" id="titleStoryBtn" class="primary-btn endless-btn">📖 STORY RESEARCH</button>
   </section>
 
   <!-- ============ STAGE SELECT ============ -->
@@ -2552,6 +2648,9 @@
       <span style="width:56px"></span>
     </div>
     <p class="lab-instruction">これまでの研究で発見・記録した内容を振り返る</p>
+    <!-- STEP33: Research Archive System。Story/Memory/Character/Protocol/Facilityを
+         まとめた新しい入口。既存の詳細アーカイブ一覧はそのまま下に残す -->
+    <button type="button" id="researchArchiveHubBtn" class="primary-btn">🗄️ RESEARCH ARCHIVE</button>
     <button type="button" id="protocolArchiveBtn" class="ghost-btn">PROTOCOL ARCHIVE</button>
     <button type="button" id="environmentArchiveBtn" class="ghost-btn">ENVIRONMENT ARCHIVE</button>
     <button type="button" id="worldEnvArchiveModeSelectBtn" class="ghost-btn">🌍 WORLD ENVIRONMENT ARCHIVE</button>
@@ -2559,6 +2658,21 @@
     <button type="button" id="hiddenArchiveModeSelectBtn" class="ghost-btn hidden-archive-btn">🌑 HIDDEN ENVIRONMENT ARCHIVE</button>
     <!-- STEP32: Narrative & Story System -->
     <button type="button" id="storyArchiveModeSelectBtn" class="ghost-btn">📖 RESEARCH DATABASE</button>
+    <!-- STEP32-3: Memory Fragment System -->
+    <button type="button" id="memoryArchiveModeSelectBtn" class="ghost-btn">🧠 MEMORY ARCHIVE</button>
+    <!-- STEP32-4: Character Relationship System -->
+    <button type="button" id="characterArchiveModeSelectBtn" class="ghost-btn">💞 CHARACTER ARCHIVE</button>
+  </section>
+
+  <!-- ============ STEP32: STORY RESEARCH (Story Scenario Framework) ============ -->
+  <section id="screen-storyresearch" class="screen">
+    <div class="select-header">
+      <button type="button" id="storyResearchBackBtn" class="ghost-btn">‹ TITLE</button>
+      <h2>STORY RESEARCH</h2>
+      <span style="width:56px"></span>
+    </div>
+    <p class="lab-instruction">1回の探索で完結するStory Scenarioに挑む。CASEは順番にクリアすることで解放される</p>
+    <div id="storyResearchCards" class="lab-cards"></div>
   </section>
 
   <!-- ============ STEP32: RESEARCH DATABASE (Narrative & Story System) ============ -->
@@ -2596,6 +2710,54 @@
       <button type="button" class="story-tab-btn" data-type="ENDING">ENDING</button>
     </div>
     <div id="storyArchiveEntries" class="story-entries-list"></div>
+  </section>
+
+  <!-- ============ STEP32-3: MEMORY ARCHIVE (Memory Fragment System) ============ -->
+  <section id="screen-memoryarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="memoryArchiveBackBtn" class="ghost-btn">‹ ARCHIVE</button>
+      <h2>MEMORY ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats">
+      <div class="endless-stat"><span class="endless-stat-label">Collected</span><span id="memoryArchiveCollected" class="endless-stat-value">0 / 0</span></div>
+    </div>
+    <div id="memoryArchiveList" class="memory-archive-list"></div>
+  </section>
+
+  <!-- ============ STEP32-4: CHARACTER ARCHIVE (Character Relationship System) ============ -->
+  <section id="screen-characterarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="characterArchiveBackBtn" class="ghost-btn">‹ ARCHIVE</button>
+      <h2>CHARACTER ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div id="characterArchiveList" class="character-archive-list"></div>
+  </section>
+
+  <!-- ============ STEP33: RESEARCH ARCHIVE (Story/Memory/Character/Protocol/Facilityへの入口) ============ -->
+  <section id="screen-researcharchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="researchArchiveBackBtn" class="ghost-btn">‹ ARCHIVE</button>
+      <h2>RESEARCH ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <p class="lab-instruction">探索で取得した情報をカテゴリ別に確認する</p>
+    <button type="button" id="researchArchiveStoryBtn" class="ghost-btn">📖 STORY</button>
+    <button type="button" id="researchArchiveMemoryBtn" class="ghost-btn">🧠 MEMORY</button>
+    <button type="button" id="researchArchiveCharacterBtn" class="ghost-btn">💞 CHARACTER</button>
+    <button type="button" id="researchArchiveProtocolBtn" class="ghost-btn">⚙️ PROTOCOL</button>
+    <button type="button" id="researchArchiveFacilityBtn" class="ghost-btn">🏛️ FACILITY</button>
+  </section>
+
+  <!-- ============ STEP33: STORY ARCHIVE (Chapter進行の一覧表示) ============ -->
+  <section id="screen-chapterarchive" class="screen">
+    <div class="select-header">
+      <button type="button" id="chapterArchiveBackBtn" class="ghost-btn">‹ RESEARCH ARCHIVE</button>
+      <h2>STORY ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div id="chapterArchiveList" class="chapter-archive-list"></div>
   </section>
 
   <!-- ============ STEP29: IDENTITY SELECT (新規プレイ開始時、一度だけ研究者タイプを選ぶ) ============ -->
@@ -2757,6 +2919,14 @@
       </button>
     </div>
     <p class="lab-instruction">進む先を1つ選択する（Node種類ごとにrisk/rewardが異なる）</p>
+    <!-- STEP32-1: Story Framework Base System。現在のChapter/Layer進行を表示するだけの
+         小さな常時表示ブロック（要求仕様セクション7）。折りたたみパネルへ入れると
+         見落とされやすいため、あえて独立した1行として常時表示にした -->
+    <div id="mapStoryStatus" class="map-story-status hidden">
+      <span class="map-story-label">STORY</span>
+      <span id="mapStoryChapterLabel" class="map-story-chapter">Chapter 1: First Signal</span>
+      <span id="mapStoryLayerProgress" class="map-story-layer">Layer 1 / 4</span>
+    </div>
     <!-- UI改修: Environment Analysis（Active Effects）とLayer/World Stability詳細を
          1つの折りたたみ可能なパネルへ統合。常時見えるのは要約行のみとし、
          「詳細」ボタンで展開するまでActive Effects/Mutation情報は隠す
@@ -3294,6 +3464,28 @@
     </div>
   </div>
 
+  <!-- ============ STEP32-2: DIALOGUE (Layer Narrative SystemのDialogue System) ============ -->
+  <div id="dialogueOverlay" class="overlay dialogue-overlay hidden">
+    <div class="clear-card dialogue-card">
+      <div id="dialogueSpeaker" class="dialogue-speaker"></div>
+      <div id="dialogueText" class="dialogue-text"></div>
+      <div id="dialogueNextIndicator" class="dialogue-next-indicator hidden">▼ TAP</div>
+    </div>
+  </div>
+
+  <!-- ============ STEP32: STORY CHOICE (Story ScenarioのCHOICE型Story Event、2択) ============ -->
+  <div id="storyChoiceOverlay" class="overlay hidden">
+    <div class="clear-card node-result-card">
+      <span class="node-result-icon">🔀</span>
+      <div id="storyChoiceTitle" class="node-result-title"></div>
+      <div id="storyChoiceMessage" class="node-result-message"></div>
+      <div class="story-choice-buttons">
+        <button type="button" id="storyChoiceBtn1" class="primary-btn story-choice-btn"></button>
+        <button type="button" id="storyChoiceBtn2" class="primary-btn story-choice-btn"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ STEP27: REWARD CHOICE (Elite Nodeクリア直後の3択報酬) ============ -->
   <div id="rewardChoiceOverlay" class="overlay hidden">
     <div class="clear-card reward-choice-card-outer">
@@ -3403,6 +3595,16 @@
   <script src="src/endless/boss.js"></script>
   <script src="src/endless/aiAnalysis.js"></script>
   <script src="src/endless/mapGenerator.js"></script>
+  <!-- STEP32: Story Scenario Framework（difficultyManager.js/worldEnvironment.js/score.js/
+       mapGenerator.js等、上記までの読み込み完了を前提とする。storyMode.jsは依存する
+       他5ファイルすべての後に読み込む） -->
+  <script src="src/endless/scenarioData.js"></script>
+  <script src="src/endless/storyNode.js"></script>
+  <script src="src/endless/scenarioManager.js"></script>
+  <script src="src/endless/storyEventManager.js"></script>
+  <script src="src/endless/storyEndingManager.js"></script>
+  <script src="src/endless/scenarioSelectUI.js"></script>
+  <script src="src/endless/storyMode.js"></script>
   <script src="src/endless/events.js"></script>
   <script src="src/endless/eventManager.js"></script>
   <script src="src/endless/endlessGame.js"></script>
@@ -3420,6 +3622,29 @@
   <script src="src/endless/rewardChoice.js"></script>
   <script src="src/endless/extractManager.js"></script>
   <script src="src/endless/neuralLab.js"></script>
+  <!-- STEP32-1: Story Framework Base System（endless.jsが依存するため、その直前に読み込む） -->
+  <script src="src/endless/layerStoryData.js"></script>
+  <!-- STEP32-5-2: layerStoryData.jsに依存するため、その直後に読み込む -->
+  <script src="src/endless/layerContentData.js"></script>
+  <script src="src/endless/layerStoryEventManager.js"></script>
+  <script src="src/endless/storyManager.js"></script>
+  <!-- STEP32-2: Dialogue System（dialogueManager.jsが依存するため、その直前にcharacterData.js/
+       dialogueData.jsを読み込む。endless.jsが依存するため、その直前に読み込む） -->
+  <script src="src/endless/characterData.js"></script>
+  <script src="src/endless/dialogueData.js"></script>
+  <script src="src/endless/dialogueManager.js"></script>
+  <!-- STEP32-3: Memory Fragment System（endless.jsが依存するため、その直前に読み込む） -->
+  <script src="src/endless/memoryData.js"></script>
+  <script src="src/endless/memoryManager.js"></script>
+  <script src="src/endless/memoryArchiveUI.js"></script>
+  <!-- STEP32-4: Character Relationship System（endless.jsが依存するため、その直前に読み込む） -->
+  <script src="src/endless/relationshipData.js"></script>
+  <script src="src/endless/relationshipManager.js"></script>
+  <script src="src/endless/characterArchiveUI.js"></script>
+  <!-- STEP33: Research Archive System（layerStoryData.js/各Archiveクラスに依存するため、
+       それらの読み込み後・endless.jsの直前に読み込む） -->
+  <script src="src/endless/chapterArchiveUI.js"></script>
+  <script src="src/endless/researchArchiveUI.js"></script>
   <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>

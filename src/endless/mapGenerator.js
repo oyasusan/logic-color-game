@@ -32,10 +32,12 @@
   const SIGNAL_EVERY_DEPTH = 5; // protocolSignal.jsのSIGNAL_EVERY_DEPTHと合わせる
 
   // Depth Tier別のNode抽選重み（Lab/Signal/Bossを除く5種）。合計値に意味は無く、比率のみが重要
+  // story: STEP32(Story Scenario Framework)セクション7で追加。他5種より意図的に低い
+  // 固定重みとし（Tierによる変化を付けない）、既存のNode出現バランスへの影響を最小限にした
   const WEIGHT_TIERS = [
-    { maxDepth: 5, weights: { puzzle: 55, event: 20, elite: 5, recovery: 15, unknown: 5 } },
-    { maxDepth: 15, weights: { puzzle: 45, event: 20, elite: 12, recovery: 13, unknown: 10 } },
-    { maxDepth: Infinity, weights: { puzzle: 35, event: 18, elite: 20, recovery: 12, unknown: 15 } }
+    { maxDepth: 5, weights: { puzzle: 55, event: 20, elite: 5, recovery: 15, unknown: 5, story: 6 } },
+    { maxDepth: 15, weights: { puzzle: 45, event: 20, elite: 12, recovery: 13, unknown: 10, story: 6 } },
+    { maxDepth: Infinity, weights: { puzzle: 35, event: 18, elite: 20, recovery: 12, unknown: 15, story: 6 } }
   ];
 
   // Protocol所持時に特定Node種類の重みへ掛ける倍率

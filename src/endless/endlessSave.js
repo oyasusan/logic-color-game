@@ -122,7 +122,54 @@
       storyProgress: { lastNotifiedStage: null }, // AI Dialogue Integration用、直近通知済みのStory Stage
       timelineData: [],           // { id, timestamp } 解放順（古い順）のResearch Timelineデータ
       endingFlags: [],            // 達成済みEnding id一覧（一度達成したら二度と失われない）
-      simulationZeroCleared: false // END D「Simulation Zero」の解放条件用、生涯フラグ
+      simulationZeroCleared: false, // END D「Simulation Zero」の解放条件用、生涯フラグ
+
+      // ---- STEP32: Story Scenario Framework ----
+      // 前回実装したSTEP32(Narrative & Story System)の`storyProgress`（Endless RUNを
+      // またいだStory Stage通知）とは概念が異なる（こちらはScenario挑戦中の一時的な
+      // 進行位置）ため、フィールド名衝突を避けて"scenarioProgress"と命名した
+      scenarioProgress: { activeScenarioId: null, nodeIndex: 0 }, // 挑戦中Scenarioの状態。未挑戦時はactiveScenarioId=null
+      scenarioClearData: {},   // { [scenarioId]: { cleared:true, endingId, clearedAt } } Scenarioごとのクリア記録
+      endingHistory: [],       // { scenarioId, endingId, timestamp } 直近ENDING_HISTORY_LIMIT件（古い順）
+      choiceHistory: [],       // { scenarioId, eventId, choiceId, timestamp } 直近CHOICE_HISTORY_LIMIT件（古い順）
+
+      // ---- STEP32-1: Story Framework Base System (Layer Narrative System) ----
+      // 要求仕様どおりの名前は"storyProgress"だが、既にSTEP32(Narrative & Story System)の
+      // storyProgress({lastNotifiedStage})とSTEP32(Story Scenario Framework)実装時に検討した
+      // 命名（scenarioProgressへ変更済み）の両方と概念が異なるため、3つ目の衝突を避けて
+      // "layerStoryProgress"と命名した（ENDLESS RESEARCHのLayer進行に直結するChapter管理、
+      // という性質を名前に反映させた）
+      layerStoryProgress: { currentChapter: 'chapter01', currentLayer: 1, completedLayers: [], completedChapters: [] },
+
+      // ---- STEP32-2: Dialogue System ----
+      dialogueHistory: { completedDialogueIds: [] }, // 同じ会話を再表示しないための既読記録
+
+      // ---- STEP32-3: Memory Fragment System ----
+      // 「Memory Fragment」という語はこのプロジェクトで既に2つの異なる意味で使われている
+      // （既存のPhase3 `memoryFragments`=単なる生涯累計カウンタ、STEP32 Narrative &
+      // Story Systemの`storyData.js`内`memory_001`〜`006`=totalRuns条件のStoryEntry）。
+      // 本フィールド名`memoryProgress`自体はどちらとも衝突しないため要求仕様どおりの名前
+      // を採用したが、格納するid（memfrag_xxx接頭辞）は`memory_xxx`と紛らわしくならない
+      // よう意図的に区別した（memoryData.js参照）
+      memoryProgress: { collectedMemoryIds: [] },
+
+      // ---- STEP32-4: Character Relationship System ----
+      // 要求仕様セクション9の保存形式`{characterId, relationship, state}`をキャラクターid
+      // ごとのdictとして保持する（3キャラクター分あるため）。`level`はrelationshipData.jsの
+      // ARIA_LEVELSテーブルからstateを逆引きすれば常に導出できるため、あえて別フィールドとして
+      // 永続化していない（要求仕様セクション9が`level`を保存対象に含めていないことと整合する）
+      relationshipData: {
+        player: { characterId: 'player', relationship: 0, state: 'RESEARCHER' },
+        aria: { characterId: 'aria', relationship: 0, state: 'LOGICAL_AI' },
+        lost_researcher: { characterId: 'lost_researcher', relationship: 0, state: 'UNKNOWN' }
+      },
+
+      // ---- STEP33: Research Archive System ----
+      // 直近開いていたRESEARCH ARCHIVEのタブ（'story'|'memory'|'character'|'protocol'|
+      // 'facility'）を覚えておくだけの小さな状態。他のArchive系（Memory/Character/
+      // Protocol/Facility）は既存のsaveフィールドをそのまま参照するため、新規に
+      // 永続化が必要なのはこの1項目のみだった
+      archiveData: { lastViewedTab: null }
     };
   }
 
@@ -136,6 +183,8 @@
   const DIRECTOR_LOG_LIMIT = 100;    // STEP31: AI Directorログの保持件数上限
   const DIRECTOR_REPORT_LIMIT = 50;  // STEP31: Run Report Archiveの保持件数上限
   const TIMELINE_LIMIT = 200;        // STEP32: Research Timelineの保持件数上限
+  const ENDING_HISTORY_LIMIT = 100;  // STEP32(Scenario): Ending History保持件数上限
+  const CHOICE_HISTORY_LIMIT = 200;  // STEP32(Scenario): Choice History保持件数上限
 
   class EndlessSaveStore {
     constructor() {
@@ -910,6 +959,180 @@
     setSimulationZeroCleared() {
       if (this.data.simulationZeroCleared) return;
       this.data.simulationZeroCleared = true;
+      this.save();
+    }
+
+    /** ---------------- STEP32: Story Scenario Framework ---------------- */
+
+    getScenarioProgress() {
+      return this.data.scenarioProgress;
+    }
+
+    /** @param {string|null} scenarioId nullでScenario未挑戦状態に戻す */
+    setScenarioProgress(scenarioId, nodeIndex) {
+      this.data.scenarioProgress = { activeScenarioId: scenarioId, nodeIndex: nodeIndex || 0 };
+      this.save();
+    }
+
+    getScenarioClearData(id) {
+      return this.data.scenarioClearData[id] || null;
+    }
+
+    isScenarioCleared(id) {
+      return !!this.data.scenarioClearData[id];
+    }
+
+    getAllScenarioClearData() {
+      return Object.assign({}, this.data.scenarioClearData);
+    }
+
+    recordScenarioClear(id, endingId) {
+      this.data.scenarioClearData[id] = { cleared: true, endingId, clearedAt: Date.now() };
+      this.save();
+    }
+
+    getEndingHistory() {
+      return this.data.endingHistory.slice();
+    }
+
+    recordScenarioEnding(scenarioId, endingId) {
+      this.data.endingHistory.push({ scenarioId, endingId, timestamp: Date.now() });
+      if (this.data.endingHistory.length > ENDING_HISTORY_LIMIT) {
+        this.data.endingHistory.splice(0, this.data.endingHistory.length - ENDING_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    getChoiceHistory() {
+      return this.data.choiceHistory.slice();
+    }
+
+    /** @returns {Array<Object>} 指定Scenario分のみ（古い順） */
+    getChoiceHistoryForScenario(scenarioId) {
+      return this.data.choiceHistory.filter(c => c.scenarioId === scenarioId);
+    }
+
+    recordChoice(scenarioId, eventId, choiceId) {
+      this.data.choiceHistory.push({ scenarioId, eventId, choiceId, timestamp: Date.now() });
+      if (this.data.choiceHistory.length > CHOICE_HISTORY_LIMIT) {
+        this.data.choiceHistory.splice(0, this.data.choiceHistory.length - CHOICE_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** Scenario報酬のResearch Data付与。recordRun()のresearchDataGained加算と同じ2フィールドへ積み増す */
+    grantScenarioResearchData(amount) {
+      if (!amount) return;
+      this.data.researchDataTotal += amount;
+      this.data.permanentResearchData += amount;
+      this.save();
+    }
+
+    /** ---------------- STEP32-1: Story Framework Base System ---------------- */
+
+    getLayerStoryProgress() {
+      return this.data.layerStoryProgress;
+    }
+
+    setLayerStoryCurrentChapter(chapterId) {
+      this.data.layerStoryProgress.currentChapter = chapterId;
+      this.save();
+    }
+
+    setLayerStoryCurrentLayer(layer) {
+      this.data.layerStoryProgress.currentLayer = layer;
+      this.save();
+    }
+
+    /** @returns {boolean} 新規記録ならtrue（既に記録済みならfalse） */
+    recordLayerStoryLayerCleared(layer) {
+      if (this.data.layerStoryProgress.completedLayers.indexOf(layer) !== -1) return false;
+      this.data.layerStoryProgress.completedLayers.push(layer);
+      this.save();
+      return true;
+    }
+
+    /** @returns {boolean} 新規記録ならtrue（既に記録済みならfalse） */
+    recordLayerStoryChapterCompleted(chapterId) {
+      if (this.data.layerStoryProgress.completedChapters.indexOf(chapterId) !== -1) return false;
+      this.data.layerStoryProgress.completedChapters.push(chapterId);
+      this.save();
+      return true;
+    }
+
+    /** StoryManager.resetStoryProgress()用のテスト用リセット */
+    resetLayerStoryProgress() {
+      this.data.layerStoryProgress = { currentChapter: 'chapter01', currentLayer: 1, completedLayers: [], completedChapters: [] };
+      this.save();
+    }
+
+    /** ---------------- STEP32-2: Dialogue System ---------------- */
+
+    getDialogueHistory() {
+      return this.data.dialogueHistory;
+    }
+
+    isDialogueCompleted(id) {
+      return this.data.dialogueHistory.completedDialogueIds.indexOf(id) !== -1;
+    }
+
+    /** @returns {boolean} 新規記録ならtrue（既に記録済みならfalse） */
+    recordDialogueCompleted(id) {
+      if (this.isDialogueCompleted(id)) return false;
+      this.data.dialogueHistory.completedDialogueIds.push(id);
+      this.save();
+      return true;
+    }
+
+    /** ---------------- STEP32-3: Memory Fragment System ---------------- */
+
+    getMemoryProgress() {
+      return this.data.memoryProgress;
+    }
+
+    isMemoryCollected(id) {
+      return this.data.memoryProgress.collectedMemoryIds.indexOf(id) !== -1;
+    }
+
+    /** @returns {boolean} 新規取得ならtrue（既に取得済みならfalse） */
+    recordMemoryCollected(id) {
+      if (this.isMemoryCollected(id)) return false;
+      this.data.memoryProgress.collectedMemoryIds.push(id);
+      this.save();
+      return true;
+    }
+
+    /** ---------------- STEP32-4: Character Relationship System ---------------- */
+
+    /** @returns {{characterId:string, relationship:number, state:string}} */
+    getRelationshipData(characterId) {
+      return this.data.relationshipData[characterId] || null;
+    }
+
+    /** @returns {number} 変更後の関係値（対象キャラクターが存在しなければ0のまま何もしない） */
+    addRelationshipValue(characterId, value) {
+      const record = this.data.relationshipData[characterId];
+      if (!record) return 0;
+      record.relationship += value;
+      this.save();
+      return record.relationship;
+    }
+
+    setRelationshipState(characterId, state) {
+      const record = this.data.relationshipData[characterId];
+      if (!record) return;
+      record.state = state;
+      this.save();
+    }
+
+    /** ---------------- STEP33: Research Archive System ---------------- */
+
+    getArchiveData() {
+      return this.data.archiveData;
+    }
+
+    setArchiveLastViewedTab(tab) {
+      this.data.archiveData.lastViewedTab = tab;
       this.save();
     }
   }

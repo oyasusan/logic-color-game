@@ -20,15 +20,15 @@
 
   const BASE_THREAT = {
     recovery: 0, research_lab: 1, protocol_signal: 1,
-    puzzle: 2, event: 2, elite: 4, boss: 5, unknown: null
+    puzzle: 2, event: 2, elite: 4, boss: 5, unknown: null, story: 0
   };
   const BASE_REWARD = {
     recovery: 20, research_lab: 70, protocol_signal: 60,
-    puzzle: 60, event: 50, elite: 85, boss: 95, unknown: null
+    puzzle: 60, event: 50, elite: 85, boss: 95, unknown: null, story: 10
   };
   const BASE_CONFIDENCE = {
     recovery: 'HIGH', research_lab: 'MEDIUM', protocol_signal: 'MEDIUM',
-    puzzle: 'HIGH', event: 'MEDIUM', elite: 'HIGH', boss: 'HIGH', unknown: 'LOW'
+    puzzle: 'HIGH', event: 'MEDIUM', elite: 'HIGH', boss: 'HIGH', unknown: 'LOW', story: 'HIGH'
   };
 
   function hashString(str) {

@@ -6,6 +6,11 @@
 
 外部ライブラリ不使用（HTML5 + CSS3 + Vanilla JavaScript ES6+ のみ）。スマートフォンのブラウザ（Chrome / Safari）で動作することを想定。
 
+## Documentation
+
+- docs/STORY_BIBLE.md
+  - 世界観、キャラクター、ストーリー設定
+
 ## 遊び方
 
 1. `logic-color-game` ディレクトリをそのまま静的ファイルとして配信する（`file://` で直接開くと `fetch` でのJSON読み込みが失敗するブラウザがあるため、簡易サーバー経由を推奨）。
@@ -1772,3 +1777,312 @@ Environment内で発生する一時的なResearch Event（異常/チャンス）
 **テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（StoryData/StoryUnlockManager/ResearchDatabase/EndingManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、StoryData全31件の内訳・`checkUnlockCondition`の各条件タイプ（数値しきい値/Hidden Environment包含判定/null）・ResearchDatabaseの`addEntry`/`isUnlocked`/`getCompletionRate`/`getCompletionByType`・Story Stage判定とStage遷移の重複通知防止・EndingManagerの5種条件判定と永続化・再判定時の非重複を含め計39項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、要求仕様のTest Flow（Run開始→Layer進行→条件達成→Story Log取得→AI Dialogue変化→Archive更新→Hidden File取得→Ending条件確認→Save→Load）を実際のコード経路で通し、RUN開始→Layer1移動での`log_001`自動解放とトースト表示→protocolCount条件でのLog解放（RUN開始時デフォルト所持数での自動解放・スナップショットoverrideでの追加解放の両方）→Story Stage遷移（early→middle）でのAI Dialogueトースト→Hidden Environment解放連動のFILE解放→SIMULATION ZERO内クリアでの`simulationZeroCleared`記録→RUN終了でのEND A達成・永続化・ResearchDatabaseへの反映・「続ける」ボタン付きオーバーレイ表示→RESEARCH DATABASE画面（統計表示/Codex一覧/Timeline描画/タブ切替/未解放エントリの「???」表示/戻るボタン）→別インスタンスでのSave/Reload後の状態復元→STEP32フィールドを持たない旧形式セーブからのマイグレーション→既存のSTEP30-7/前回UI改修等既存画面への無影響を含め計49項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
 
 **未実装/既知の制約**: AI Director Dialogue Integration（要求仕様セクション8）は、5人格×4Stageの組み合わせ全てを個別に用意する完全なクロス積ではなく、AI Directorの人格とは独立した4段階（early/middle/late/final）の「世界観Dialogue」として簡略化して実装した（STEP31で5人格の性格別Dialogueは既に別トリガーとして用意済みのため、Story Stageは人格に依存しない「世界そのものの語り」として役割分担した設計判断）。Research Codexの内訳表示は、要求仕様が挙げた項目のうち実際にゲーム内に存在する集計軸（PROTOCOL/ENVIRONMENT/MUTATION/EVENT/HIDDEN/ACHIEVEMENT/STORY）のみを対象にしている。
+
+## STEP32: Story Scenario Framework
+
+※このセッションでは「STEP32」という番号のToDo仕様が2回提示された（1回目が上記「Narrative & Story System」、2回目が本セクション）。要求仕様の文面が別物のため、番号の重複はそのまま保持し、両方を別セクションとして実装した。
+
+1回の探索で完結するStory型ゲームモード「STORY RESEARCH」を、既存のENDLESS RESEARCHとは完全に分離した新モードとして追加する要求仕様（STEP32 Story Scenario Framework）に基づき実装した。要求仕様のアーキテクチャルール（セクション15）どおり、既存のPuzzle Logic/Reward System/Environment Systemを一切改変せず、既存の各Manager/UIを呼び出すだけの新規Coordinator群として設計している。
+
+**新規ファイル**:
+- `src/endless/scenarioData.js`（ScenarioData） — 要求仕様セクション3の形式（id/title/description/difficulty/layerCount/chapters/storyEvents/environment/boss/ending/reward/unlockCondition）でCASE001〜006の6Scenarioを完全にData化した定義。新しいScenarioを追加する場合はこのファイルへのデータ追加のみで対応できる
+- `src/endless/storyNode.js`（StoryNode） — 二重の役割を持つ。①`buildScenarioNodes(scenario)`: Scenarioのchapters配列から、Story Mode内部で1つずつ消化する「フラットな1本道のNodeシーケンス」を組み立てる（Story Modeは「Scenario固定・Layer構成固定」のためMap分岐生成は行わない）。②要求仕様セクション7が指す「既存Research Map（Endless RESEARCH側）に追加するStory Node種別」用の、CASE Scenarioとは独立したアンビエントな断片イベントプール
+- `src/endless/scenarioManager.js`（ScenarioManager） — 要求仕様セクション2のAPI（`getAvailableScenarios`/`loadScenario`/`startScenario`/`updateProgress`/`completeScenario`/`getScenarioResult`）をそのまま実装。加えてGAME画面の「‹ BACK」で挑戦を中断するための`exitScenario()`を追加した（要求仕様には明示が無いが、途中離脱の受け皿として必須のため）
+- `src/endless/storyEventManager.js`（StoryEventManager） — 要求仕様セクション6のStory Event System。DIALOGUE/DISCOVERY/MEMORY/CHOICE/CINEMATICの取得と、CHOICE型で選ばれた選択肢のchoiceHistoryへの記録のみを持つ
+- `src/endless/storyEndingManager.js`（StoryEndingManager） — 要求仕様セクション11のEnding System。protocolUnlock.js/storyUnlockManager.jsと同じ「状態を持たない静的オブジェクト」設計で、Scenarioのending配列からそのRUNでの選択履歴に応じた1件を決定する
+- `src/endless/scenarioSelectUI.js`（ScenarioSelectUI） — 要求仕様セクション12の新画面「STORY RESEARCH」のDOM描画・カード選択のみを持つ
+- `src/endless/storyMode.js`（StoryMode） — ENDLESS RESEARCH側の`endless.js`と対になる中核Coordinator。Scenario進行・Puzzle開始・Story Eventオーバーレイ表示・AI Director連携・Environment連携・Ending表示・Endless Research連携（報酬付与）を統括する
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **保存フィールド名の衝突回避**: 要求仕様セクション13の`storyProgress`は、既に実装済みの前STEP32（Narrative & Story System）が同名フィールド（Story Stage通知用）で使用済みだったため、本機能では`scenarioProgress`（挑戦中Scenarioの一時的な進行位置）という別名にした。`scenarioClearData`/`endingHistory`/`choiceHistory`は衝突が無かったため要求仕様どおりの名前をそのまま使った
+- **Puzzle自体の仕様**: Story ModeのPuzzleは、ENDLESS RESEARCHのような制限時間/Life/コンボ/スコアの仕組みを持たない、Stage Modeと全く同じ「時間無制限・自由にUNDO/RESET/HINT可能」な既存Game/PuzzleManagerをそのまま再利用する設計にした（要求仕様に失敗・タイムアップ時の挙動の指定が無く、物語を読ませることが主目的のモードで時間切迫のスリルを追加する必要性が薄いと判断したため）。これにより`main.js`側もENDLESS RESEARCHのようにhandleCellTap等へ個別分岐を増やす必要が無く、`_handleClear()`と`handleGameBack()`の2箇所だけで統合できた
+- **Puzzle難易度の決定方法**: Scenarioの`difficulty`（★1〜5）から、既存`DifficultyManager.getPuzzleConfig()`が期待する「仮想Depth」への変換テーブル（`BASE_DEPTH_BY_DIFFICULTY = {1:3, 2:8, 3:15, 4:35, 5:50}`）を設計し、Scenario内でPuzzleを重ねるごとに+2、Bossはさらに+10した仮想Depthを渡すことで、既存のPuzzle生成ロジック（puzzleTier.js）を一切変更せずに難易度スケーリングを実現した
+- **Environment連携（セクション9）の範囲**: 6Scenarioそれぞれに既存WorldEnvironment（env_grid/env_network/env_ocean/env_unknown/env_forest/env_fractal）を1つ参照させ、`environmentThemeLayer`の背景描画にのみ反映した（`environmentRenderer`を`app.endless`側から共有）。Modifier効果（Map重み/Reward倍率/Protocol Fragment倍率等）はEndless RESEARCH専用の仕組みが対象のため、Story Modeでは意図的に適用していない（新規に6つの専用Environmentを追加してModifierまでフル実装すると、要求仕様セクション15の「既存Environment Systemへ直接埋め込まない」という制約の趣旨を超える改修規模になるため）
+- **Protocol連携（セクション10）**: CASE003報酬のColor Analyzer・CASE006報酬のGenesis Protocolを、RUN開始時のProtocol Select（`protocols.js`）ではなく、Signal限定プール（`protocolSignals.js`）へ`unlock:{type:'scenarioReward',value:<case id>}`として追加した。この`type`はprotocolUnlock.jsのsnapshot判定に存在しないキーのため通常の自動解放では絶対にtrueにならず、Scenario Clear時に`storyMode.js`が直接`save.unlockProtocol(id)`を呼ぶ経路でのみ解放される（解放後はProtocol Archive・Endless RESEARCHのProtocol Signal抽選プールへも自動的に反映される）
+- **Ending分岐**: CASE004（Lost Researcherを捜索するか/しないか）・CASE005（AI Memoryを復元するか/消去するか、要求仕様セクション11の例そのまま）の2Scenarioに、CHOICE型Story Eventの選択結果で分岐する2種のEndingを実装した。残り4Scenarioは単一のEndingのみ（`condition:null`）とした
+- **Story Node（セクション7）の実装範囲**: Endless RESEARCHの既存Research Mapに新しいNode種類`story`を追加した（`nodeTypes.js`/`aiAnalysis.js`/`mapGenerator.js`へ小さな追加、既存5種の出現バランスへの影響を避けるため固定の低い重みにした）。ただしEndless側の`story`Nodeは、CASE Scenarioの正史とは独立した「Endless世界線側の断片」（`StoryNode.AMBIENT_STORY_EVENTS`、6種）を表示するのみとし、CASEのStoryEventそのものは参照しない設計にした（2つの世界線を混在させると物語の一貫性が崩れるため）
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `scenarioProgress`/`scenarioClearData`/`endingHistory`/`choiceHistory`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった。Scenario報酬のResearch Data付与用に`grantScenarioResearchData()`も追加した（`recordRun()`と同じ2フィールドへの積み増し）
+- `protocolSignals.js`: Color Analyzer/Genesis Protocolの2件を追加
+- `protocolUnlock.js`: `getConditionLabel()`に`scenarioReward`のケースを追加（Protocol Archiveでの未解放条件表示用）
+- `nodeTypes.js`/`aiAnalysis.js`/`mapGenerator.js`/`endless.js`: 前述のStory Node（Endless Map向け）統合
+- `main.js`: `this.storyMode`の生成（`this.endless`より後、saveを共有するため）、`_handleClear()`への`story`分岐追加、`handleGameBack()`への`story`分岐追加
+
+**実装中に見つけた既存の不具合の修正（本Stepの実装とは直接関係ないが、影響範囲を調べる過程で発見）**:
+- 前STEP32（Narrative & Story System）の`_buildResearchCodexSummary()`で、PROTOCOLの母数(total)が`Protocols.ALL.length`（RUN開始時選択可能な基本3種のみ）になっており、Signal限定6種（本Stepで追加した2種を含む）が集計から漏れていた。`ProtocolUnlock.getAllDefs().length`（基本+Signal全9種、本Step追加分を含め計11種）を使うよう修正した
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（ScenarioData/StoryNode/ScenarioManager/StoryEventManager/StoryEndingManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、ScenarioData全6件の内訳・各Scenarioの`layerCount`とhasPuzzleチャプター数の整合性・unlockCondition連鎖・CASE004/CASE005の分岐Ending定義・`buildScenarioNodes`のNode数とdirectorLine付与位置・ScenarioManagerの一連のAPI（Unlock判定→開始→進行→完了→報酬→次Scenario解放→中断）・StoryEventManagerの選択記録・StoryEndingManagerの分岐/フォールバック判定を含め計49項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`App`/`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、TITLE画面からの新規導線→STORY RESEARCH画面（Unlock/Locked表示）→CASE001〜004の実際のPuzzle解答（生成された盤面をanswerどおりに実際にタップして解く）を含むフルクリア→Story Event（DIALOGUE/DISCOVERY/MEMORY/CINEMATIC）オーバーレイの表示→AI Directorトースト（CASE001/CASE005の指定台詞）→CASE003クリアでのColor Analyzer実解放→CASE004でのCHOICE分岐と対応するEnding表示・選択履歴の永続化→GAME画面からのBACKボタンによる中断（進行位置のみ破棄、クリア未記録）→Endless RESEARCH側のStory Node統合（NodeTypes/AIAnalysis/MapGenerator）→Research Codexバグ修正の反映確認→別インスタンスでのSave/Reload後の状態復元→STEP32(Scenario)フィールドを持たない旧形式セーブからのマイグレーションを含め計53項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: Chapter単位の「objectives」フィールドは、要求仕様どおりデータとしては全Chapterに定義したが、達成度を個別に判定・表示する専用UIは実装していない（Story Event/Chapter遷移時の説明文として表示するに留めた。要求仕様に具体的な判定ロジックの指定が無かったため）。Boss Puzzleは既存`boss.js`（Depth10/25/50固定のBoss定義）を経由せず、Scenario側の仮想Depthをさらに引き上げた通常Puzzle生成として実装しており、既存ENDLESS RESEARCHのBoss演出（専用の名前・撃破時の特別なスコア倍率等）は持たない（Story ModeにはそもそもScore/Reward計算チェーンが存在しないため、Boss固有の倍率計算自体が不要という設計判断）。
+
+## STEP32-1: Story Framework Base System
+
+※このセッションでは「STEP32」系の要求仕様が3回提示された（1回目「Narrative & Story System」、2回目「Story Scenario Framework」、3回目が本セクション「STEP32-1 Story Framework Base System」）。3回目は末尾に「-1」が付いた別の番号のため、そのままセクション名として採用した。
+
+ENDLESS RESEARCHのLayerクリアをトリガーに、Chapter進行を管理する基盤（Layer Narrative System）を追加する要求仕様（STEP32-1）に基づき実装した。要求仕様どおり、既存のPuzzle System/Endless Research Mode/Reward処理には一切変更を加えず、Layerクリアの通知を受け取って独自にChapter進行を計算するだけの、既存システムから見て透過的な追加として設計している。
+
+**新規ファイル**:
+- `src/endless/storyManager.js`（StoryManager） — 要求仕様セクション1のAPI（`initializeStory`/`getCurrentChapter`/`getCurrentStoryLayer`/`onLayerClear`/`completeChapter`/`resetStoryProgress`）をそのまま実装したCoordinator本体。実際の永続化は完全に`endlessSave.js`へ委譲し、自身は状態を持たない
+- `src/endless/layerStoryData.js`（LayerStoryData） — 要求仕様セクション2のデータ駆動形式（`{chapters:[{id,title,startLayer,endLayer,unlockCondition}]}`）でchapter01〜06（Layer1〜30）を定義した
+- `src/endless/layerStoryEventManager.js`（LayerStoryEventManager） — 要求仕様セクション5のAPI（`checkLayerEvent(layer)`）のみを実装。要求仕様どおり「今回は表示処理は作らない」ため、検索対象のイベントデータ（セクション6の例を含む、Chapter開始Layerごとの最小限のプレースホルダー6件）とAPIのみに留めた
+
+**要求仕様に無く、こちらで設計した主な判断（保存フィールド名の衝突回避）**: 要求仕様が指定するファイル名/フィールド名の一部が、このセッション内で既に実装済みの他STEP32系機能と重複していたため、以下のとおりリネームして実装した（いずれも実際に生成されるオブジェクトの中身・APIは要求仕様どおり）。
+- `StoryData.js` → `layerStoryData.js`（`G.LayerStoryData`）: 既存の`storyData.js`（STEP32 Narrative & Story System、LOG/MEMORY/FILE等のStoryEntryを持つ`G.StoryData`）と同名衝突するため
+- `StoryEventManager.js` → `layerStoryEventManager.js`（`G.LayerStoryEventManager`）: 既存の`storyEventManager.js`（STEP32 Story Scenario Framework、CHOICE型Story Eventの取得・選択記録を持つ`G.StoryEventManager`クラス）と同名衝突するため
+- Save Data `storyProgress` → `layerStoryProgress`: 既存の`storyProgress`（STEP32 Narrative & Story Systemの`{lastNotifiedStage}`）、および前STEP32(Story Scenario Framework)実装時に同じ理由で`scenarioProgress`へリネーム済みだった経緯の両方と衝突するため、3つ目の重複を避けた
+- `StoryManager.js`は衝突が無かったため要求仕様どおりの名前をそのまま使った
+
+**Layer Clear連携（要求仕様セクション3）**: `endless.js`の`_handleRoundClear(stats)`内、既存の報酬計算・Achievement/Identity EXP付与処理の直後に`this.storyManager.onLayerClear(this.depth)`を1行追加しただけで、既存のスコア/Research Data/Protocol Fragment等の報酬処理には一切触れていない。
+
+**UI表示（要求仕様セクション7）**: 「Research画面」をMAP画面（`#screen-map`、コードベース内で実際に「リサーチマップ」と呼ばれる画面）と解釈し、`Chapter N: <title>` / `Layer X / Y`の2行を表示する常時表示の小さなブロックを追加した。既存の折りたたみ式Environment詳細パネルへ入れると見落とされやすいと判断し、あえて独立した要素にした。
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `layerStoryProgress`（`currentChapter`/`currentLayer`/`completedLayers`/`completedChapters`）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `endless.js`: `storyManager`の生成、`_handleRoundClear`への`onLayerClear()`呼び出し追加、MAP画面のStory状態表示（`_renderStoryStatus()`）を追加
+
+**実装中に発見・修正した設計上の問題（jsdom統合テストで検出）**: `_renderStoryStatus()`を`_renderWorldEnvironmentBadge()`（Layer移動時のみ呼ばれる）からしか呼んでいなかったため、Layerクリアの瞬間にChapterが進行しても、次のLayer移動が起きるまでMAP画面のChapter表示が古いまま（1つ前のChapter名）になってしまうバグを実テストで検出した。`_handleRoundClear`内の`onLayerClear()`呼び出し直後にも`_renderStoryStatus()`を呼ぶよう修正し、Layerクリア直後に即座に画面表示が更新されるようにした。
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（LayerStoryData/LayerStoryEventManager/StoryManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、LayerStoryData全6Chapterの範囲・`getByLayer`の境界値（Layer1/8/30/999超過時のクランプ）・`getNextChapter`（最終Chapterでnull）・LayerStoryEventManagerの検索結果（要求仕様セクション6の例との完全一致含む）・StoryManagerの一連のAPI（初期化→Layerクリア記録→Story Event返却→Chapter境界での自動進行→手動`completeChapter()`→最終Chapterでの`null`返却→リセット）・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計41項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、実際のRUN開始→Layer1〜4を実際にPuzzleを解いてクリア→各クリアで`completedLayers`が正しく記録されること・既存の報酬処理（スコア加算等）が無影響で動作し続けること・Layer4クリアでChapter1が完了しChapter2（Lost Data）へ自動進行すること・MAP画面のStory状態表示がLayerクリア直後に即座に更新されること・既存Endless RESEARCH機能（HUD表示/STORY RESEARCHボタン等）への無影響・別インスタンスでのSave/Reload後の状態復元を含め計19項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: 要求仕様セクション5で明示されたとおり、Story Event（`LayerStoryEventManager.checkLayerEvent()`）の検索結果を実際に画面表示する演出（Dialogue Overlay等）は今回実装していない（`StoryManager.onLayerClear()`の返り値として検索結果を返すところまでに留めた。要求仕様が「今回は表示処理は作らない」と明示しているため）。Chapterのunlock判定（`unlockCondition`）はデータとして定義したが、Chapter進行自体が「前ChapterのendLayerへ到達したら自動的に次へ進む」という一本道のため、実際にはこの判定を経由せず`completeChapter()`が無条件で次Chapterへ進める設計にした（Layer Clear経由の進行は必ず順番どおりのため、unlockCondition評価は将来「Chapterを個別に選んでジャンプする」ようなUIを追加する場合に備えたデータとして温存している）。
+
+## STEP32-2: Dialogue System
+
+STEP32-1（Story Framework Base System）で「今回は表示処理は作らない」と明示的にスコープ外にした、Story Eventの実際の演出（キャラクター会話）を追加する要求仕様（STEP32-2）に基づき実装した。要求仕様セクション6のフロー（Layer Clear→StoryEventManager→DialogueManager.startDialogue()→Dialogue終了→StoryManager更新）どおり、STEP32-1で既に用意済みだった`StoryManager.onLayerClear()`の返り値（Story Event定義、これまで未使用だった）を初めて実際に消費する形で統合した。
+
+**新規ファイル**:
+- `src/endless/dialogueManager.js`（DialogueManager） — 要求仕様セクション1のAPI（`startDialogue`/`nextLine`/`endDialogue`/`isPlaying`）をそのまま実装したCoordinator本体。文字送り演出やタップ処理などのDOM操作は一切持たず、`ui.showDialogue()`/`ui.hideDialogue()`を呼ぶだけに徹した（researchDatabase.js等と同じ「Coordinator+描画はUI側」という役割分担）
+- `src/endless/characterData.js`（CharacterData） — 要求仕様セクション2どおり、player/aria/lost_researcherの3キャラクターを定義した
+- `src/endless/dialogueData.js`（DialogueData） — 要求仕様セクション3の形式（`{id, lines:[{speaker,text}]}`）で、要求仕様セクション7の「初期テストDialogue追加」どおりChapter1（Layer1〜4）分の4件を実装した。idは`layerStoryEventManager.js`のStoryEvent idと1:1対応させている
+
+**Dialogue UI（要求仕様セクション4/5）**: 新規ファイルは作らず、既存の全オーバーレイ（`showNodeResult`/`showStoryChoice`等）と同じく`ui.js`へ`showDialogue()`/`hideDialogue()`メソッドとして実装した（このプロジェクトの「オーバーレイ表示は全てui.jsのメソッドとして持つ」という既存の一貫した設計に合わせた）。文字送り演出（1文字ずつ表示、`DIALOGUE_TYPE_SPEED_MS`=30ms間隔）・タップ時の状態遷移（文字送り中のタップ→即座に全文表示、全文表示済みのタップ→次セリフ/終了）は`showDialogue()`内の1つのクリックハンドラ（`_dialogueTapHandler`）で完結させた。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **ARIAとSTEP31 AI Directorの関係**: STEP31で実装済みのAI Director（5人格: ANALYST/MENTOR/CHAOS/OBSERVER/RESEARCHER）とは統合せず、ARIAを完全に独立したキャラクターとして実装した（要求仕様がARIAを固定の1キャラクターとしてデータ化しており、5人格システムとの統合方法を要求していないため）
+- **「StoryManager更新」の実体**: 要求仕様セクション6のフロー図が示す「Dialogue終了→StoryManager更新」は、実際にはStoryManagerの状態更新（Chapter進行）がLayerクリアの瞬間（`StoryManager.onLayerClear()`内、Dialogue開始より前）に既に同期的に完了しているため、Dialogue終了時に追加で呼ぶStoryManager APIは無い。フロー図はあくまで「順序」の説明として扱い、実装は`endless.js`側でクリア結果オーバーレイの「つづける」タップ→（未読のDIALOGUE型イベントがあれば）Dialogue開始→Dialogue終了→既存の`_afterRoundEnd()`/`_endRun()`という一続きのコールバックチェーンとして組み立てた
+- **要求仕様セクション9「Endless Research互換」の解釈**: 「Dialogue SystemはStory Modeのみ使用。Endless Researchでは無効」という一文は、文字どおり読むとSTEP32-1で実装済みの唯一のトリガー元（`endless.js`の`_handleRoundClear`、ENDLESS RESEARCHのLayerクリア時に発火）と矛盾する（Dialogue Systemが発火する場所が他に存在しないため）。このセッションには別の「Story Mode」（STEP32 Story Scenario Framework、`storyMode.js`、CASE001〜006の独立Scenario）も存在するため、この一文は「2つの独立した「Story」系システムを混在させず、Dialogue SystemはLayer Narrative System（StoryManagerベース）側にのみ属し、Story Scenario Framework側には配線しない」という要件として解釈した。実際に`storyMode.js`には一切手を加えていない
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `dialogueHistory`（`{completedDialogueIds:[]}`）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `layerStoryEventManager.js`: Chapter1のLayer2〜4クリアイベント（`chapter01_layer02_clear`〜`04_clear`）を追加した（STEP32-1時点ではChapter開始Layer（Layer1）のみ1件用意していたが、`dialogueData.js`の4件のテスト会話に対応させるため、Chapter1に限り全Layerへ拡充した）
+- `endless.js`: `dialogueManager`の生成、`_handleRoundClear`内で`storyManager.onLayerClear()`の返り値がDIALOGUE型イベントの場合にクリア結果オーバーレイの「つづける」タップ後Dialogueを挟むよう統合した
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（CharacterData/DialogueData/LayerStoryEventManager拡張/DialogueManagerをwindowレルム内で読み込み、mockのui/saveを注入して直接検証）で、CharacterData全3件・DialogueData全4件（要求仕様の台詞テキストとの完全一致含む）・LayerStoryEventManagerのChapter1拡充分・DialogueManagerの一連のAPI（開始→セリフ送り→終了→既読記録→既読の再表示拒否→存在しないidの拒否→1行のみのDialogueでのタップ即終了）・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計38項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、実際のPuzzle解答によるLayer1クリア→クリア結果オーバーレイの「つづける」タップ→Dialogueオーバーレイ表示（ARIA表示・文字送り演出の途中経過確認）→タップでの文字送り即時完了→自然完了（タイマー経由）での全文表示確認→次セリフへの遷移→最終セリフタップでのDialogue終了→`dialogueHistory`への記録→既存RUN進行（MAP画面への復帰）が正常に続くこと→Layer2クリアでの新規Dialogue表示→既読Dialogueの再表示拒否確認→既存の報酬処理・HUD表示への無影響→別インスタンスでのSave/Reload後の状態復元を含め計24項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: `isPlaying()`は要求仕様どおり実装したが、現状これを参照して他の操作をブロックする箇所は無い（Dialogue表示中はオーバーレイが画面全体を覆うため、実質的に他の操作は既に不可能になっている）。他Chapter（2〜6）分のDialogueデータは、要求仕様セクション7が「Chapter1用」と明示的にスコープを限定しているため、今回は追加していない（`layerStoryEventManager.js`のChapter開始Layer分の1件ずつは既にプレースホルダーとして存在するため、`dialogueData.js`へ台詞データを追加するだけで拡張可能な状態にはなっている）。
+
+## STEP32-3: Memory Fragment System
+
+探索中に発見する記憶データ（Memory Fragment）を管理するシステムを追加する要求仕様（STEP32-3）に基づき実装した。要求仕様セクション5「Layer Clear→Story Event→Memory取得チェック」・セクション6「Dialogue連携」どおり、STEP32-1/STEP32-2で既に組み立て済みだったLayer Clear→Story Event→Dialogueのパイプラインへ、Memory取得チェックを差し込む形で統合した。
+
+**新規ファイル**:
+- `src/endless/memoryManager.js`（MemoryManager） — 要求仕様セクション1のAPI（`collectMemory`/`hasMemory`/`getCollectedMemories`/`getMemoryProgress`）に加え、要求仕様セクション5用の`checkLayerMemories(snapshot)`（storyUnlockManager.js等と同じ`{type,value}>=`比較でLayer Clear時に新規取得分を判定する）を実装した
+- `src/endless/memoryData.js`（MemoryData） — 要求仕様セクション2の形式（`{id,title,description,chapter,type,content,unlockCondition}`）に、セクション7の`character`（関連キャラクター）フィールドを加えて実装。セクション3の「初期Memory Fragment作成（Chapter1用）」どおりMEMORY_001「Genesis Beginning」（Layer3クリアで取得）・MEMORY_002「Unknown Access」（Layer4クリアで取得）の2件のみを実装した
+- `src/endless/memoryArchiveUI.js`（MemoryArchiveUI） — 要求仕様セクション4の新画面「MEMORY ARCHIVE」のDOM描画のみを持つ
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **「Memory Fragment」という語の第3の意味について**: このプロジェクトには既に「Memory Fragment」という語が2つの異なる意味で使われている（①`endlessSave.js`の`memoryFragments`＝Event Node等で獲得する単なる生涯累計カウンタ、②STEP32 Narrative & Story Systemの`storyData.js`内`memory_001`〜`006`＝totalRuns条件で解放されるStoryEntry）。本STEPが要求する`memoryProgress`というSave欄フィールド名自体はどちらとも衝突しなかったためそのまま採用したが、中身のMemory idは既存の`memory_001`等と紛らわしくなるのを避け、`memfrag_`接頭辞（`memfrag_001`/`memfrag_002`）で区別した
+- **Dialogue連携（セクション6）の実装方法**: 「SYSTEM: Memory Fragment recovered.」という発言者を解決するため、`characterData.js`へ`system`（疑似キャラクター）を追加した。個々のMemory取得時Dialogueは`dialogueData.js`へ`${memoryId}_recovered`という命名規則のidで2行（1行目`system`固定文、2行目はMemoryの`character`フィールドが指す相手の反応セリフ）として実装した
+- **Chapter DialogueとMemory Dialogueの同時発生への対応**: Layer3/Layer4クリアでは、STEP32-2のChapter Dialogue（`chapter01_layer03_clear`等）とMemory取得Dialogue（`memfrag_001_recovered`等）の両方が同一Layerクリアで発火する。`ui.showDialogue()`は単一オーバーレイのため同時に2件流し込むと片方が消える（STEP31/STEP32で繰り返し検出したのと同種の「後勝ち」問題）ため、`endless.js`の`_handleRoundClear`内でこれらをキュー（配列）にまとめ、`DialogueManager.onComplete`を使って1件ずつ直列に再生するよう設計した
+- **Endless Research連携準備（セクション10）の具体化**: 「Memory収集率をResearch Archiveへ反映可能に」という要求を、既存のSTEP32 Narrative & Story System「RESEARCH DATABASE」画面のResearch Codex一覧（`_buildResearchCodexSummary()`）へ`MEMORY`行として実際に追加する形で満たした（「可能にする」の準備で留めず、実際に反映済みの状態にした）
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `memoryProgress`（`{collectedMemoryIds:[]}`）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `characterData.js`/`dialogueData.js`: 前述のとおり`system`キャラクターと2件のMemory Fragment回収Dialogueを追加
+- `endless.js`: `memoryManager`/`memoryArchiveUI`の生成、Archive Hubからの導線配線、`_handleRoundClear`内でのDialogueキュー化統合、`_buildResearchCodexSummary()`への`MEMORY`行追加
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（MemoryData/CharacterData拡張/DialogueData拡張/MemoryManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、MemoryData全2件（要求仕様のtitle/content/取得Layerとの完全一致含む）・既存`memory_00X`系idとの非衝突確認・CharacterData/DialogueDataの拡張分・MemoryManagerの一連のAPI（未取得→取得→重複取得拒否→未定義id拒否→一覧取得→収集率算出→Layer Clear連携での新規取得判定と再判定時の非重複）・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計34項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、実際のPuzzle解答によるLayer1〜4の連続クリア→Layer1/2ではMemory未取得のままChapter Dialogueのみ再生されること→Layer3クリアでmemfrag_001が取得され、Chapter DialogueとMemory Dialogueがキューにより正しい順番で直列に再生されること→Layer4クリアでの同様の確認→MEMORY ARCHIVE画面（Collected: 2/2表示、各Memoryのtitle/character/content表示、戻るボタン）→Research CodexへのMEMORY行反映確認→既存の報酬処理・HUD表示への無影響→別インスタンスでのSave/Reload後の状態復元を含め計29項目、全PASS（2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: 要求仕様セクション9「Story分岐準備」（`hasMemory()`を条件として利用可能にする）は、`MemoryManager.hasMemory(id)`が単純な同期的boolean判定として既に利用可能な状態であること自体をもって満たしたとみなし、これを実際に消費する新しい分岐システムは今回追加していない（要求仕様が「準備」と明示しているため）。他Chapter（2〜6）分のMemory Fragmentデータは、要求仕様セクション3が「Chapter1用」と明示的にスコープを限定しているため、今回は追加していない。
+
+## STEP32-4: Character Relationship System
+
+キャラクターごとの関係値・状態を管理し、Story進行によって会話やイベント内容を変化させるシステムを追加する要求仕様（STEP32-4）に基づき実装した。要求仕様セクション6「Memory取得→Relationship変化→状態更新」・セクション5「Dialogue条件対応」どおり、STEP32-2/STEP32-3で既に実装済みだったDialogue/Memory Fragmentパイプラインへ、キャラクター状態の管理と条件判定を差し込む形で統合した。
+
+**新規ファイル**:
+- `src/endless/relationshipManager.js`（RelationshipManager） — 要求仕様セクション1のAPI（`getRelationship`/`addRelationship`/`getCharacterState`/`checkCondition`）に加え、要求仕様セクション4/6用の`checkAriaEvolution()`（Memory取得数・重要Memory取得・Final Chapter到達の3条件をprotocolUnlock.js等と同じ`{type,value}>=`比較で判定し、ARIAの状態を進める）を実装した
+- `src/endless/relationshipData.js`（RelationshipData） — 要求仕様セクション2/3の初期状態3件と、セクション4のARIA状態変化テーブル（LEVEL0 Logical AI→LEVEL1 Curious AI→LEVEL2 Emotional AI→LEVEL3 Self Aware）を実装した
+- `src/endless/characterArchiveUI.js`（CharacterArchiveUI） — 要求仕様セクション8の新画面「CHARACTER ARCHIVE」のDOM描画のみを持つ
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **`level`を独立フィールドとして永続化しない設計**: 要求仕様セクション2のデータ形式は`level`を含むが、セクション9の実際のSave対象は`{characterId,relationship,state}`のみで`level`が無い。`state`から`RelationshipData.ARIA_LEVELS`を逆引きすれば`level`は常に一意に導出できるため、重複データを持たず都度計算する設計にした（`discoveryRate`等、既存endlessSave.jsの一貫した設計判断を踏襲）
+- **LEVEL2「重要Memory取得」・LEVEL3「Final Chapter」の具体的な判定基準**: 要求仕様に具体的な指定が無かったため設計した。LEVEL2は`memfrag_002`（Unknown Access、ARIA自身のアクセスIDに関わる記録）を「重要Memory」とした（2件しかないMemoryのうち、より個人的な内容の方を採用）。LEVEL3は`layerStoryData.js`の最終Chapter（chapter06）到達とした
+- **ARIA状態遷移のタイミング（実テストで発見・修正したバグ）**: 当初`checkAriaEvolution()`をMemory取得直後、Dialogueキュー再生より前に呼んでいたところ、`memfrag_002_recovered`に付けた`condition:{character:'aria',state:'CURIOUS_AI'}`（セクション5の動作例）が、Dialogue表示前にARIAが既にEMOTIONAL_AIへ進化してしまうため常に不成立になり、Dialogue自体が表示されなくなるバグを検出した。「Dialogueのcondition判定は、そのLayerクリアで取得したMemoryを反映する前の状態に対して行われるべき」という設計に修正し、`checkAriaEvolution()`の呼び出しをDialogueキューが完全に再生し終えた直後（`nextStep()`直前）まで遅らせた
+- **Choice対応準備（セクション7）**: `addRelationship(characterId, value)`が既に「任意の理由（Memory取得/将来のChoice結果等）による関係値変更」を受け付ける汎用APIとして成立しているため、これを将来のChoice Event実装時の合成部品として使う想定とし、専用の新しいデータ構造・処理は追加していない
+- **Endless Research連携（セクション10）**: STEP32-1の設計（Layer Narrative SystemはENDLESS RESEARCH本体の`endless.js`へ直接組み込まれており、別モードとして分離されていない）により、`relationshipManager`は他の全システムと同じ`this.save`を共有するため、RUNをまたいでもARIAの状態は自然に維持される（新しいRUNを開始してもリセットされない）。実テストでこれを明示的に確認した
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `relationshipData`（`{player,aria,lost_researcher}`各`{characterId,relationship,state}`）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `dialogueManager.js`: `relationshipManager`を任意の依存として受け取れるようにし、`startDialogue()`内で`dialogue.condition`があれば`checkCondition()`でゲートするよう拡張（`relationshipManager`省略時は従来どおり無条件で表示する後方互換を維持）
+- `dialogueData.js`: `memfrag_002_recovered`へ要求仕様セクション5の動作例として`condition:{character:'aria',state:'CURIOUS_AI'}`を追加した
+- `endless.js`: `memoryManager`より後・`dialogueManager`より前に`relationshipManager`/`characterArchiveUI`を生成する順序に並べ替え（`relationshipManager`が`memoryManager`/`storyManager`に、`dialogueManager`が`relationshipManager`にそれぞれ依存するため）、Archive Hubからの導線配線、`_handleRoundClear`内でのMemory取得時`addRelationship`呼び出しと、Dialogueキュー再生完了後の`checkAriaEvolution()`呼び出しを追加した
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（RelationshipData/RelationshipManager/DialogueManagerの条件ゲートをwindowレルム内で読み込み、mockのsave/memoryManager/storyManagerを注入して直接検証）で、RelationshipDataの初期値・ARIA_LEVELSの逆引き・状態名解決・RelationshipManagerの一連のAPI（関係値取得/加算/累積/存在しないキャラクターへの安全な加算/条件判定/ARIA状態遷移の3段階すべて＋非ARIAキャラクターへの非適用＋再判定時の非重複進行）・DialogueManagerのcondition判定によるゲート（ブロック/通過/relationshipManager省略時の後方互換/condition無しDialogueへの非影響）・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計36項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、実際のPuzzle解答によるLayer1〜4の連続クリア→Layer1/2ではARIAがLOGICAL_AIのまま変化しないこと→Layer3でのmemfrag_001取得によるrelationship+5とCURIOUS_AIへの遷移→Layer4でのmemfrag_002（重要Memory）取得によるrelationship+5(計10)とEMOTIONAL_AIへの遷移、および条件付きDialogue（memfrag_002_recovered）が正しいタイミングで実際に表示・完了すること→CHARACTER ARCHIVE画面（State/Memory/Relationship表示、戻るボタン）→新規RUN開始をまたいでもARIA状態が維持されること（Endless Research連携）→既存機能への無影響→別インスタンスでのSave/Reload後の状態復元を含め計26項目、全PASS（ユニット/統合とも2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: Lost Researcherの関係値・状態は初期値のまま変化させる仕組みを実装していない（要求仕様セクション4がARIAの状態変化のみを具体的に要求しており、Lost Researcher/Playerの変化条件は指定されていないため）。Choice Event本体（要求仕様セクション7）は前述のとおり「準備」に留め、実際のChoice UIやイベントトリガーは追加していない。
+
+## STEP32-5-1: Chapter01 First Signal Content Integration
+
+Chapter01「First Signal」の実コンテンツ（台詞・Memory Fragment・Chapter完了演出）を、STEP32-1〜STEP32-4で構築済みのLayer Narrative Systemへ追加する要求仕様（STEP32-5-1）に基づき実装した。要求仕様が明記する「コード構造は変更せず、Data追加方式で実装」を徹底し、`StoryManager`/`DialogueManager`/`MemoryManager`/`RelationshipManager`の4クラス自体には一切手を加えず、既存データファイル（`dialogueData.js`/`memoryData.js`）の内容改訂と、`endless.js`（既存の統合・配線レイヤー、これまでの全STEP32系サブステップで一貫して唯一の変更対象だった箇所）への数行の追加のみで実現した。
+
+**新規ファイルは無し（Data改訂のみ）**:
+- `dialogueData.js`: Chapter1 Layer1〜3のChapter Dialogue台詞を要求仕様どおりに全面改訂した（Layer1は2行→3行、Layer2/3も文言を全面更新。Layer4は要求仕様の台詞が既存実装と完全一致していたため変更していない）
+- `memoryData.js`: `memfrag_001`（Genesis Beginning）の取得LayerをLayer3→Layer2へ、`memfrag_002`の取得LayerをLayer4→Layer3へ、それぞれ前倒しした。`memfrag_002`のtitleを要求仕様どおり「Unknown Access」→「Unknown Researcher」へ改名し、両方のcontentを要求仕様のテキストへ更新した
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Relationship付与を「Layer3のみ」に絞る方法**: 要求仕様はLayer2のMemory取得（MEMORY_001）にはRelationship変化を記載せず、Layer3のMemory取得（MEMORY_002）にのみ「Relationship: ARIA +5」と明記している。この非対称性を、既存の`endless.js`のロジック（`if (m.character) this.relationshipManager.addRelationship(...)`、STEP32-4で実装済み・無変更）はそのままに、`memfrag_001.character`を`aria`から`null`へ変更するだけの**データ変更のみ**で表現した。これにより「コード構造を変更しない」という制約を完全に満たしつつ、要求仕様どおりの挙動を実現した（副作用として、CHARACTER ARCHIVE画面のARIAの「Memory」欄は2/2ではなく1/2表示になる。memfrag_001は`character`を持たないため、キャラクター別カウントの対象から外れるため。この副作用は許容できる範囲と判断した）
+- **Chapter Complete表示の実装方法**: 要求仕様セクション「Layer4 Clear Event」が求める「CHAPTER 01 COMPLETE / FIRST SIGNAL」という完了演出は、既存4クラスのいずれにも該当する表示機能が無かったため、`endless.js`に`_showChapterCompleteOverlay()`という小さなヘルパーメソッドを追加した。ただしこれは既存の`ui.showNodeResult()`（RUN中のあらゆる結果表示に既に使われている汎用オーバーレイ）をそのまま呼ぶだけで、新しいDOM要素・新しいCSS・新しいUIクラスは一切追加していない。Chapter完了の判定自体も、`StoryManager`を変更せず、`_handleRoundClear`内で`storyManager.onLayerClear()`を呼ぶ**前**に`getCurrentChapter()`で「クリア前のChapter」を控え、クリアしたLayerがそのChapterの`endLayer`以上かどうかを`endless.js`側で判定するだけに留めた（StoryManagerの`completeChapter()`内部ロジックと同じ判定式を、呼び出し側で二重に評価する形。StoryManager自体に「Chapter完了を通知する」ための新しい返り値やイベントを追加するコード変更を避けるための設計判断）
+- **表示タイミング**: Chapter Complete表示は、Layer4のChapter Dialogue（`chapter01_layer04_clear`）が再生し終わった直後（Dialogueキューが空になった瞬間）に表示するよう統合した。ARIA状態遷移（`checkAriaEvolution()`）の判定より後、`nextStep()`（MAPへの復帰処理）より前、という既存の一連のコールバックチェーンへ自然に追加した
+
+**既存ファイルの変更**: `endless.js`のみ。`_handleRoundClear`冒頭で`chapterBeforeClear`を控える1行、Chapter完了判定の1行、Dialogueキュー完了時のChapter Complete表示呼び出し数行、および`_showChapterCompleteOverlay()`ヘルパーメソッド本体を追加した。
+
+**テスト**: 主に統合テストで検証した（今回はコード変更が最小限のためNode.js単体テストは割愛し、実際のプレイフローを通したjsdom統合テストに焦点を絞った）。jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、まずデータ内容そのものの直接検証（`memfrag_001`/`memfrag_002`の新Layer・新content・新character、Layer1〜4の新台詞テキストが要求仕様と完全一致すること）を行い、続けて実際のPuzzle解答によるLayer1〜4の連続クリアで、Layer1では変化無し→Layer2でMEMORY_001取得かつRelationship変化無し（CURIOUS_AIへの遷移のみ）→Layer3でMEMORY_002取得かつRelationship+5ちょうど（Layer2分が加算されていないことも確認）と条件付きDialogueの正常表示→Layer4でのChapter Dialogue再生後にCHAPTER 01 COMPLETE/FIRST SIGNAL表示→chapter01完了記録・chapter02解放・MAP画面への復帰→既存の報酬処理への無影響→別インスタンスでのSave/Reload後の状態復元を含め計31項目、全PASS（2回連続実行で安定性も確認済み、間欠的なjsdom/undiciのネットワークflakeが1回発生したが再実行で正常終了を確認。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: Layer3のChapter Dialogue（「なぜ私の内部に存在するのでしょう。」）と、同じLayer3で連続再生されるMemory Fragment回収Dialogue（`memfrag_002_recovered`、「なぜ私の内部データに存在するのでしょう。」）は、要求仕様がそれぞれ独立して指定した台詞のため、内容が非常に似通ったまま連続表示される（意図的にどちらかを削除・統合していない。要求仕様の記述をそのまま実装した結果であり、将来的に片方を調整する余地がある点をここに記録しておく）。
+
+## STEP32-5-2: Layer Narrative System汎用化基盤
+
+Layer Narrative SystemをChapter1専用から、Chapter2以降を追加可能な汎用システムへ拡張する要求仕様（STEP32-5-2）に基づき実装した。要求仕様が明記する「今回はゲームコンテンツ追加ではなく、Story拡張基盤の整備が目的」を徹底し、`docs/STORY_BIBLE.md`（本要求の事前条件として存在確認済み）を設定の基準として扱いつつ、実際のゲーム進行（`endless.js`の`_handleRoundClear`）には一切手を加えず、新規データファイルの追加と既存データファイルへの「予約枠」追加のみで実装した。
+
+**新規ファイル**:
+- `src/endless/layerContentData.js`（LayerContentData） — 要求仕様セクション2が求める統一Layer Story Data構造（`layerId/chapterId/title/environment/dialogueId/memoryId/relationshipChange`）を実装した新規の正本テーブル。これまで`layerStoryEventManager.js`（Dialogue idの検索）・`memoryData.js`（Memoryごとの`unlockCondition`）・`endless.js`内の固定値（Relationship+5）に分散していた「Layer1件分の内容」を、1レコードとして見渡せる形に整理した。Layer1〜4は既存実装（STEP32-5-1）の実際の値と1:1で一致させ、Layer5〜30は要求仕様セクション3と同じ「locked（予約）」プレースホルダーとした
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **セクション1「Chapter Data拡張」は追加不要だった**: `layerStoryData.js`のChapter02〜06（title/Layer範囲/unlockCondition）は、既にSTEP32-1の時点で要求仕様と完全に一致する内容が実装済みだった（Chapter同士のタイトル・Layer範囲は当時からStory Bibleと同じ設計だったため）。データを重複追加せず、既存実装が要求を満たしていることを確認するのみに留めた
+- **`LayerContentData`を今回は実行経路から参照させない設計**: 新設した統一テーブルは、要求仕様セクション5「Dialogue管理を確認」・セクション7の検証項目（Chapter1動作が変化していないこと/Endless Research動作に影響がないこと）を踏まえ、あえて`endless.js`側から一切参照させない「純粋な将来の拡張基盤」として設計した。既存の実行パス（`layerStoryEventManager.checkLayerEvent()`/`memoryData.js`の`unlockCondition`/Relationship+5の固定値）は完全に無変更のままとした。Chapter2以降に実際のDialogueコンテンツを追加するタイミング（本ステップより後）で、`StoryManager`側がこのテーブルを正本として参照するよう統合することを見込んでいるが、その統合自体は今回のスコープ外とした
+- **Memory003〜030・Partner AIの「locked/予約」実現方法**: 既存コード（`memoryManager.js`/`relationshipManager.js`）を一切変更せず、データの持たせ方だけで安全に無効化した。
+  - Memory: `unlockCondition: null`にすると、既存の`MemoryManager._checkUnlockCondition()`（`if (!condition) return false`）が常にfalseを返すため、絶対に自動取得されない
+  - Partner AI（LEVEL4）: `condition.type`に、`RelationshipManager._buildAriaSnapshot()`が絶対に生成しないキー（`reserved`）を指定した。`_checkLevelCondition()`は`snapshot[condition.type]||0 >= condition.value`で判定するため、snapshotに存在しないキーは常に0として扱われ、到達不可能になる
+  - どちらも「将来、本物の条件に差し替えるだけで有効化できる」形を保ちつつ、今回は絶対に発火しないことをテストで保証した
+- **Memory003〜030のChapter割り当て**: 要求仕様に具体的な配分指定が無かったため、Layer範囲の広さに比例させて設計した（Chapter2〜5は各4件、Layer21〜30と特に長いFinal Chapterのみ12件、既存2件と合わせて合計30件）
+
+**既存ファイルの変更（いずれもデータの追加のみ、既存のキー・値は変更していない）**:
+- `memoryData.js`: `memfrag_003`〜`memfrag_030`（28件、全て`locked:true`・`unlockCondition:null`）を追加
+- `relationshipData.js`: `ARIA_LEVELS`へLEVEL4「Partner AI」（`reserved:true`、到達不可能な`condition`）を追加
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（LayerContentData/MemoryData/RelationshipDataをwindowレルム内で読み込み、実`MemoryManager`/`RelationshipManager`へmockのsaveを注入して直接検証）で、既存Chapter Dataの内容確認・LayerContentData全30件のスキーマ・Layer1〜4の値が実装済みデータと完全一致すること・Layer5〜30が正しくlocked/導出されたchapterId/environmentを持つこと・MemoryData全30件のid一意性とChapter配分・重要な安全性検証（`layerReached:30`まで到達させても、lockedな28件は一切自動取得されず実装済み2件のみが取得されること）・重要な安全性検証（ARIA進化条件を極端に満たす状況を作っても、Partner AIには絶対到達せずSELF_AWARE止まりであること）を含め計32項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、まず`memoryProgress`/`relationshipData`/`layerStoryProgress`を含む既存形式のセーブデータを直接localStorageへ書き込んでLoadが成功しデータが破壊されないことを確認し（要求仕様セクション6）、続けて実際のPuzzle解答によるLayer1〜4の連続クリアがSTEP32-5-1実装時と完全に同一の結果（台詞・Memory取得・Relationship変化・Chapter Complete表示・Chapter2解放）になることを確認、MEMORY ARCHIVE画面が新しい母数を反映して「2 / 30」・ロック済み28件を正しく表示すること・既存Endless RESEARCH機能への無影響・別インスタンスでのSave/Reload後の状態復元を含め計27項目、全PASS（ユニット/統合とも2回連続実行で安定性も確認済み。テスト中、間欠的なjsdomのスクリプト読み込みタイミングflakeが数回発生したため、待機時間を4秒→6秒へ延長して安定させた。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: 要求仕様が明示するとおり、Chapter2以降の本文Dialogue・Memory内容は今回追加していない（`locked`状態のプレースホルダーのみ）。`layerContentData.js`は現時点で実行経路から参照されない「将来の拡張基盤」に留まる。Chapter2以降へ実コンテンツを追加する将来のステップで、`StoryManager`側をこのテーブル経由の参照へ統合するかどうかは、その時点の要求仕様次第とし、今回は判断を先送りにした。
+
+## STEP33: Research Archive System
+
+プレイヤーが探索で取得した情報を確認できるResearch Archiveシステムを追加する要求仕様（STEP33）に基づき実装した。要求仕様セクション5「Protocol Archiveは既存システムがある場合統合」の方針を、Story以外の全カテゴリ（Memory/Character/Protocol/Facility）へ適用し、新規実装は「Story（Chapter進行一覧）」と「5カテゴリへのナビゲーションHub」の2画面のみに絞った。既存の各Archive画面自体（表示内容・データ）には一切手を加えていない。
+
+**新規ファイル**:
+- `src/endless/researchArchiveUI.js`（ResearchArchiveUI） — 要求仕様セクション1の「Story/Memory/Character/Protocol/Facility」5メニューを持つ新設Hub画面。各ボタンは対応する既存（または新設の）Archiveクラスの`show()`をそのまま呼ぶだけ
+- `src/endless/chapterArchiveUI.js`（ChapterArchiveUI） — 要求仕様セクション2の「Story Archive」。`layerStoryData.js`（Chapter Data）と`layerStoryProgress`（Save Data）を参照し、各Chapterのtitle/unlock状態/completion状態/Layer進行を一覧表示する（これまで存在しなかった、Chapter単位の見渡し画面）
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **カテゴリと既存実装の対応付け**: 要求仕様セクション3「Memory Archive」→既存`memoryArchiveUI.js`（STEP32-3）、セクション4「Character Archive」→既存`characterArchiveUI.js`（STEP32-4）、セクション5「Protocol Archive」→既存`protocolArchive.js`（Phase C）、セクション6「Facility Archive」（`worldEnvironment.js`と連携しEnvironment発見状態を表示）→既存`worldEnvironmentArchive.js`（STEP30-3、要求仕様の説明と完全に一致する画面が既にあった）として、それぞれ新規実装せず統合した
+- **二重化した「戻る」ボタンの動的解決**: 既存の各Archive画面は、従来の「ARCHIVE HUB」（8個の詳細アーカイブ一覧、STEP30〜32-4で順次追加されてきた既存画面）からも引き続き開けるようにする必要があった（要求仕様セクション8「Endless Research動作維持」＝既存画面の動作を壊さないことを含むと解釈）。同じ画面を2つの入口（従来のARCHIVE HUB／新設のRESEARCH ARCHIVE）から開けるようにしつつ「戻る」を正しい行き先へ振り分けるため、各Archiveクラスの`onBack`プロパティを**呼び出し直前に動的に上書きする**設計にした（`researchArchiveUI.js`の`_bindTabButton()`が`targetUI.onBack = () => this.show()`を`show()`の直前に設定する）。これにより、ARCHIVE HUB経由なら`_showArchiveHub()`、RESEARCH ARCHIVE経由ならこのHubへ、常に直前に開いた入口へ正しく戻る
+- **`protocolArchive.js`への`onBack`追加**: 上記の統一的な「戻る」振り分けを実現するには、`protocolArchive.js`だけが他の6つのArchiveクラスと異なり`onBack`プロパティを持たず、戻るボタンが`endless.js`側で`_showArchiveHub()`に直接ハードコードされていた。他クラスと同じ`onBack`パターンへ揃える最小限の変更（プロパティ追加+`endless.js`側のクリックハンドラを`onBack`優先に変更、無指定時は従来どおり`_showArchiveHub()`へフォールバック）を行い、後方互換を保ったまま二重入口に対応させた
+- **`archiveData`の内容**: 要求仕様セクション7が求める新規Save対象として、直近開いていたタブ（`lastViewedTab`）のみを持たせた。5カテゴリのうちStory以外は全て既存のSaveフィールド（`memoryProgress`/`relationshipData`/`unlockedProtocols`/`discoveredWorldEnvironments`等）をそのまま参照するため、真に新規で必要な永続データはこの1項目のみだった
+- **既存ARCHIVE HUBの扱い**: 要求仕様セクション8「Mobile UI崩れなし」を踏まえ、既存の8ボタンの並びは一切変更せず、先頭に「🗄️ RESEARCH ARCHIVE」を1つ追加するだけに留めた（既存画面への回帰リスクを最小化する、このセッションで繰り返し採用してきた「既存要素は変更せず追加のみ」の方針）
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `archiveData`（`{lastViewedTab:null}`）を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった
+- `protocolArchive.js`: `onBack`プロパティを追加（前述）
+- `endless.js`: `chapterArchiveUI`/`researchArchiveUI`の生成（`protocolArchive`/`worldEnvironmentArchive`等5つの依存が揃った直後に配置）、ARCHIVE HUBからの新規導線配線、Protocol Archiveの戻るボタンを`onBack`優先に変更
+
+**テスト**: 統合テストに焦点を絞った（今回は既存クラスの再利用が中心で新規ロジックが少ないため）。jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、`archiveData`を持たない旧形式セーブからのマイグレーション確認→ARCHIVE HUBからRESEARCH ARCHIVEへの導線→STORY（Chapter1のみ表示・他5Chapterが正しくLOCKED表示されること）→MEMORY/CHARACTER/PROTOCOL/FACILITYの4カテゴリがそれぞれ既存Archive画面をそのまま開くこと→各画面からRESEARCH ARCHIVEへ正しく戻ること（動的`onBack`の検証）→RESEARCH ARCHIVEからARCHIVE HUBへ戻ること→**回帰確認として**従来どおりARCHIVE HUBからProtocol/Memory Archiveを開いた場合は引き続きARCHIVE HUBへ戻ること（RESEARCH ARCHIVE経由で上書きされた`onBack`が正しく再上書きされ、迷子にならないこと）→実際のPuzzle解答によるLayer1クリアが従来どおり動作すること（STEP32-5-1/5-2の回帰確認）→別インスタンスでのSave/Reload後の状態復元を含め計33項目、全PASS（2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: 要求仕様セクション5「Lore表示項目を追加可能な構造にする」について、`protocolArchive.js`自体は改修していない（既存の`description`/`rarity`表示のまま）。Lore項目（研究技術としての世界観説明等）を追加する場合、`docs/STORY_BIBLE.md`5章で整理済みのProtocol Loreカテゴリ分類を参照し、`protocols.js`/`protocolSignals.js`のデータへ新しいフィールド（例: `lore`）を追加し`protocolArchive.js`の`_render()`で表示するだけで対応できる構造（データ駆動）にはなっているが、実際のフィールド追加・表示は今回のスコープ外とした。
+
+## STEP34: Layer Clear → Story Narrative統合、Chapter1完成
+
+LayerクリアとStory Narrativeを接続し、Chapter1のストーリー体験を完成させる要求仕様（STEP34）に基づき実装した。要求仕様セクション1が明示する新しい演出順序（Layer Clear→Story Event Check→Dialogue→Memory Unlock→Relationship Update→Reward）に合わせて`_handleRoundClear`を再構成し、STEP32-5-2で「将来の拡張基盤」として用意しただけだった`layerContentData.js`を、実際にゲーム進行から参照される正本テーブルへ昇格させた。
+
+**新規ファイルは無し**。既存6ファイルの改修のみ（データ改訂+ロジック統合）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **`layerContentData.js`を「Story Event管理システム」として正式採用**: 要求仕様セクション2の管理項目（`eventId/trigger/dialogueId/memoryId/relationshipChange`）のうち、`dialogueId`/`memoryId`/`relationshipChange`は既に`layerContentData.js`（STEP32-5-2）が持っていたため、不足していた`eventId`/`trigger`（`trigger`は全件共通で`'LAYER_CLEAR'`）だけを追加する形で対応した。3つ目の類似データファイルを新設せず、既存の正本テーブルを拡充する選択をした
+- **`StoryManager.onLayerClear()`の参照先切り替え**: これまで`layerStoryEventManager.js`（Dialogue idのみを検索する専用テーブル、STEP32-1/32-2で実行経路として使用）を参照していたのを`layerContentData.js`へ切り替えた。STEP32-5-2の時点でLayer1〜4の値が旧実装と1:1一致することを検証済みだったため、この切り替え自体はChapter1の挙動に影響しない（実テストで確認）。`layerStoryEventManager.js`は削除せず、実行経路から外れた状態でファイルとしては残している
+- **Layer3/Layer4の再配分**: 要求仕様セクション3が「Layer3: ARIA解析イベント（Memory記載なし）」「Layer4: Memory002 Unknown Researcher取得+Chapter1完了イベント」と明記したため、STEP32-5-1時点でLayer3に置いていたmemfrag_002の取得を再びLayer4へ移した（`memoryData.js`の`unlockCondition`と`layerContentData.js`の`memoryId`/`relationshipChange`を連動して変更）。Layer3の`chapter01_layer03_clear`Dialogue自体（「このデータは隔離されています。／なぜ私の内部に存在するのでしょう。」）は改変せず、そのまま「ARIA解析イベント」として再定義した
+- **Memory Unlock/Relationship Updateの駆動方式変更**: 従来`memoryManager.checkLayerMemories()`（`MemoryData.ALL`を毎回全件走査し`unlockCondition`を評価）で行っていたMemory取得判定を、`layerEvent.memoryId`（Story Event管理テーブルが直接指定する値）による直接呼び出し（`memoryManager.collectMemory(id)`）へ変更した。同様にRelationship加算も、従来の「取得したMemoryに`character`フィールドがあれば固定値+5」という判定から、`layerEvent.relationshipChange`（`{character,value}`）が直接指定する値を使う方式へ変更した。`checkLayerMemories()`自体はAPIとして削除せず残している（テスト・将来利用のため）
+- **Memory取得時演出「MEMORY FOUND」の設計（要求仕様セクション5）**: 既存の`showNodeResult`をそのまま再利用し、新規オーバーレイ・新規UIクラスは追加しなかった。「MEMORY FOUND / Memory Title / ARIA Analysis」という3行構成を、①`showNodeResult`で"MEMORY FOUND"+Memory Titleと内容を表示→②既存の`${memoryId}_recovered`Dialogue（STEP32-3、ARIAの反応セリフ）を"ARIA Analysis"として再生、という2段階の演出として実現した。新しいDialogue文面は追加していない（既存のものをそのまま「ARIA Analysis」の実体として位置づけ直した）
+- **演出順序の入れ替えが既存Endless RESEARCHへ与える影響**: Reward表示を最後に回す変更は、Story内容（`layerEvent.dialogueId`等）が存在するLayerでのみ意味を持つ。Story未実装の大多数のLayer（5以降）では`storySteps`が空になるため、即座にRewardオーバーレイが表示され、体感上は変更前と完全に同一になる（実テストで確認、要求仕様セクション7「Endless Research動作維持」）
+- **Dialogue条件`storyProgress`の判定基準**: 要求仕様に具体的な比較対象の指定が無かったため、既存の`layerReached`系の判定と一貫性を持たせ、`{type:'storyProgress', minLayer}`で「現在のStory Layer進行がminLayer以上か」を判定するシンプルな形にした（Chapter比較等の複雑な条件は今回は実装していない）
+
+**既存ファイルの変更**:
+- `layerContentData.js`: 全レコードへ`eventId`/`trigger`を追加。Layer3/Layer4の`memoryId`/`relationshipChange`/`title`を前述のとおり再配分
+- `memoryData.js`: `memfrag_002.unlockCondition.value`を3→4に変更
+- `storyManager.js`: `onLayerClear()`の参照先を`LayerStoryEventManager.checkLayerEvent()`→`LayerContentData.getByLayer()`へ切り替え
+- `relationshipManager.js`: `checkCondition()`を`type`付きの3条件（`ariaState`/`relationship`/`storyProgress`）へ拡張（`type`無しのレガシー形式は`ariaState`として後方互換動作）
+- `dialogueData.js`: `memfrag_002_recovered`のconditionを新形式`{type:'ariaState',...}`へ移行
+- `endless.js`: `_handleRoundClear`の演出順序を再構成（Story Event Check→Dialogue→Memory Unlock→Relationship Update→Chapter Complete→Rewardの順）。`MemoryData`を新たにimportし、Memory Unlock/Relationship Updateを`layerEvent`駆動に変更
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（layerContentData/memoryData/storyManager/relationshipManager/dialogueDataをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、Layer1〜5のレコード内容（新eventId/trigger、Layer3/4の再配分）・`memoryData.js`のunlockCondition変更・`StoryManager.onLayerClear()`が新しいレコード形状を返すこと・`RelationshipManager.checkCondition()`の全パターン（レガシー形式/ariaState/relationship/storyProgress/null/未知typeのフェイルオープン）・`dialogueData.js`の条件移行を含め計19項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、既存形式セーブのLoad確認→実際のPuzzle解答によるLayer1〜4の完全な新シーケンス確認（Layer1: Dialogueが先でRewardが後になる順序転換／Layer2: Dialogue→MEMORY FOUND→ARIA Analysis→Rewardの4段階、memfrag_001取得・relationship変化無し・CURIOUS_AI遷移／Layer3: ARIA解析イベントのみ（Memory無し）／Layer4: Dialogue→MEMORY FOUND(Unknown Researcher)→条件付きARIA Analysis→relationship+5→Chapter Complete→Reward、chapter02解放）→Story ArchiveへのChapter1 COMPLETE反映確認→Protocol Archive/Research Map画面への無影響確認→既存の報酬処理への無影響→別インスタンスでのSave/Reload後の状態復元を含め計39項目、全PASS（ユニット/統合とも2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: `layerStoryEventManager.js`（STEP32-1/32-2）は実行経路から外れたが、要求仕様に明示的な削除指示が無いためファイル自体は残した（`index.html`の読み込みも残している。未使用コードとして将来整理する余地がある点をここに記録する）。Dialogue条件`storyProgress`のChapter単位の比較（例: 「Chapter2以降でのみ表示」）は今回実装しておらず、Layer番号の比較のみに対応している。
+
+## STEP35: Chapter2「Lost Data」Layer5〜8コンテンツ追加
+
+Chapter2「Lost Data」（Layer5〜8）のストーリーコンテンツを追加する要求仕様（STEP35）に基づき実装した。STEP34で確立した「Story Event Check→Dialogue→Memory Unlock→Relationship Update→Reward」のLayer Clearフローと、`layerContentData.js`を正本とするStory Event管理システムは、Chapter2でも一切の実行ロジック変更なしにそのまま機能した（新規実装は全てデータ追加のみ）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **ARIA状態の扱い（要求仕様セクション3「開始: Curious AI／終了: Curious AI」との整合）**: 実装前に実機テストで確認したところ、Chapter1 Layer4で取得するmemfrag_002が`relationshipData.js`のLEVEL2（`EMOTIONAL_AI`）到達条件（`importantMemoryCollected`）を満たすため、実際にはARIAはChapter1完了と同時に内部state値としては`EMOTIONAL_AI`へ遷移済みであることが判明した（これはSTEP32-4で意図的に設計されたChapter1完結の演出）。要求仕様セクション7「Chapter1動作維持」を優先し、この遷移条件自体は変更していない。そのため要求仕様セクション3の「Curious AI」という記述は、内部state値を強制的にCURIOUS_AIへ固定する指示ではなく、**台詞の書きぶり（理知的で好奇心に満ちた口調を保つこと）への指示**として解釈した。Chapter2の全Dialogueは「〜が分かってきました」「理解が深まってきました」のような分析的な言い回しで統一し、要求仕様セクション3の「変化は感情ではなく理解度向上として表現する」を文字どおり満たす形にした。この解釈の経緯と根拠（実機テストのARIA state確認結果）を`dialogueData.js`のコメントに詳しく記録した
+- **Layer7/8のRelationship配分**: 要求仕様セクション5「Layer7: ARIA Relationship +5」のみ明記されていたため、Layer8には`relationshipChange: null`を設定した（Chapter1のLayer4パターン、Memory取得と同時にRelationship変化が明記されている箇所にのみ付与する既存の設計方針を踏襲）
+- **Memory003/004のcharacterフィールド**: memfrag_003（Layer7、Relationship+5とセット）は`character: 'aria'`、memfrag_004（Layer8、Relationship変化なし）は`character: null`とし、Chapter1のmemfrag_001/002と同じ「Relationship変化を伴うMemoryにはcharacterを設定する」という命名規約を維持した（STEP34以降、実際のRelationship駆動は`layerContentData.js`の`relationshipChange`が正本のため、この`character`フィールド自体はドキュメンテーション目的の記録用）
+
+**既存ファイルの変更**:
+- `layerContentData.js`: Layer5〜8を`locked`予約からIMPLEMENTEDへ昇格。Layer9以降は引き続きlocked予約のまま
+- `memoryData.js`: memfrag_003（Researcher Profile）/memfrag_004（Genesis Project Log）を`locked`予約からIMPLEMENTEDへ昇格。`RESERVED_COUNT_BY_CHAPTER`のchapter02を4→2件（memfrag_005/006のみ残存）へ調整（合計30件は変わらない）
+- `dialogueData.js`: Chapter2 Layer5〜8のChapter Dialogue（4件）とMemory回収Dialogue（memfrag_003_recovered/memfrag_004_recovered、2件）を追加
+
+**新規ファイルは無し**。`layerStoryData.js`のchapter02定義（title/Layer範囲/Environment）は既にSTEP32-1で要求仕様と完全一致する内容が実装済みだったため、変更不要だった。`chapterArchiveUI.js`（STEP33）も、`LayerStoryData`/`layerStoryProgress`を汎用的に参照する設計のため、Chapter2の進行状態表示（要求仕様セクション6）にコード変更なしで対応できた。
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（Layer5〜8のeventId/dialogueId/memoryId/relationshipChange/environment、memfrag_003/004の内容、reservedカウント調整）→既存形式セーブのLoad確認→実際のPuzzle解答によるChapter1クリア（Chapter1動作維持の回帰確認、ARIAがEMOTIONAL_AIへ到達することも含めて確認）→Chapter2 Layer5〜8の完全な新シーケンス確認（Layer5: Chapter2開始イベント、Dialogueのみ／Layer6: 破損データ解析イベント、Dialogueのみ／Layer7: Dialogue→MEMORY FOUND(Researcher Profile)→ARIA Analysis→Relationship+5／Layer8: Dialogue→MEMORY FOUND(Genesis Project Log)→ARIA Analysis→Chapter Complete→Reward、chapter03解放）→Story Archive/Memory Archiveへの反映確認→Protocol Archive/Research Map/既存報酬処理への無影響確認→別インスタンスでのSave/Reload後の状態復元を含め計49項目、全PASS（2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**テスト実装中に発見したテストハーネス側の問題（ゲームロジックのバグではない）**: 初回のテスト実装でLayer6のDialogueが表示されない失敗が発生し、原因調査の結果、`transitionManager.js`（STEP30-3のEnvironment Transition演出）が「続ける」ボタンクリック待ちで自動には閉じない設計であるにもかかわらず、既存のテストヘルパー`enterLayer()`がこのオーバーレイの dismiss処理を持っていなかったことが原因と判明した（Chapter1のLayer1〜4は偶然すべて同一Environment内で完結していたため、これまでのSTEP32〜34のテストではこの演出が一度も発生せず、見過ごされていた）。Chapter2の`env_network`遷移で初めて表面化したため、STEP35のテストヘルパーに`dismissEnvTransitionIfShown()`を追加して解消した。ゲーム本体のコードは変更していない。
+
+**未実装/既知の制約**: 要求仕様どおりChapter2のみを実装し、Chapter3以降（Layer9〜）は引き続き`locked`予約のまま。ARIAのLEVEL3（`SELF_AWARE`）到達条件（`finalChapterReached`）はChapter2では変化しないため、Chapter2を通じてARIAは`EMOTIONAL_AI`のまま推移する（前述のとおり要求仕様セクション3の「Curious AI」は内部state値ではなく台詞の書きぶりへの指示として解釈したため、この点は矛盾ではない）。
+
+## STEP36: Chapter3「Color Experiment」Layer9〜12コンテンツ追加
+
+Chapter3「Color Experiment」（Layer9〜12）のストーリーコンテンツを追加する要求仕様（STEP36）に基づき実装した。STEP34/35で確立したLayer Clearフロー・Story Event管理システムは今回も無変更で機能したが、要求仕様セクション2「Layer11: Protocol Color Analyzer取得」に対応するため、Story Event管理システムへ`protocolId`という新しい管理項目を1つ追加した（Memory Unlockの`memoryId`と対になる仕組み）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Color Analyzerは新規Protocolを作らず、既存データを再利用した**: `protocolSignals.js`を調査した結果、`color_analyzer`（Color Analyzer、PERFECTボーナス+40%）が既にSTEP32（Story Scenario Framework）でSTORY RESEARCH CASE003クリア報酬として実装済みであることが判明した。要求仕様セクション5「カテゴリ: Genesis Protocol」も`docs/STORY_BIBLE.md`5章に既に同じ分類で記載済みだった。このため新規Protocol定義は追加せず、`endless.js`のLayer11クリア処理から既存の`save.unlockProtocol('color_analyzer')`を直接呼ぶ設計にした（CASE003クリア経由でも、Chapter3 Layer11経由でも、どちらが先でも正しく動作する。`unlockProtocol()`自体が「既に解放済みならfalseを返す」二重解放防止を内蔵しているため）。Protocol Archiveの解放条件ラベル（`protocolUnlock.js`の`getConditionLabel()`）にも、`color_analyzer`だけ2つ目の解放経路（Chapter3 Layer11到達）を追記する小さな修正を加えた
+- **Protocol取得演出「PROTOCOL UNLOCKED」の設計**: 要求仕様に演出の具体的な指定は無かったが、STEP34の「MEMORY FOUND」演出とセッションを通じて確立した「情報系オーバーレイは自動消滅させない（続けるボタン必須）」というユーザーフィードバック方針に合わせ、既存の自動消滅アニメーション`ui.showProtocolDiscovery()`（`_checkProtocolUnlocks()`の通常解放時に使用）ではなく、MEMORY FOUNDと同じ`ui.showNodeResult()`（続けるボタン付き）で表示する新しいStory Stepタイプ`protocolUnlocked`を追加した。新規UIコンポーネントは追加していない
+- **memfrag_005/006の所属Chapter訂正（STEP35からの数値整合性の是正）**: STEP35時点では`memfrag_005`/`memfrag_006`を「Chapter2の未使用予約枠」として生成していたが、STEP36の要求仕様セクション4が「Memory005: Human Cognitive Pattern」「Memory006: Color Experiment Final Report」をChapter3のMemoryとして明示的に指定したため、この2件をChapter2→Chapter3へ再割当した。この過程で、実際のコンテンツ実装パターンが「各Chapter予約4枠のうち2枠を実装」ではなく「各Chapter実装2件・予約枠は持たない」（Chapter1が最初からその形だった）と判明したため、`RESERVED_COUNT_BY_CHAPTER`をこの機会に実態に合わせて整理した（Chapter2/3は予約枠0で確定、余った分はFinal Chapter=chapter06の予約枠へ吸収し16件とした。合計30件は不変）。詳細な経緯は`memoryData.js`のコメントに記録した
+- **ARIA状態の扱い（要求仕様セクション3「開始: Curious AI／終了: Emotional AI」との整合）**: Chapter2と同じ理由（Chapter1完了時点で既にARIAは内部state値として`EMOTIONAL_AI`へ遷移済み）により、Chapter3の間に新たなLEVEL到達は発生しない（LEVEL3=`SELF_AWARE`はFinal Chapter到達が条件のため）。要求仕様セクション3「変化は感情追加ではなく人間の思考への理解深化として表現する」という指示を踏まえ、「Curious AI→Emotional AI」という記述を内部state値の強制ではなく**台詞のトーンの変化**（Layer9の分析的な語り口から、Layer12のmemfrag_006_recoveredでの「LOGIC COLORの本当の意味」への深い理解と共感へ至る流れ）として解釈し反映した
+
+**既存ファイルの変更**:
+- `layerContentData.js`: Layer9〜12を`locked`予約からIMPLEMENTEDへ昇格。新フィールド`protocolId`をスキーマへ追加（既存の全レコードへも後方互換のため`protocolId: null`を補った）
+- `memoryData.js`: memfrag_005（Human Cognitive Pattern）/memfrag_006（Color Experiment Final Report）をChapter2予約枠からChapter3実装済みへ再割当。`RESERVED_COUNT_BY_CHAPTER`を実態に合わせて整理（Chapter2/3の余剰枠をFinal Chapterへ統合）
+- `dialogueData.js`: Chapter3 Layer9〜12のChapter Dialogue（4件）とMemory回収Dialogue（memfrag_005_recovered/memfrag_006_recovered、2件）を追加
+- `endless.js`: `_handleRoundClear`のStory Event Check部にProtocol Unlock処理（`layerEvent.protocolId`駆動）を追加。Story StepsキューへProtocol取得演出（`protocolUnlocked`タイプ）を追加
+- `protocolUnlock.js`: `getConditionLabel()`の`scenarioReward`分岐に、`color_analyzer`専用の2経路表示（軽微な表示改善、機能への影響なし）
+
+**新規ファイルは無し**。`layerStoryData.js`のchapter03定義、`protocolSignals.js`のcolor_analyzer定義は既に要求仕様と完全一致する内容が実装済みだったため、いずれも変更不要だった。
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（Layer9〜12のeventId/dialogueId/memoryId/protocolId/relationshipChange/environment、memfrag_005/006の再割当・所属Chapter、色analyzer既存データの再利用確認）→既存形式セーブのLoad確認→実際のPuzzle解答によるChapter1/2クリア（回帰確認）→Chapter3 Layer9〜12の完全な新シーケンス確認（Layer9: Color Analysis Lab開始イベント、Dialogueのみ／Layer10: Dialogue→MEMORY FOUND(Human Cognitive Pattern)→ARIA Analysis→Relationship+5／Layer11: Dialogue→PROTOCOL UNLOCKED(Color Analyzer)→Reward／Layer12: Dialogue→MEMORY FOUND(Color Experiment Final Report)→ARIA Analysis→Relationship+5→Chapter Complete→Reward、chapter04解放）→Story Archive/Memory Archive/Protocol Archiveへの反映確認→既存報酬処理への無影響確認→別インスタンスでのSave/Reload後の状態復元を含め計84項目、全PASS（2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**テスト実装中に発見した事象（ゲームロジックのバグではない）**: Layer10がたまたま既存のBoss出現ロジック（Depth 10ごと等の既存仕様）に該当するBoss Layerだったため、クリア時の報酬オーバーレイタイトルが通常の「DEPTH X CLEAR」ではなく「${bossName} DEFEATED!」形式になっていた。これはSTEP31以前からの既存Boss機能がそのまま動作しているだけであり、STEP36の変更とは無関係。テストのアサーションを両方のタイトル形式を許容するよう修正して対応した。
+
+**未実装/既知の制約**: 要求仕様どおりChapter3のみを実装し、Chapter4以降（Layer13〜）は引き続き`locked`予約のまま。
+
+## STEP37: Chapter4「Silent Facility」Layer13〜16コンテンツ追加
+
+Chapter4「Silent Facility」（Layer13〜16）のストーリーコンテンツを追加する要求仕様（STEP37）に基づき実装した。STEP34〜36で確立したLayer Clearフロー・Story Event管理システムは今回も無変更で機能したが、要求仕様セクション3「Lost Researcherを本格利用（characterData.jsの既存データと連携。状態: UNKNOWN→DISCOVERED）」に対応するため、Story Event管理システムへ`characterDiscovery`という新しい管理項目を1つ追加した（STEP36の`protocolId`と全く同じ設計パターン）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Lost Researcherは新規データを作らず既存データを再利用**: `characterData.js`/`relationshipData.js`を調査した結果、`lost_researcher`（表示名"Unknown Researcher"）は既にSTEP32-4（Character Relationship System）で`DEFAULTS`に`{relationship:0, state:'UNKNOWN'}`として定義済みであることが判明した。新規キャラクターデータは追加せず、`endless.js`のLayer14クリア処理から既存の`save.setRelationshipState('lost_researcher', 'DISCOVERED')`を直接呼ぶ設計にした。二重発見防止のガード（既にDISCOVERED済みなら何もしない）も、`protocolId`/`memoryId`と同じパターンで実装した
+- **Character Discovery演出「CHARACTER DISCOVERED」の設計**: 要求仕様に演出の具体的な指定は無かったが、STEP34〜36で確立した「情報系オーバーレイは自動消滅させない」方針に合わせ、MEMORY FOUND/PROTOCOL UNLOCKEDと同じ`ui.showNodeResult()`（続けるボタン付き）で表示する新しいStory Stepタイプ`characterDiscovered`を追加した。「Lost Researcher登場」は要求仕様セクション2でMemory007取得とセットで描写されているため、Story StepsキューではMEMORY FOUND→ARIA Analysis Dialogueの**後**にCHARACTER DISCOVEREDを配置し、「記録を読み解いた結果としてキャラクターの存在が明らかになる」という順序で表現した
+- **Layer14/15のRelationship変化先の判断**: 要求仕様セクション6は「Layer14: +5」「Layer15: +5」とのみ記載され、対象キャラクターの指定が無かった。Chapter1〜3では一貫してARIAへのRelationship変化だったが、Chapter4は要求仕様セクション3が「Lost Researcherを本格利用」と明記していること、`lost_researcher.relationship`がSTEP32-4以来ずっと未使用（常に0）のまま放置されていたことから、Layer14/15の+5は**Lost Researcher自身へのRelationship変化**として設計した（Lost Researcherを発見し、記録を読み解いていく過程で関係が深まっていく、という自然な物語上の対応）。Memory007/008の`character`フィールドも`aria`ではなく`lost_researcher`とした
+- **Layer15のmemfrag_008をChapter1の伏線と接続**: 要求仕様セクション4「主人公とGenesis Projectの関係への伏線」に対応するため、`memfrag_008_recovered`のDialogueをSTEP32-5-1で実装済みのChapter1 Layer2台詞「最終アクセス記録を発見しました。Access ID: Researcher-01」（`chapter01_layer02_clear`）と意図的に呼応させた。既存のDialogueデータは変更せず、新しいDialogueの文面で参照するだけに留めている
+
+**既存ファイルの変更**:
+- `layerContentData.js`: Layer13〜16を`locked`予約からIMPLEMENTEDへ昇格。新フィールド`characterDiscovery`をスキーマへ追加（既存の全レコードへも後方互換のため`characterDiscovery: null`を補った）
+- `memoryData.js`: memfrag_007（Lost Researcher Record）/memfrag_008（Researcher-01 Profile）/memfrag_009（Facility Shutdown Report）を実装済みへ昇格。`RESERVED_COUNT_BY_CHAPTER`のchapter04を4→1（memfrag_010のみ残存）へ調整
+- `dialogueData.js`: Chapter4 Layer13〜16のChapter Dialogue（4件）とMemory回収Dialogue（memfrag_007_recovered/008_recovered/009_recovered、3件）を追加
+- `endless.js`: `_handleRoundClear`のStory Event Check部にCharacter Discovery処理（`layerEvent.characterDiscovery`駆動）を追加。Story StepsキューへCharacter Discovery演出（`characterDiscovered`タイプ）を追加。`CharacterData`のimportを追加
+
+**新規ファイルは無し**。`layerStoryData.js`のchapter04定義、`characterData.js`/`relationshipData.js`のlost_researcher定義は既に要求仕様と完全一致する内容が実装済みだったため、いずれも変更不要だった。`characterArchiveUI.js`もキャラクターのstateを汎用的に表示する設計のため、コード変更なしでDISCOVERED状態の表示に対応できた。
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（Layer13〜16のeventId/dialogueId/memoryId/characterDiscovery/relationshipChange/environment、memfrag_007〜009の内容・character紐付け、lost_researcher既存データの再利用確認）→既存形式セーブのLoad確認→実際のPuzzle解答によるChapter1〜3クリア（回帰確認）→Chapter4 Layer13〜16の完全な新シーケンス確認（Layer13: Silent Facility開始イベント、Dialogueのみ／Layer14: Dialogue→MEMORY FOUND(Lost Researcher Record)→ARIA Analysis→CHARACTER DISCOVERED(Lost Researcher)→Relationship+5／Layer15: Dialogue→MEMORY FOUND(Researcher-01 Profile)→ARIA Analysis→Relationship+5(再発見なし確認)／Layer16: Dialogue→MEMORY FOUND(Facility Shutdown Report)→ARIA Analysis→Chapter Complete→Reward、chapter05解放）→Character Archiveへの反映確認（Lost ResearcherがDISCOVEREDと表示されること）→Story/Memory/Protocol Archiveへの反映確認→既存報酬処理への無影響確認→別インスタンスでのSave/Reload後の状態復元を含め計125項目、全PASS（2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**テスト実装中に発見した事象（テストハーネス側の問題、ゲームロジックのバグではない）**: 初回のテスト実行でテストフック取得に失敗する事象が発生したが、初期ページ読み込み待機時間（6秒）を8秒へ延長したところ再現しなくなった。以前のSTEPで観測してきたjsdomの初回スクリプト読み込みタイミングflakeと同種の事象と考えられる。ゲーム本体のコードは変更していない。
+
+**未実装/既知の制約**: 要求仕様どおりChapter4のみを実装し、Chapter5以降（Layer17〜）は引き続き`locked`予約のまま。

@@ -58,7 +58,12 @@
     EnvironmentEventManager, EnvironmentEventPanel, EnvironmentEventArchive,
     HiddenEnvironmentManager, HiddenEnvironmentRenderer, HiddenEnvironmentArchive, HiddenEnvironmentData,
     AIDirector, DirectorHud,
-    StoryData, StoryUnlockManager, ResearchDatabase, ResearchTimeline, EndingManager, StoryArchiveUI
+    StoryData, StoryUnlockManager, ResearchDatabase, ResearchTimeline, EndingManager, StoryArchiveUI,
+    StoryManager, LayerStoryData,
+    DialogueManager,
+    MemoryManager, MemoryArchiveUI, MemoryData, CharacterData,
+    RelationshipManager, CharacterArchiveUI,
+    ChapterArchiveUI, ResearchArchiveUI
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -151,6 +156,28 @@
       });
       this.storyArchiveUI.onBack = () => this._showArchiveHub();
 
+      // ---- STEP32-1: Story Framework Base System (Layer Narrative System) ----
+      this.storyManager = new StoryManager({ save: this.save });
+
+      // ---- STEP32-3: Memory Fragment System ----
+      // STEP32-4のrelationshipManagerがmemoryManagerに依存するため、
+      // dialogueManager（STEP32-2）より先にここで生成する
+      this.memoryManager = new MemoryManager({ save: this.save });
+      this.memoryArchiveUI = new MemoryArchiveUI({ ui, memoryManager: this.memoryManager });
+      this.memoryArchiveUI.onBack = () => this._showArchiveHub();
+
+      // ---- STEP32-4: Character Relationship System ----
+      this.relationshipManager = new RelationshipManager({
+        save: this.save, memoryManager: this.memoryManager, storyManager: this.storyManager
+      });
+      this.characterArchiveUI = new CharacterArchiveUI({
+        ui, relationshipManager: this.relationshipManager, memoryManager: this.memoryManager
+      });
+      this.characterArchiveUI.onBack = () => this._showArchiveHub();
+
+      // ---- STEP32-2: Dialogue System ----
+      this.dialogueManager = new DialogueManager({ ui, save: this.save, relationshipManager: this.relationshipManager });
+
       // ---- STEP30-3: Environment Visual / HUD Evolution ----
       this.environmentScan = new EnvironmentScan({ ui });
       this.transitionManager = new TransitionManager({ ui });
@@ -201,6 +228,19 @@
       this.protocolSignal = new ProtocolSignal({ ui, protocolManager: this.protocolManager, save: this.save });
       this.protocolSignal.onDecision = (action, def, targetId) => this._handleProtocolSignal(action, def, targetId);
       this.protocolArchive = new ProtocolArchive({ ui, save: this.save });
+
+      // ---- STEP33: Research Archive System ----
+      this.chapterArchiveUI = new ChapterArchiveUI({ ui, save: this.save });
+      this.researchArchiveUI = new ResearchArchiveUI({
+        ui, save: this.save,
+        chapterArchiveUI: this.chapterArchiveUI,
+        memoryArchiveUI: this.memoryArchiveUI,
+        characterArchiveUI: this.characterArchiveUI,
+        protocolArchive: this.protocolArchive,
+        worldEnvironmentArchive: this.worldEnvironmentArchive
+      });
+      this.researchArchiveUI.onBack = () => this._showArchiveHub();
+
       this.environmentManager.onSelect = def => this._handleEnvironmentSelected(def);
       this.environmentManager.onBack = () => {
         // Protocol Selectへ戻る際、選択し直しでActive Protocolが重複しないよう空にしておく
@@ -278,6 +318,9 @@
         envEventArchiveBtn: document.getElementById('envEventArchiveModeSelectBtn'),
         hiddenArchiveBtn: document.getElementById('hiddenArchiveModeSelectBtn'),
         storyArchiveBtn: document.getElementById('storyArchiveModeSelectBtn'),
+        memoryArchiveBtn: document.getElementById('memoryArchiveModeSelectBtn'),
+        characterArchiveBtn: document.getElementById('characterArchiveModeSelectBtn'),
+        researchArchiveHubBtn: document.getElementById('researchArchiveHubBtn'),
         performanceModeBtn: document.getElementById('performanceModeBtn'),
         archiveHubBtn: document.getElementById('archiveHubBtn'),
         archiveHubBackBtn: document.getElementById('archiveHubBackBtn'),
@@ -307,7 +350,12 @@
 
         // STEP30-1: Environment Framework
         endlessWorldEnvValue: document.getElementById('endlessWorldEnvValue'),
-        mapWorldEnvLabel: document.getElementById('mapWorldEnvLabel')
+        mapWorldEnvLabel: document.getElementById('mapWorldEnvLabel'),
+
+        // STEP32-1: Story Framework Base System
+        mapStoryStatus: document.getElementById('mapStoryStatus'),
+        mapStoryChapterLabel: document.getElementById('mapStoryChapterLabel'),
+        mapStoryLayerProgress: document.getElementById('mapStoryLayerProgress')
       };
 
       this._bindEvents();
@@ -330,7 +378,12 @@
         this.el.protocolArchiveBtn.addEventListener('click', () => this.protocolArchive.show());
       }
       if (this.el.protocolArchiveBackBtn) {
-        this.el.protocolArchiveBackBtn.addEventListener('click', () => this._showArchiveHub());
+        // STEP33: protocolArchive.onBackが設定されていればそちらを優先する（RESEARCH ARCHIVE
+        // 経由で開いた場合はそちらへ戻る）。未設定時は従来どおりARCHIVE HUBへ戻る
+        this.el.protocolArchiveBackBtn.addEventListener('click', () => {
+          if (this.protocolArchive.onBack) { this.protocolArchive.onBack(); return; }
+          this._showArchiveHub();
+        });
       }
       if (this.el.environmentArchiveBtn) {
         this.el.environmentArchiveBtn.addEventListener('click', () => this.environmentArchive.show());
@@ -358,6 +411,15 @@
       }
       if (this.el.storyArchiveBtn) {
         this.el.storyArchiveBtn.addEventListener('click', () => this.storyArchiveUI.show());
+      }
+      if (this.el.memoryArchiveBtn) {
+        this.el.memoryArchiveBtn.addEventListener('click', () => this.memoryArchiveUI.show());
+      }
+      if (this.el.characterArchiveBtn) {
+        this.el.characterArchiveBtn.addEventListener('click', () => this.characterArchiveUI.show());
+      }
+      if (this.el.researchArchiveHubBtn) {
+        this.el.researchArchiveHubBtn.addEventListener('click', () => this.researchArchiveUI.show());
       }
       if (this.el.archiveHubBtn) {
         this.el.archiveHubBtn.addEventListener('click', () => this._showArchiveHub());
@@ -462,7 +524,9 @@
         this.worldMutationManager.getMutationHistory().map(h => h.id)
       );
       return {
-        PROTOCOL: { unlocked: this.save.getUnlockedProtocols().length, total: G.Protocols.ALL.length },
+        // 修正: 基本3種(Protocols.ALL)だけでなくSignal限定6種(ProtocolSignals.ALL、
+        // STEP32のColor Analyzer/Genesis Protocol含む)も母数に含める必要があった
+        PROTOCOL: { unlocked: this.save.getUnlockedProtocols().length, total: G.ProtocolUnlock.getAllDefs().length },
         ENVIRONMENT: { unlocked: this.save.getUnlockedWorldEnvironments().length, total: G.WorldEnvironment.ALL.length },
         MUTATION: { unlocked: uniqueMutations.size, total: G.MutationData.ALL.length },
         EVENT: { unlocked: this.save.getDiscoveredEnvironmentEvents().length, total: G.EnvironmentEventData.ALL.length },
@@ -471,6 +535,13 @@
         STORY: (() => {
           const rate = this.researchDatabase.getCompletionRate();
           return { unlocked: rate.unlocked, total: rate.total };
+        })(),
+        // STEP32-3: Memory Fragment Systemセクション10「Story完了後、Memory収集率を
+        // Research Archiveへ反映可能に」。既存のRESEARCH DATABASE画面のCodex一覧へ
+        // そのまま合流させる形で実現した
+        MEMORY: (() => {
+          const progress = this.memoryManager.getMemoryProgress();
+          return { unlocked: progress.collected, total: progress.total };
         })()
       };
     }
@@ -1235,6 +1306,37 @@
         mutationName: activeMutation ? activeMutation.name : null
       });
       this.environmentRenderer.render(def);
+      this._renderStoryStatus(); // STEP32-1: Story Framework Base System
+    }
+
+    /** STEP32-1: Story Framework Base System セクション7。現在Chapter/Layer進行の表示のみ */
+    _renderStoryStatus() {
+      if (!this.el.mapStoryStatus) return;
+      const chapter = this.storyManager.getCurrentChapter();
+      if (!chapter) { this.el.mapStoryStatus.classList.add('hidden'); return; }
+      const chapterNumber = LayerStoryData.ALL.indexOf(chapter) + 1;
+      const layerInChapter = Math.min(Math.max(this.storyManager.getCurrentStoryLayer() - chapter.startLayer + 1, 0), chapter.endLayer - chapter.startLayer + 1);
+      if (this.el.mapStoryChapterLabel) this.el.mapStoryChapterLabel.textContent = `Chapter ${chapterNumber}: ${chapter.title}`;
+      if (this.el.mapStoryLayerProgress) this.el.mapStoryLayerProgress.textContent = `Layer ${layerInChapter} / ${chapter.endLayer - chapter.startLayer + 1}`;
+      this.el.mapStoryStatus.classList.remove('hidden');
+    }
+
+    /**
+     * STEP32-5-1: Chapter01「First Signal」コンテンツ統合セクション「Layer4 Clear Event」の
+     * 「Complete表示（CHAPTER 01 COMPLETE / FIRST SIGNAL）」。既存の`ui.showNodeResult()`を
+     * そのまま再利用し、新しいオーバーレイ・新しいUIクラスは追加しない
+     * （要求仕様「コード構造は変更せず、Data追加方式で実装」を守るための設計判断）。
+     * @param {Object} chapterDef 完了したChapter定義（layerStoryData.js参照）
+     * @param {Function} onContinue
+     */
+    _showChapterCompleteOverlay(chapterDef, onContinue) {
+      const chapterNumber = LayerStoryData.ALL.indexOf(chapterDef) + 1;
+      this.ui.showNodeResult({
+        icon: '🎉',
+        title: `CHAPTER ${String(chapterNumber).padStart(2, '0')} COMPLETE`,
+        message: chapterDef.title.toUpperCase(),
+        onContinue
+      });
     }
 
     /**
@@ -1288,6 +1390,10 @@
           break;
         case 'recovery':
           this._handleRecoveryNode();
+          break;
+        case 'story':
+          // STEP32: Story Scenario Framework セクション7
+          this._handleStoryNode();
           break;
         default:
           // 未知のNode種類が万一渡ってきた場合の安全弁。通常のPuzzleとして扱う
@@ -1514,6 +1620,25 @@
         icon: '❤️',
         title: 'RECOVERY',
         message: recovered > 0 ? `ライフが${recovered}回復した` : 'ライフはすでに満タンだった',
+        onContinue: () => this._showMapChoices()
+      });
+    }
+
+    /**
+     * STEP32: Story Scenario Framework セクション7。Puzzleを介さず、STORY RESEARCHの
+     * 各CASEの正史とは独立した断片（storyNode.js AMBIENT_STORY_EVENTS）を1つ表示する
+     * 安全地帯。Recovery Nodeと同じ「即座に結果確定→MAPへ戻る」パターン
+     */
+    _handleStoryNode() {
+      const event = G.StoryNode ? G.StoryNode.pickAmbientStoryEvent() : null;
+      this.worldStabilityManager.increaseStability(STABILITY_DELTA_SAFE_NODE, { layer: this.depth, event: 'Safe Node' });
+      this._checkMutationTrigger();
+
+      clearTimeout(this._advanceTimer);
+      this.ui.showNodeResult({
+        icon: event ? event.icon : '📖',
+        title: event ? event.title : 'STORY LOG',
+        message: event ? event.message : '記録は既に失われていた。',
         onContinue: () => this._showMapChoices()
       });
     }
@@ -1817,6 +1942,54 @@
       // STEP32: END D「Simulation Zero」の解放条件。SIMULATION ZERO内でのクリアを生涯フラグとして記録する
       const currentHidden = this.hiddenEnvironmentManager.getCurrentHiddenEnvironment();
       if (currentHidden && currentHidden.id === 'simulation_zero') this.save.setSimulationZeroCleared();
+      // STEP32-1: Story Framework Base System。既存報酬処理には一切影響しない、
+      // Layerクリア通知のみの追加（要求仕様セクション3「既存報酬処理は変更しない」）
+      // STEP32-5-1: Chapter Complete表示のため、onLayerClear()で内部的にChapterが
+      // 進んでしまう前に「クリア前のChapter」を控えておく（StoryManager自体は変更しない）
+      // STEP34: layerEventはlayerContentData.jsの正本レコード（eventId/trigger/
+      // dialogueId/memoryId/relationshipChange）を1件返す（storyManager.js参照）。
+      // 以降のMemory Unlock/Relationship Updateは、このレコードを正本として直接
+      // 駆動する（memoryManager.checkLayerMemories()による全件走査はもう使わない。
+      // API自体はテスト・将来利用のため残している）
+      const chapterBeforeClear = this.storyManager.getCurrentChapter();
+      const layerEvent = this.storyManager.onLayerClear(this.depth);
+      const chapterJustCompleted = !!(chapterBeforeClear && this.depth >= chapterBeforeClear.endLayer);
+      this._renderStoryStatus(); // Chapter進行がLayerクリアの瞬間に起きるため、次のLayer移動を待たず即座に反映する
+
+      // STEP34セクション1「Memory Unlock」。layerEvent.memoryIdが取得条件の正本
+      let newlyCollectedMemory = null;
+      if (layerEvent && layerEvent.memoryId && this.memoryManager.collectMemory(layerEvent.memoryId)) {
+        newlyCollectedMemory = MemoryData.getById(layerEvent.memoryId);
+      }
+      // STEP34セクション1「Relationship Update」。layerEvent.relationshipChangeが正本
+      // （ARIAの状態遷移＝checkAriaEvolution自体は、下のStory演出が完了した直後まで遅らせる。
+      // Dialogue条件が「取得した瞬間の状態」に対して評価されるべきで、Memory取得と同一tickで
+      // 状態が先に進んでしまうと、その場のDialogueがcondition不成立になってしまうバグを
+      // 実テストで検出したため＝STEP32-4実装時からの既知の設計判断）
+      if (layerEvent && layerEvent.relationshipChange) {
+        this.relationshipManager.addRelationship(layerEvent.relationshipChange.character, layerEvent.relationshipChange.value);
+      }
+      // STEP36セクション2: Story Event管理システムへ`protocolId`を追加。layerEvent.protocolIdが
+      // 取得条件の正本。`save.unlockProtocol()`は既に解放済みなら何もせずfalseを返す
+      // （`_checkProtocolUnlocks()`の既存ガードと同じ二重解放防止パターン）ため、
+      // このLayerを何度クリアしても安全に呼べる
+      let newlyUnlockedProtocol = null;
+      if (layerEvent && layerEvent.protocolId && this.save.unlockProtocol(layerEvent.protocolId)) {
+        newlyUnlockedProtocol = ProtocolUnlock.getById(layerEvent.protocolId);
+      }
+      // STEP37セクション3: Story Event管理システムへ`characterDiscovery`を追加。
+      // layerEvent.characterDiscoveryが対象キャラクターidの正本。既にDISCOVERED済みなら
+      // 何もしない（protocolId/memoryIdと同じ二重発生防止パターン。このLayerを何度
+      // クリアしても安全）
+      let newlyDiscoveredCharacter = null;
+      if (layerEvent && layerEvent.characterDiscovery) {
+        const charId = layerEvent.characterDiscovery;
+        if (this.relationshipManager.getCharacterState(charId) !== 'DISCOVERED') {
+          this.save.setRelationshipState(charId, 'DISCOVERED');
+          newlyDiscoveredCharacter = CharacterData.getById(charId);
+        }
+      }
+
       this._grantIdentityExp('puzzleClear'); // STEP29: 全Identity共通の基礎EXP
       if (perfect) this._grantIdentityExp('perfectClear'); // STEP29: AnalystのEXP源
       // STEP31: Dialogue System。直後の`ui.showToast(message)`が即座に上書きしてしまうため、
@@ -1841,19 +2014,103 @@
       this._renderHud();
       this._recordPuzzleHistory(stats, true);
       // UI改修: クリア演出（盤面のライン消灯・効果音）を見る間を置いてから、
-      // 「続ける」ボタン付きの結果オーバーレイを表示する（以前は同じ待ち時間の後トースト
-      // 表示のみで自動的に次へ進んでいたが、結果を読み逃しやすいとの指摘を受けて変更した）
+      // 一連の演出（Story→Reward）を開始する（以前は同じ待ち時間の後トースト表示のみで
+      // 自動的に次へ進んでいたが、結果を読み逃しやすいとの指摘を受けて変更した）
       clearTimeout(this._advanceTimer);
       // HINT使用によるライフ消費（_handleHintUsed）が、ちょうどこのクリアと同じHINTで
       // ライフを0にしていた場合はここでRUNを終える（クリア報酬は既に加算済みのまま終了する）
       const nextStep = this.life <= 0 ? () => this._endRun() : () => this._afterRoundEnd();
-      this._advanceTimer = setTimeout(() => {
+
+      const showRewardOverlay = () => {
         this.ui.showNodeResult({
           icon: stats.isBoss ? '👑' : stats.isElite ? '⚔️' : '✅',
           title,
           message,
           onContinue: nextStep
         });
+      };
+
+      // STEP34セクション1: 「Layer Clear→Story Event Check→Dialogue→Memory Unlock→
+      // Relationship Update→Reward」の順で演出する（要求仕様の明示的なフロー図どおり）。
+      // Story内容が無いLayer（layerEventがlocked/未定義の大多数のLayer）ではstorySteps が
+      // 空のまま即座にRewardオーバーレイが表示されるため、Story未実装のLayerでのENDLESS
+      // RESEARCHの体感は変化しない（要求仕様セクション7「Endless Research動作維持」）。
+      // Chapter DialogueとMemory Fragment取得演出（STEP34セクション5「MEMORY FOUND」＋
+      // ARIA Analysis Dialogue）が同一Layerクリアで両方発生しうるため、単一オーバーレイ
+      // （showDialogue/showNodeResultはどちらも「後勝ち」実装）の競合を避けるためキュー化
+      // する（STEP31/32で繰り返し検出したのと同種の設計）。未定義のDialogue idは
+      // startDialogue()がfalseを返すため自動的にスキップされ、そのまま次のStepへ進む
+      const storySteps = [];
+      if (layerEvent && layerEvent.dialogueId) storySteps.push({ type: 'dialogue', id: layerEvent.dialogueId });
+      if (newlyCollectedMemory) {
+        // STEP34セクション5: Memory取得時演出「MEMORY FOUND / Memory Title / ARIA Analysis」。
+        // 「MEMORY FOUND」オーバーレイ（Title+内容）→「ARIA Analysis」＝既存のMemory Fragment
+        // 回収Dialogue（`${memoryId}_recovered`、STEP32-3から流用）の2段構成で表現する
+        storySteps.push({ type: 'memoryFound', memory: newlyCollectedMemory });
+        storySteps.push({ type: 'dialogue', id: `${newlyCollectedMemory.id}_recovered` });
+      }
+      if (newlyUnlockedProtocol) {
+        // STEP36セクション2: Protocol取得演出。「情報系オーバーレイは自動消滅させない」
+        // （既存フィードバック方針）に合わせ、自動で消える`ui.showProtocolDiscovery()`
+        // ではなく、MEMORY FOUNDと同じ「続ける」ボタン付きの`showNodeResult`で表示する
+        storySteps.push({ type: 'protocolUnlocked', protocol: newlyUnlockedProtocol });
+      }
+      if (newlyDiscoveredCharacter) {
+        // STEP37セクション3: Character Discovery演出。「Lost Researcher登場」は
+        // Memory取得（このLayerで発見される記録そのもの）を通じて明らかになる、という
+        // 要求仕様の描写に合わせ、MEMORY FOUND→ARIA Analysisの後に配置する
+        // （storySteps.pushの順序＝再生順序のため、既にpush済みのmemoryFound/dialogueより
+        // 後にpushすることで自動的に後段になる）
+        storySteps.push({ type: 'characterDiscovered', character: newlyDiscoveredCharacter });
+      }
+
+      const playNextStoryStep = () => {
+        if (storySteps.length === 0) {
+          // STEP32-4: ARIA状態遷移はStory演出が完全に終わった後に判定する
+          // （このLayerクリアで表示されるDialogueのcondition評価に影響させないため）
+          this.relationshipManager.checkAriaEvolution();
+          // STEP32-5-1: Chapter Complete表示。Story演出が完全に終わった後にのみ表示する
+          if (chapterJustCompleted) {
+            this._showChapterCompleteOverlay(chapterBeforeClear, showRewardOverlay);
+            return;
+          }
+          showRewardOverlay();
+          return;
+        }
+        const step = storySteps.shift();
+        if (step.type === 'memoryFound') {
+          this.ui.showNodeResult({
+            icon: '🧠',
+            title: 'MEMORY FOUND',
+            message: `${step.memory.title}\n\n${step.memory.content}`,
+            onContinue: () => playNextStoryStep()
+          });
+          return;
+        }
+        if (step.type === 'protocolUnlocked') {
+          this.ui.showNodeResult({
+            icon: '🔓',
+            title: 'PROTOCOL UNLOCKED',
+            message: `${step.protocol.name}\n\n${step.protocol.description}`,
+            onContinue: () => playNextStoryStep()
+          });
+          return;
+        }
+        if (step.type === 'characterDiscovered') {
+          this.ui.showNodeResult({
+            icon: '👤',
+            title: 'CHARACTER DISCOVERED',
+            message: `${step.character.name}${step.character.role ? `\n\n${step.character.role}` : ''}`,
+            onContinue: () => playNextStoryStep()
+          });
+          return;
+        }
+        this.dialogueManager.onComplete = () => playNextStoryStep();
+        if (!this.dialogueManager.startDialogue(step.id)) playNextStoryStep();
+      };
+
+      this._advanceTimer = setTimeout(() => {
+        playNextStoryStep();
       }, ADVANCE_DELAY_MS);
     }
 

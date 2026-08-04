@@ -68,6 +68,27 @@
       effects: { comboBonusMultiplier: 1.2, lifeBonus: -1 },
       rarity: 'rare',
       unlock: { type: 'metaRank', value: 2 }
+    },
+    // ---- STEP32: Story Scenario Framework ----
+    // CASE003/CASE006クリア報酬として直接`save.unlockProtocol(id)`で解放される
+    // 専用Protocol。`unlock`の`scenarioReward`はprotocolUnlock.jsのsnapshot判定には
+    // 存在しないキーのため通常のfindNewlyUnlockable()では絶対に自動解放されず
+    // （表示専用のドキュメント目的）、Scenario Clear経由でのみ解放される設計にした
+    {
+      id: 'color_analyzer',
+      name: 'Color Analyzer',
+      description: 'PERFECTボーナスが+40%になる（CASE003クリア報酬。LOGIC COLORの色解析理論を応用したProtocol）',
+      effects: { perfectBonusMultiplier: 1.4 },
+      rarity: 'rare',
+      unlock: { type: 'scenarioReward', value: 'case003' }
+    },
+    {
+      id: 'genesis_protocol',
+      name: 'Genesis Protocol',
+      description: '獲得スコアが×1.5、コンボボーナスが+30%になる（CASE006クリア報酬。デメリット無しの最上位Protocol）',
+      effects: { scoreMultiplier: 1.5, comboBonusMultiplier: 1.3 },
+      rarity: 'legendary',
+      unlock: { type: 'scenarioReward', value: 'case006' }
     }
   ];
 

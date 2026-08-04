@@ -21,6 +21,8 @@
   const G = global.LogicColor = global.LogicColor || {};
   const { CellState, COLORS, Score, Animation, Sound } = G;
 
+  const DIALOGUE_TYPE_SPEED_MS = 30; // STEP32-2: Dialogue System。1文字あたりの表示間隔
+
   class UI {
     /**
      * @param {Object} callbacks
@@ -66,7 +68,16 @@
           // UI改修: 5種のArchive画面への入口をまとめたハブ画面
           archiveHub: document.getElementById('screen-archivehub'),
           // STEP32: Narrative & Story System「RESEARCH DATABASE」画面
-          storyArchive: document.getElementById('screen-storyarchive')
+          storyArchive: document.getElementById('screen-storyarchive'),
+          // STEP32: Story Scenario Framework「STORY RESEARCH」画面
+          storyResearch: document.getElementById('screen-storyresearch'),
+          // STEP32-3: Memory Fragment System「MEMORY ARCHIVE」画面
+          memoryArchive: document.getElementById('screen-memoryarchive'),
+          // STEP32-4: Character Relationship System「CHARACTER ARCHIVE」画面
+          characterArchive: document.getElementById('screen-characterarchive'),
+          // STEP33: Research Archive System
+          researchArchive: document.getElementById('screen-researcharchive'),
+          chapterArchive: document.getElementById('screen-chapterarchive')
         },
 
         // TITLE
@@ -133,6 +144,19 @@
         identityEventName: document.getElementById('identityEventName'),
         identityEventSub: document.getElementById('identityEventSub'),
 
+        // STEP32: Story Scenario Framework - CHOICE型Story Event用2択オーバーレイ
+        storyChoiceOverlay: document.getElementById('storyChoiceOverlay'),
+        storyChoiceTitle: document.getElementById('storyChoiceTitle'),
+        storyChoiceMessage: document.getElementById('storyChoiceMessage'),
+        storyChoiceBtn1: document.getElementById('storyChoiceBtn1'),
+        storyChoiceBtn2: document.getElementById('storyChoiceBtn2'),
+
+        // STEP32-2: Dialogue System
+        dialogueOverlay: document.getElementById('dialogueOverlay'),
+        dialogueSpeaker: document.getElementById('dialogueSpeaker'),
+        dialogueText: document.getElementById('dialogueText'),
+        dialogueNextIndicator: document.getElementById('dialogueNextIndicator'),
+
         toast: document.getElementById('toast')
       };
 
@@ -168,6 +192,14 @@
       if (this.el.nodeResultContinueBtn) {
         this.el.nodeResultContinueBtn.addEventListener('click', () => {
           if (this._nodeResultContinue) this._nodeResultContinue();
+        });
+      }
+
+      // STEP32-2: Dialogue System。オーバーレイ全体をタップ領域にする
+      // （文字送り中ならこの一度のタップで全文表示、表示済みなら次セリフへ進む）
+      if (this.el.dialogueOverlay) {
+        this.el.dialogueOverlay.addEventListener('click', () => {
+          if (this._dialogueTapHandler) this._dialogueTapHandler();
         });
       }
     }
@@ -617,6 +649,81 @@
 
     hideNodeResult() {
       if (this.el.nodeResultOverlay) this.el.nodeResultOverlay.classList.add('hidden');
+    }
+
+    /**
+     * STEP32: Story Scenario Framework。CHOICE型Story Eventの2択オーバーレイ表示。
+     * showNodeResult()は「つづける」1ボタンのみのため、2択専用に新設した。
+     * @param {{title:string, message:string, options:Array<{id:string,label:string}>, onChoose:Function}} opts
+     */
+    showStoryChoice({ title, message, options, onChoose }) {
+      if (!this.el.storyChoiceOverlay) { return; }
+      this.el.storyChoiceTitle.textContent = title || '';
+      this.el.storyChoiceMessage.textContent = message || '';
+
+      const buttons = [this.el.storyChoiceBtn1, this.el.storyChoiceBtn2];
+      buttons.forEach((btn, i) => {
+        const option = (options || [])[i];
+        if (!btn) return;
+        if (!option) { btn.classList.add('hidden'); return; }
+        btn.classList.remove('hidden');
+        btn.textContent = option.label;
+        btn.onclick = () => {
+          this.hideStoryChoice();
+          if (onChoose) onChoose(option.id);
+        };
+      });
+
+      this.el.storyChoiceOverlay.classList.remove('hidden');
+    }
+
+    hideStoryChoice() {
+      if (this.el.storyChoiceOverlay) this.el.storyChoiceOverlay.classList.add('hidden');
+    }
+
+    /**
+     * STEP32-2: Dialogue System セクション4/5。Character Name/Dialogue Text/Next
+     * Indicatorの表示と、1文字ずつの文字送り演出を行う。要求仕様セクション5どおり
+     * 「タップで全文表示、次タップで次セリフ」の状態遷移はこのメソッドが持つ
+     * `_dialogueTapHandler`（_bindStaticEvents側の1つのクリックリスナーから呼ばれる）
+     * で切り替える。
+     * @param {{speakerName:string, text:string, onTap:Function}} opts
+     */
+    showDialogue({ speakerName, text, onTap }) {
+      if (!this.el.dialogueOverlay) { if (onTap) onTap(); return; }
+      clearInterval(this._dialogueTypeTimer);
+
+      this.el.dialogueSpeaker.textContent = speakerName || '';
+      this.el.dialogueText.textContent = '';
+      this.el.dialogueNextIndicator.classList.add('hidden');
+      this.el.dialogueOverlay.classList.remove('hidden');
+
+      const fullText = text || '';
+      let charIndex = 0;
+      const revealFull = () => {
+        clearInterval(this._dialogueTypeTimer);
+        this.el.dialogueText.textContent = fullText;
+        this.el.dialogueNextIndicator.classList.remove('hidden');
+        this._dialogueTyping = false;
+      };
+
+      this._dialogueTyping = true;
+      this._dialogueTypeTimer = setInterval(() => {
+        charIndex++;
+        this.el.dialogueText.textContent = fullText.slice(0, charIndex);
+        if (charIndex >= fullText.length) revealFull();
+      }, DIALOGUE_TYPE_SPEED_MS);
+
+      this._dialogueTapHandler = () => {
+        if (this._dialogueTyping) { revealFull(); return; }
+        if (onTap) onTap();
+      };
+    }
+
+    hideDialogue() {
+      clearInterval(this._dialogueTypeTimer);
+      if (this.el.dialogueOverlay) this.el.dialogueOverlay.classList.add('hidden');
+      this._dialogueTapHandler = null;
     }
   }
 
