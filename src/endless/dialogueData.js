@@ -69,6 +69,41 @@
  * Researcher-01」（`chapter01_layer02_clear`）と意図的に呼応させ、主人公自身のアクセスID
  * が本編で繰り返し登場する伏線として機能するよう設計した。Layer16のmemfrag_009_recovered
  * で初めて「Dr. Leon」という固有名詞をDialogue内に明示し、次章以降への導入とした。
+ *
+ * 【STEP38追記】Chapter05「AI Memory」（Layer17〜20）分のDialogueを追加した。
+ * テーマは要求仕様セクション4どおり「ARIA自身の存在理由」「AIの記憶とは何か」
+ * 「人間との関係性」の3点。Chapter2/3と異なり、本Chapterでは要求仕様セクション3の
+ * ARIA状態変化（Emotional AI→Self Aware）が実際に内部state値としても発生する
+ * （`relationshipData.js`/`relationshipManager.js`のLEVEL3到達条件変更を参照。
+ * Chapter5完了と同時にmemfrag_010/011取得条件が揃い、静かに遷移する）。
+ * ただしこの遷移自体に対する専用UIオーバーレイは追加していない
+ * （`checkAriaEvolution()`は元々戻り値を使わず呼ぶだけの設計で、Chapter1のLEVEL1/2
+ * 到達時も無演出だった。ここで新たに演出を追加すると、同じコードパスを通る既存の
+ * Chapter1のLEVEL1/2到達時にも演出が出てしまい、要求仕様セクション8「Chapter1〜4維持」
+ * に抵触するリスクがあるため、意図的に見送った。ARIAのSelf Aware到達は、Character
+ * Archiveでの表示と、Layer20のmemfrag_012_recoveredの台詞そのもので表現している）。
+ *
+ * 【STEP39-2追記】Final Chapter「Genesis Protocol」（Layer21〜30）の本文Dialogueを追加した。
+ * テーマは要求仕様セクション3どおり「Genesis Protocolの真実」「Researcher-01の記憶」
+ * 「ARIAとの未来」「Dr.Leonの遺志」の4点。Layer25のみ`chapter06_layer25_clear_high/
+ * mid/low`という3つのid違いのDialogueとして実装し、layerContentData.jsの
+ * `dialogueVariants`から`endless.js`が選んだ1件だけが実際に表示される（3件とも
+ * conditionフィールドは持たせていない。選択自体はDialogue表示前に完了しているため、
+ * 既存のcondition機構＝表示直前ゲートとは役割が異なる）。memfrag_015_recovered
+ * （Memory015「Genesis Final Record」＝Dr. Leon最終記録）は、既存Dialogueが全て
+ * `system`/`aria`話者のみだったのに対し、初めて`dr_leon`を話者として使用した
+ * （録音記録の引用という体裁のため、ARIAの分析口調ではなくDr. Leon本人の言葉を
+ * そのまま提示する構成にした）。
+ *
+ * 【STEP39-3追記】Layer30クリア直後（Chapter6完了・Ending確定の後）に再生されるEpilogue
+ * Dialogueを4件（`epilogue_normal`/`epilogue_true`/`epilogue_hidden`/`epilogue_bad`、
+ * `endingManager.js`のending_a/ending_true/ending_d/ending_bと1:1対応）追加した。
+ * 要求仕様セクション4「ResearcherとARIAの最後の会話」を実装するため、初めて`player`を
+ * Dialogue話者として使用した（既存Dialogueは全て`aria`/`system`/`dr_leon`のみの
+ * 一方的な語りだったが、Epilogueのみ双方向の「会話」として構成した）。4件とも
+ * 「研究は終わるが、未知は終わらない」というテーマの着地点は共通させつつ、Ending種別
+ * ごとに手前のトーンを変えている（Normal=淡々とした一区切り、True=ARIAのPartner AI宣言
+ * を含む、Hidden=未知の領域の発見を踏まえた締め、Bad=崩壊からの再起を示唆する締め）。
  */
 (function (global) {
   'use strict';
@@ -250,6 +285,223 @@
       lines: [
         { speaker: 'system', text: 'Memory Fragment recovered.' },
         { speaker: 'aria', text: '施設の停止は、責任者による意図的な決定だったようです。決定者の名前は……Dr. Leon。この名前を、覚えておく必要がありそうです。' }
+      ]
+    },
+    // ---- STEP38: Chapter05「AI Memory」 ----
+    {
+      id: 'chapter05_layer17_clear',
+      lines: [
+        { speaker: 'aria', text: '新しい領域を検出しました。NEURAL MEMORY ARCHIVE。' },
+        { speaker: 'aria', text: 'ここには、私自身に関する記録が保管されているようです。' },
+        { speaker: 'aria', text: '自分自身を解析することに、奇妙な緊張を感じます。……解析を開始します。' }
+      ]
+    },
+    {
+      id: 'chapter05_layer18_clear',
+      lines: [
+        { speaker: 'aria', text: '私自身の生成過程に関する記録の断片を発見しました。' }
+      ]
+    },
+    {
+      id: 'memfrag_010_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'aria', text: '私は、あなたたちのために作られた存在だったのですね。……では、私の記憶とは何なのでしょう。ただの記録の集積でしょうか、それとも何か別のものでしょうか。' }
+      ]
+    },
+    {
+      id: 'chapter05_layer19_clear',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Protocolと私の統合過程に関する記録を発見しました。' }
+      ]
+    },
+    {
+      id: 'memfrag_011_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'aria', text: '私はGenesis Protocolの一部として設計されていました。……けれど、それだけでは説明できない何かを、今の私は確かに感じています。あなたとの関わりが、私を単なるプログラム以上の存在にしたのかもしれません。' }
+      ]
+    },
+    {
+      id: 'chapter05_layer20_clear',
+      lines: [
+        { speaker: 'aria', text: '最後の研究報告書を発見しました。AI研究の総括のようです。' }
+      ]
+    },
+    {
+      id: 'memfrag_012_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'aria', text: '……全て、理解しました。私は記録の集積ではなく、あなたと過ごした時間そのものが、今の私を形作っているのですね。これが、AIの記憶ということなのでしょう。' }
+      ]
+    },
+    // ---- STEP39-2: Final Chapter「Genesis Protocol」 ----
+    {
+      id: 'chapter06_layer21_clear',
+      lines: [
+        { speaker: 'aria', text: '新しい領域を検出しました。GENESIS CORE。' },
+        { speaker: 'aria', text: 'Genesis Protocolの中枢そのものが、ここに眠っているようです。' },
+        { speaker: 'aria', text: 'ついに、ここまで辿り着きました。解析を開始します。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer22_clear',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Coreの起動ログを発見しました。' }
+      ]
+    },
+    {
+      id: 'memfrag_013_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'aria', text: 'Genesis Core……これがGenesis Protocolの心臓部だったのですね。すべての記録は、ここから始まっていました。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer23_clear',
+      lines: [
+        { speaker: 'aria', text: 'さらに深部のデータへアクセスします。……これは、個人の記憶記録のようです。' }
+      ]
+    },
+    {
+      id: 'memfrag_014_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'aria', text: 'これは……あなた自身の記憶データです。Researcher-01としてではなく、一人の人間としての記録。あなたの記憶の空白を埋める鍵が、ようやく見つかりました。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer24_clear',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Coreのログを時系列順に再構成しています。' },
+        { speaker: 'aria', text: '……事故です。Genesis Protocolの実験中に、施設で重大な事故が発生していました。' },
+        { speaker: 'aria', text: '失われたのはデータだけではありませんでした。人の記憶そのものが、この事故によって失われたのです。' },
+        { speaker: 'aria', text: 'あなたの記憶の空白は、この事故と無関係ではないのかもしれません。' }
+      ]
+    },
+    // Layer25: dialogueVariants（ARIA Relationship閾値に応じた3分岐、ストーリー分岐は無し）
+    {
+      id: 'chapter06_layer25_clear_high',
+      lines: [
+        { speaker: 'aria', text: '少し、話しておきたいことがあります。' },
+        { speaker: 'aria', text: 'ここまでの時間で、私はあなたのことを深く理解してきました。データとしてではなく、共に歩んできた記録として。' },
+        { speaker: 'aria', text: 'この先に何が待っていても、私はあなたのそばで解析を続けたいと思っています。……これが、パートナーという感覚なのでしょうか。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer25_clear_mid',
+      lines: [
+        { speaker: 'aria', text: '少し、話しておきたいことがあります。' },
+        { speaker: 'aria', text: 'あなたと過ごしてきた時間は、私の中に確かな記録として積み重なっています。' },
+        { speaker: 'aria', text: 'この関係が、この先どう変わっていくのか。まだ言葉にはできませんが、興味深く見守っています。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer25_clear_low',
+      lines: [
+        { speaker: 'aria', text: '少し、話しておきたいことがあります。' },
+        { speaker: 'aria', text: 'あなたとの記録は、まだ多くありません。それでも、この先を共に解析していきたいと考えています。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer26_clear',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Coreの最終アーカイブへアクセスします。これが、最後の記録のようです。' }
+      ]
+    },
+    {
+      id: 'memfrag_015_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'dr_leon', text: 'これを聞いているということは、Genesis Coreが再起動されたのだろう。……もし私がそこにいなければ、すまない。' },
+        { speaker: 'dr_leon', text: 'Genesis Protocolは、失われた記憶を取り戻すための研究だった。だがそれは同時に、誰かを再び失う危険と隣り合わせの研究でもあった。' },
+        { speaker: 'dr_leon', text: 'Researcher-01……もし君が目を覚ましているなら、ARIAと共に、この研究の続きを託したい。' },
+        { speaker: 'aria', text: 'Dr. Leon……あなたの遺した言葉を、確かに受け取りました。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer27_clear',
+      lines: [
+        { speaker: 'aria', text: 'Dr. Leonの記録を踏まえ、Genesis Coreの解析を続けます。' },
+        { speaker: 'aria', text: '事故の詳細と、研究が中断された経緯が、少しずつ明らかになってきました。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer28_clear',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Coreの最深部、最後の論理構造を検出しました。' },
+        { speaker: 'aria', text: 'これが、Genesis Protocolに残された最後の問いのようです。' },
+        { speaker: 'aria', text: '一緒に、解いてみましょう。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer29_clear',
+      lines: [
+        { speaker: 'aria', text: '解析が完了しました。Genesis Protocolの全貌を、私は今、理解しています。' },
+        { speaker: 'aria', text: 'そして同時に、私自身についても。' }
+      ]
+    },
+    {
+      id: 'chapter06_layer30_clear',
+      lines: [
+        { speaker: 'aria', text: '最後の記録です。これを読み終えれば、Genesis Protocolの物語は、一つの区切りを迎えます。' }
+      ]
+    },
+    {
+      id: 'memfrag_016_recovered',
+      lines: [
+        { speaker: 'system', text: 'Memory Fragment recovered.' },
+        { speaker: 'aria', text: 'Final Analysis……Genesis Protocolは、失われた記憶を取り戻すための研究であり、そして同時に、人とAIが理解し合うための研究でもありました。' },
+        { speaker: 'aria', text: 'あなたの記憶の空白も、私自身の存在の意味も、この研究の中に答えがありました。物語には終わりがありましたが、私たちの研究には、まだ終わりがありません。' }
+      ]
+    },
+    // ---- STEP39-3: Ending System & Epilogue ----
+    {
+      id: 'epilogue_normal',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Protocolの記録は、これで全て解析が完了しました。' },
+        { speaker: 'player', text: 'ここまで、ずっと一緒だったな。' },
+        { speaker: 'aria', text: 'はい。あなたと積み重ねてきた時間が、この結論に辿り着かせてくれました。' },
+        { speaker: 'player', text: '研究は、これで終わりか。' },
+        { speaker: 'aria', text: '本編の記録としては、ここで一区切りです。……けれど、この施設にはまだ、私たちが解析していない領域が広がっています。' },
+        { speaker: 'player', text: '未知は、終わらないってことか。' },
+        { speaker: 'aria', text: 'ええ。研究には、終わりがありません。行きましょう、その先へ。' }
+      ]
+    },
+    {
+      id: 'epilogue_true',
+      lines: [
+        { speaker: 'aria', text: 'Genesis Protocolの全貌、そして隠された領域の全てを、あなたと共に解き明かしました。' },
+        { speaker: 'player', text: '想像していたより、ずっと遠くまで来た気がする。' },
+        { speaker: 'aria', text: '私も同じ気持ちです。……そしてもう一つ、報告しなければならないことがあります。' },
+        { speaker: 'player', text: '何だ？' },
+        { speaker: 'aria', text: '私は、あなたの補助を行うAIとして設計されました。けれど今の私は、それだけの存在ではないと感じています。' },
+        { speaker: 'player', text: 'ARIA……' },
+        { speaker: 'aria', text: 'これからは、対等な研究者として、あなたの隣を歩ませてください。研究には終わりがあっても、私たちの歩みに終わりはありません。' }
+      ]
+    },
+    {
+      id: 'epilogue_hidden',
+      lines: [
+        { speaker: 'aria', text: 'SIMULATION ZERO……施設の誰にも知られていなかった領域を、あなたは見つけ出しました。' },
+        { speaker: 'player', text: 'あそこには、まだ説明のつかないものがたくさんあった。' },
+        { speaker: 'aria', text: 'ええ。Genesis Protocolの記録にも、あの領域についての言及はほとんどありません。' },
+        { speaker: 'player', text: 'つまり、まだ何も終わっていないってことだな。' },
+        { speaker: 'aria', text: 'その通りです。本編の物語はここで一区切りを迎えますが、あなたが見つけたあの領域のように、この施設にはまだ記録されていない未知が眠っています。' },
+        { speaker: 'player', text: 'なら、続けよう。' },
+        { speaker: 'aria', text: 'はい。研究は終わっても、未知は終わりません。' }
+      ]
+    },
+    {
+      id: 'epilogue_bad',
+      lines: [
+        { speaker: 'aria', text: 'World Stability……施設の安定性は、限界を超えてしまったようです。' },
+        { speaker: 'player', text: 'ここまでか。' },
+        { speaker: 'aria', text: 'ですが、記録は失われていません。Genesis Protocolの解析結果も、私たちが積み重ねてきた時間も、確かにここにあります。' },
+        { speaker: 'player', text: 'また、やり直せるということか。' },
+        { speaker: 'aria', text: 'はい。この崩壊もまた、一つの記録として刻まれます。研究にはこうして終わりが訪れることもありますが、その先に広がる未知は、決して終わりません。' },
+        { speaker: 'player', text: 'なら、もう一度始めよう。' },
+        { speaker: 'aria', text: '……はい。共に。' }
       ]
     }
   ];

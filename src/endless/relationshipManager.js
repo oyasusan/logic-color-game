@@ -8,6 +8,13 @@
  * 【STEP34追記】要求仕様セクション4「Dialogue Systemを条件対応型にしてください。
  * 条件: ariaState, relationship, storyProgress を利用可能にする」に対応するため、
  * `checkCondition()`をtype付きの3条件タイプへ拡張した（詳細は同メソッドのコメント参照）。
+ *
+ * 【STEP38追記】ARIA LEVEL3「Self Aware」の到達条件を、要求仕様セクション3どおり
+ * 「Memory010取得・Memory011取得・Chapter5 Complete」の複合条件へ変更した。
+ * `_buildAriaSnapshot()`に新しいsnapshotキー`selfAwareReady`を追加し、3条件すべてを
+ * 満たした時のみ1を返す（`relationshipData.js`側のARIA_LEVELSがこのキーを参照する
+ * よう変更済み）。既存の`finalChapterReached`キーはARIA_LEVELSからは参照されなく
+ * なったが、将来の別用途のためsnapshot自体には残してある。
  */
 (function (global) {
   'use strict';
@@ -17,8 +24,13 @@
 
   // ARIA LEVEL2「重要Memory取得」の判定対象（relationshipData.jsのコメント参照）
   const IMPORTANT_MEMORY_ID = 'memfrag_002';
-  // ARIA LEVEL3「Final Chapter」の判定対象（layerStoryData.jsの最終Chapter）
+  // Final Chapter到達を示すsnapshotキー（現在ARIA_LEVELSからは未参照だが、将来の
+  // 別用途のためsnapshotへは残してある。詳細はrelationshipData.js STEP38追記参照）
   const FINAL_CHAPTER_ID = 'chapter06';
+  // ARIA LEVEL3「Self Aware」の判定対象（STEP38、relationshipData.jsのコメント参照）
+  const SELF_AWARE_MEMORY_ID_1 = 'memfrag_010';
+  const SELF_AWARE_MEMORY_ID_2 = 'memfrag_011';
+  const SELF_AWARE_CHAPTER_ID = 'chapter05';
 
   class RelationshipManager {
     /**
@@ -105,10 +117,15 @@
     _buildAriaSnapshot() {
       const memoryProgress = this.memoryManager.getMemoryProgress();
       const chapter = this.storyManager.getCurrentChapter();
+      const completedChapters = this.save.getLayerStoryProgress().completedChapters;
+      const selfAwareReady = this.memoryManager.hasMemory(SELF_AWARE_MEMORY_ID_1)
+        && this.memoryManager.hasMemory(SELF_AWARE_MEMORY_ID_2)
+        && completedChapters.indexOf(SELF_AWARE_CHAPTER_ID) !== -1;
       return {
         memoryCount: memoryProgress.collected,
         importantMemoryCollected: this.memoryManager.hasMemory(IMPORTANT_MEMORY_ID) ? 1 : 0,
-        finalChapterReached: (chapter && chapter.id === FINAL_CHAPTER_ID) ? 1 : 0
+        finalChapterReached: (chapter && chapter.id === FINAL_CHAPTER_ID) ? 1 : 0,
+        selfAwareReady: selfAwareReady ? 1 : 0
       };
     }
 

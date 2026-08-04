@@ -67,6 +67,16 @@
  * 全てARIAへのRelationship変化だったが、Chapter4はLost Researcher本人を発見・
  * 理解していく物語のため、初めて`lost_researcher`へのRelationship変化を持たせた。
  * 詳細はlayerContentData.js/endless.jsのコメント参照）。
+ *
+ * 【STEP38追記: memfrag_010の所属Chapter訂正】STEP37時点ではmemfrag_010を
+ * 「chapter04の予約枠（未使用の最後の1件）」として生成していたが、STEP38の要求仕様
+ * セクション5が「Memory010: ARIA Creation Log」をChapter05（AI Memory）のMemoryとして
+ * 明示的に指定したため、STEP36のmemfrag_005/006と同じ手順でchapter04→chapter05へ
+ * 再割当し、memfrag_011/012と合わせて3件を実装済みへ昇格させた。これによりChapter4は
+ * 実装3件・予約枠0（Chapter1〜3と同じ「所属Chapterに余剰予約枠を残さない」パターンへ
+ * 統一）、Chapter5は実装3件・予約枠2（memfrag_013/014が残存）となった
+ * （`RESERVED_COUNT_BY_CHAPTER`からchapter04を削除、chapter05を4→2へ調整。
+ * 実装9件+予約21件=合計30件で不変）。
  */
 (function (global) {
   'use strict';
@@ -166,22 +176,105 @@
       content: 'Facility Shutdown報告書',
       character: null,
       unlockCondition: { type: 'layerReached', value: 16 }
+    },
+    // ---- STEP38: Chapter05「AI Memory」 ----
+    {
+      id: 'memfrag_010',
+      title: 'ARIA Creation Log',
+      description: 'ARIAの生成過程に関する記録の断片。',
+      chapter: 'chapter05',
+      type: 'LOG',
+      content: 'ARIA生成記録：Neural Memory基盤構築ログ',
+      character: 'aria',
+      unlockCondition: { type: 'layerReached', value: 18 }
+    },
+    {
+      id: 'memfrag_011',
+      title: 'Genesis AI Integration',
+      description: 'ARIAとGenesis Protocolの統合過程に関する記録の断片。',
+      chapter: 'chapter05',
+      type: 'LOG',
+      content: 'Genesis AI統合記録',
+      character: 'aria',
+      unlockCondition: { type: 'layerReached', value: 19 }
+    },
+    {
+      id: 'memfrag_012',
+      title: 'Final AI Research Report',
+      description: 'AI研究の最終報告に関する記録の断片。',
+      chapter: 'chapter05',
+      type: 'LOG',
+      content: 'Final AI Research報告書',
+      character: null,
+      unlockCondition: { type: 'layerReached', value: 20 }
+    },
+    // ---- STEP39-2: Final Chapter「Genesis Protocol」 ----
+    {
+      id: 'memfrag_013',
+      title: 'Genesis Core Log',
+      description: 'Genesis Coreの起動記録の断片。',
+      chapter: 'chapter06',
+      type: 'LOG',
+      content: 'Genesis Core起動ログ：全ての記録の出発点',
+      character: null,
+      unlockCondition: { type: 'layerReached', value: 22 }
+    },
+    {
+      id: 'memfrag_014',
+      title: "Researcher-01's Memory",
+      description: '主人公自身の個人的な記憶記録の断片。',
+      chapter: 'chapter06',
+      type: 'LOG',
+      content: 'Researcher-01個人記憶記録：Cognitive Gapの空白を埋める鍵',
+      character: 'player',
+      unlockCondition: { type: 'layerReached', value: 23 }
+    },
+    {
+      id: 'memfrag_015',
+      title: 'Genesis Final Record',
+      description: 'Dr. Leonが遺した最終記録の断片。',
+      chapter: 'chapter06',
+      type: 'LOG',
+      content: 'Genesis Final Record：Dr. Leon最終記録',
+      character: 'dr_leon',
+      unlockCondition: { type: 'layerReached', value: 26 }
+    },
+    {
+      id: 'memfrag_016',
+      title: 'Final Analysis',
+      description: 'Genesis Protocolの全貌を示す最終解析記録の断片。',
+      chapter: 'chapter06',
+      type: 'LOG',
+      content: 'Final Analysis：Genesis Protocol総括',
+      character: 'aria',
+      unlockCondition: { type: 'layerReached', value: 30 }
     }
   ];
 
-  // STEP32-5-2: Memory010〜030の予約枠。
+  // STEP32-5-2: Memory013〜030の予約枠。
   // 【STEP36追記】Chapter1〜3が「各Chapter実装2件・予約枠0」という実態のパターンで
   // 確定したため、Chapter4/5は各4件、余った分をChapter6（Final Chapter、Layer21〜30と
   // 範囲が広い）へ吸収して16件とした（4+4+16=24件、実装6件+予約24件=合計30件で不変）
   // 【STEP37追記】Chapter04はmemfrag_007〜009の3件が実装済みへ昇格したため、
   // 予約数を4→1（memfrag_010のみ）へ調整した（合計30件は不変）
+  // 【STEP38追記】memfrag_010がchapter05へ再割当・実装済みへ昇格したため、
+  // chapter04の予約枠は0（RESERVED_COUNT_BY_CHAPTERから削除）、chapter05の予約数を
+  // 4→2（memfrag_013/014のみ）へ調整した（実装9件+予約21件=合計30件で不変）
+  // 【STEP39-2追記: memfrag_013/014の所属Chapter訂正】STEP38時点ではmemfrag_013/014を
+  // 「chapter05の予約枠（未使用）」として生成していたが、STEP39-2の要求仕様セクション4が
+  // 「Memory013: Genesis Core Log」「Memory014: Researcher-01 Memory」をChapter06
+  // （Final Chapter）のMemoryとして明示的に指定したため、STEP36のmemfrag_005/006と
+  // 同じ手順でchapter05→chapter06へ再割当し、既存のchapter06予約枠の先頭2件
+  // （memfrag_015/016）と合わせて4件を実装済みへ昇格させた。これによりChapter5は
+  // 実装3件・予約枠0（Chapter1〜4と同じ「所属Chapterに余剰予約枠を残さない」パターンへ
+  // 統一）、Chapter6は実装4件・予約枠14（memfrag_017〜030）となった
+  // （RESERVED_COUNT_BY_CHAPTERからchapter05を削除、chapter06を16→14へ調整。
+  // 実装13件+予約17件=合計30件で不変）
   const RESERVED_COUNT_BY_CHAPTER = [
-    { chapter: 'chapter04', count: 1 },
-    { chapter: 'chapter05', count: 4 },
-    { chapter: 'chapter06', count: 16 }
+    { chapter: 'chapter06', count: 14 }
   ];
   const RESERVED = [];
-  let nextNumber = 10;
+  let nextNumber = 17;
   RESERVED_COUNT_BY_CHAPTER.forEach(({ chapter, count }) => {
     for (let i = 0; i < count; i++) {
       RESERVED.push({

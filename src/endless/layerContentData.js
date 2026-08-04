@@ -58,71 +58,95 @@
  * 新規データ追加は不要で、`endless.js`が`layerEvent.characterDiscovery`を見て
  * 既存の`save.setRelationshipState()`をそのまま呼ぶだけで対応した
  * （STEP36のprotocolId統合と全く同じ設計パターン）。
+ *
+ * 【STEP38追記】Chapter05「AI Memory」（Layer17〜20）の本文コンテンツを実装した。
+ * 今回はStory Event管理システムへの新フィールド追加は不要だった（既存の`memoryId`/
+ * `relationshipChange`のみで表現可能なため）。ARIAのLEVEL3「Self Aware」到達条件を
+ * `finalChapterReached`から要求仕様どおりのChapter5条件（Memory010+Memory011取得+
+ * Chapter5完了）へ変更した点が本Chapterの核心的な変更（`relationshipData.js`/
+ * `relationshipManager.js`のコメント参照）。
+ *
+ * 【STEP39-2追記】Final Chapter「Genesis Protocol」（Layer21〜30）の本文コンテンツを
+ * 実装し、Layer1〜30が全件IMPLEMENTEDとなった（RESERVEDプレースホルダー機構は不要になり
+ * 削除。`ENVIRONMENT_BY_CHAPTER`/`LayerStoryData`参照もRESERVED専用だったため合わせて
+ * 削除した）。要求仕様セクション2「Layer25: ARIAとの対話イベント、Relationship値に
+ * 応じた会話分岐（ストーリー分岐はしない）」に対応するため、新たに`dialogueVariants`
+ * フィールドを追加した（`memoryId`/`protocolId`/`characterDiscovery`と対になる、
+ * Story Event管理の追加項目。値はARIA Relationship閾値の降順配列、または未使用なら
+ * null。実際の1件選択はendless.jsの`_resolveDialogueVariant()`が行う）。Layer26では
+ * Memory015取得と同時にDr. Leonを`characterDiscovery`させる（STEP37のLost Researcher
+ * と全く同じ設計パターン）。要求仕様セクション2にRelationship+X等の明示的な指定が
+ * 無かったため、Layer21〜30は全件`relationshipChange: null`とした（詳細はREADME.md
+ * STEP39-2セクション参照）。
  */
 (function (global) {
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { LayerStoryData } = G;
-
-  // 要求仕様のStory Bible（docs/STORY_BIBLE.md 6章）に定義済みのChapter⇔Environment対応
-  const ENVIRONMENT_BY_CHAPTER = {
-    chapter01: 'env_grid',
-    chapter02: 'env_network',
-    chapter03: 'env_ocean',
-    chapter04: 'env_unknown',
-    chapter05: 'env_forest',
-    chapter06: 'env_fractal'
-  };
 
   // Layer1〜4: 実装済みのChapter01コンテンツ（STEP34セクション3のイベント名をtitleへ反映）。
   // eventIdはこのファイルで新設したStory Event識別子（`${chapterId}_layer${N}_event`）、
   // triggerは全件共通で'LAYER_CLEAR'
   const IMPLEMENTED = [
-    { layerId: 1, chapterId: 'chapter01', title: 'ARIA Initialization', environment: 'env_grid', eventId: 'chapter01_layer01_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer01_clear', memoryId: null, protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 2, chapterId: 'chapter01', title: 'Memory Recovery: Genesis Beginning', environment: 'env_grid', eventId: 'chapter01_layer02_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer02_clear', memoryId: 'memfrag_001', protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 3, chapterId: 'chapter01', title: 'ARIA Analysis', environment: 'env_grid', eventId: 'chapter01_layer03_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer03_clear', memoryId: null, protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 4, chapterId: 'chapter01', title: 'Chapter Complete', environment: 'env_grid', eventId: 'chapter01_layer04_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer04_clear', memoryId: 'memfrag_002', protocolId: null, characterDiscovery: null, relationshipChange: { character: 'aria', value: 5 } },
+    { layerId: 1, chapterId: 'chapter01', title: 'ARIA Initialization', environment: 'env_grid', eventId: 'chapter01_layer01_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer01_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 2, chapterId: 'chapter01', title: 'Memory Recovery: Genesis Beginning', environment: 'env_grid', eventId: 'chapter01_layer02_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer02_clear', memoryId: 'memfrag_001', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 3, chapterId: 'chapter01', title: 'ARIA Analysis', environment: 'env_grid', eventId: 'chapter01_layer03_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer03_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 4, chapterId: 'chapter01', title: 'Chapter Complete', environment: 'env_grid', eventId: 'chapter01_layer04_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter01_layer04_clear', memoryId: 'memfrag_002', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'aria', value: 5 } },
     // ---- STEP35: Chapter02「Lost Data」（Layer5〜8） ----
-    { layerId: 5, chapterId: 'chapter02', title: 'Quantum Network Access', environment: 'env_network', eventId: 'chapter02_layer05_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer05_clear', memoryId: null, protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 6, chapterId: 'chapter02', title: 'Corrupted Data Analysis', environment: 'env_network', eventId: 'chapter02_layer06_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer06_clear', memoryId: null, protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 7, chapterId: 'chapter02', title: 'Memory Recovery: Researcher Profile', environment: 'env_network', eventId: 'chapter02_layer07_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer07_clear', memoryId: 'memfrag_003', protocolId: null, characterDiscovery: null, relationshipChange: { character: 'aria', value: 5 } },
-    { layerId: 8, chapterId: 'chapter02', title: 'Chapter Complete', environment: 'env_network', eventId: 'chapter02_layer08_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer08_clear', memoryId: 'memfrag_004', protocolId: null, characterDiscovery: null, relationshipChange: null },
+    { layerId: 5, chapterId: 'chapter02', title: 'Quantum Network Access', environment: 'env_network', eventId: 'chapter02_layer05_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer05_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 6, chapterId: 'chapter02', title: 'Corrupted Data Analysis', environment: 'env_network', eventId: 'chapter02_layer06_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer06_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 7, chapterId: 'chapter02', title: 'Memory Recovery: Researcher Profile', environment: 'env_network', eventId: 'chapter02_layer07_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer07_clear', memoryId: 'memfrag_003', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'aria', value: 5 } },
+    { layerId: 8, chapterId: 'chapter02', title: 'Chapter Complete', environment: 'env_network', eventId: 'chapter02_layer08_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter02_layer08_clear', memoryId: 'memfrag_004', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
     // ---- STEP36: Chapter03「Color Experiment」（Layer9〜12） ----
-    { layerId: 9, chapterId: 'chapter03', title: 'Color Analysis Lab Access', environment: 'env_ocean', eventId: 'chapter03_layer09_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer09_clear', memoryId: null, protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 10, chapterId: 'chapter03', title: 'Memory Recovery: Human Cognitive Pattern', environment: 'env_ocean', eventId: 'chapter03_layer10_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer10_clear', memoryId: 'memfrag_005', protocolId: null, characterDiscovery: null, relationshipChange: { character: 'aria', value: 5 } },
-    { layerId: 11, chapterId: 'chapter03', title: 'Protocol Unlock: Color Analyzer', environment: 'env_ocean', eventId: 'chapter03_layer11_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer11_clear', memoryId: null, protocolId: 'color_analyzer', characterDiscovery: null, relationshipChange: null },
-    { layerId: 12, chapterId: 'chapter03', title: 'Chapter Complete', environment: 'env_ocean', eventId: 'chapter03_layer12_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer12_clear', memoryId: 'memfrag_006', protocolId: null, characterDiscovery: null, relationshipChange: { character: 'aria', value: 5 } },
+    { layerId: 9, chapterId: 'chapter03', title: 'Color Analysis Lab Access', environment: 'env_ocean', eventId: 'chapter03_layer09_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer09_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 10, chapterId: 'chapter03', title: 'Memory Recovery: Human Cognitive Pattern', environment: 'env_ocean', eventId: 'chapter03_layer10_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer10_clear', memoryId: 'memfrag_005', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'aria', value: 5 } },
+    { layerId: 11, chapterId: 'chapter03', title: 'Protocol Unlock: Color Analyzer', environment: 'env_ocean', eventId: 'chapter03_layer11_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer11_clear', memoryId: null, protocolId: 'color_analyzer', characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 12, chapterId: 'chapter03', title: 'Chapter Complete', environment: 'env_ocean', eventId: 'chapter03_layer12_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter03_layer12_clear', memoryId: 'memfrag_006', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'aria', value: 5 } },
     // ---- STEP37: Chapter04「Silent Facility」（Layer13〜16） ----
-    { layerId: 13, chapterId: 'chapter04', title: 'Silent Facility Access', environment: 'env_unknown', eventId: 'chapter04_layer13_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer13_clear', memoryId: null, protocolId: null, characterDiscovery: null, relationshipChange: null },
-    { layerId: 14, chapterId: 'chapter04', title: 'Memory Recovery: Lost Researcher Record', environment: 'env_unknown', eventId: 'chapter04_layer14_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer14_clear', memoryId: 'memfrag_007', protocolId: null, characterDiscovery: 'lost_researcher', relationshipChange: { character: 'lost_researcher', value: 5 } },
-    { layerId: 15, chapterId: 'chapter04', title: 'Memory Recovery: Researcher-01 Profile', environment: 'env_unknown', eventId: 'chapter04_layer15_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer15_clear', memoryId: 'memfrag_008', protocolId: null, characterDiscovery: null, relationshipChange: { character: 'lost_researcher', value: 5 } },
-    { layerId: 16, chapterId: 'chapter04', title: 'Chapter Complete', environment: 'env_unknown', eventId: 'chapter04_layer16_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer16_clear', memoryId: 'memfrag_009', protocolId: null, characterDiscovery: null, relationshipChange: null }
+    { layerId: 13, chapterId: 'chapter04', title: 'Silent Facility Access', environment: 'env_unknown', eventId: 'chapter04_layer13_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer13_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 14, chapterId: 'chapter04', title: 'Memory Recovery: Lost Researcher Record', environment: 'env_unknown', eventId: 'chapter04_layer14_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer14_clear', memoryId: 'memfrag_007', protocolId: null, characterDiscovery: 'lost_researcher', dialogueVariants: null, relationshipChange: { character: 'lost_researcher', value: 5 } },
+    { layerId: 15, chapterId: 'chapter04', title: 'Memory Recovery: Researcher-01 Profile', environment: 'env_unknown', eventId: 'chapter04_layer15_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer15_clear', memoryId: 'memfrag_008', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'lost_researcher', value: 5 } },
+    { layerId: 16, chapterId: 'chapter04', title: 'Chapter Complete', environment: 'env_unknown', eventId: 'chapter04_layer16_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter04_layer16_clear', memoryId: 'memfrag_009', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    // ---- STEP38: Chapter05「AI Memory」（Layer17〜20） ----
+    { layerId: 17, chapterId: 'chapter05', title: 'Neural Memory Access', environment: 'env_forest', eventId: 'chapter05_layer17_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter05_layer17_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 18, chapterId: 'chapter05', title: 'Memory Recovery: ARIA Creation Log', environment: 'env_forest', eventId: 'chapter05_layer18_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter05_layer18_clear', memoryId: 'memfrag_010', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'aria', value: 5 } },
+    { layerId: 19, chapterId: 'chapter05', title: 'Memory Recovery: Genesis AI Integration', environment: 'env_forest', eventId: 'chapter05_layer19_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter05_layer19_clear', memoryId: 'memfrag_011', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: { character: 'aria', value: 5 } },
+    { layerId: 20, chapterId: 'chapter05', title: 'Chapter Complete', environment: 'env_forest', eventId: 'chapter05_layer20_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter05_layer20_clear', memoryId: 'memfrag_012', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    // ---- STEP39-2: Final Chapter「Genesis Protocol」（Layer21〜30） ----
+    // 要求仕様セクション2どおりRelationship+X等の明示的な指定が無いため、Layer21〜30は
+    // 全件relationshipChange:nullとした（Chapter1〜5と異なり、本Chapterはリレーション
+    // シップの「読み取り」＝Layer25のdialogueVariants分岐のみを行い、新規付与は行わない
+    // という設計判断。詳細はREADME.md STEP39-2セクション参照）
+    { layerId: 21, chapterId: 'chapter06', title: 'Genesis Core Activation', environment: 'env_fractal', eventId: 'chapter06_layer21_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer21_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 22, chapterId: 'chapter06', title: 'Memory Recovery: Genesis Core Log', environment: 'env_fractal', eventId: 'chapter06_layer22_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer22_clear', memoryId: 'memfrag_013', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 23, chapterId: 'chapter06', title: 'Memory Recovery: Researcher-01 Memory', environment: 'env_fractal', eventId: 'chapter06_layer23_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer23_clear', memoryId: 'memfrag_014', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 24, chapterId: 'chapter06', title: 'Genesis Project Accident Truth', environment: 'env_fractal', eventId: 'chapter06_layer24_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer24_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    // Layer25: 「Relationship値に応じた会話分岐（ストーリー分岐はしない）」への対応として、
+    // Story Event管理システムへ新たに`dialogueVariants`を追加した（既存のmemoryId/protocolId/
+    // characterDiscoveryと同じ「1フィールドずつ拡張」方式）。dialogueIdは使わずnullとし、
+    // 代わりにdialogueVariants（ARIA Relationship閾値の降順リスト）から、その時点の
+    // relationshipManager.getRelationship('aria')以上の最初の1件だけをendless.js側で
+    // 選び出してstorySteps化する（進行・報酬・Chapter進行には一切影響しない、台詞の
+    // 出し分けのみ＝要求仕様どおり「ストーリー分岐はしない」）
+    { layerId: 25, chapterId: 'chapter06', title: 'Dialogue with ARIA', environment: 'env_fractal', eventId: 'chapter06_layer25_event', trigger: 'LAYER_CLEAR', dialogueId: null, memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: [
+      { minRelationship: 20, dialogueId: 'chapter06_layer25_clear_high' },
+      { minRelationship: 10, dialogueId: 'chapter06_layer25_clear_mid' },
+      { minRelationship: 0, dialogueId: 'chapter06_layer25_clear_low' }
+    ], relationshipChange: null },
+    // Layer26: Memory015「Genesis Final Record」（Dr.Leon最終記録）取得と同時にDr. Leonを
+    // CHARACTER DISCOVEREDさせる（STEP37のLost Researcher/Layer14と全く同じ設計パターン）
+    { layerId: 26, chapterId: 'chapter06', title: 'Memory Recovery: Genesis Final Record', environment: 'env_fractal', eventId: 'chapter06_layer26_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer26_clear', memoryId: 'memfrag_015', protocolId: null, characterDiscovery: 'dr_leon', dialogueVariants: null, relationshipChange: null },
+    { layerId: 27, chapterId: 'chapter06', title: 'Genesis Core Analysis', environment: 'env_fractal', eventId: 'chapter06_layer27_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer27_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 28, chapterId: 'chapter06', title: 'Final Puzzle', environment: 'env_fractal', eventId: 'chapter06_layer28_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer28_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 29, chapterId: 'chapter06', title: 'Analysis Complete', environment: 'env_fractal', eventId: 'chapter06_layer29_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer29_clear', memoryId: null, protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null },
+    { layerId: 30, chapterId: 'chapter06', title: 'Chapter Complete', environment: 'env_fractal', eventId: 'chapter06_layer30_event', trigger: 'LAYER_CLEAR', dialogueId: 'chapter06_layer30_clear', memoryId: 'memfrag_016', protocolId: null, characterDiscovery: null, dialogueVariants: null, relationshipChange: null }
   ];
 
-  // Layer17〜30: 要求仕様セクション3どおりの予約（locked）プレースホルダー。
-  // chapterId/environmentはlayerStoryData.js/ENVIRONMENT_BY_CHAPTERから機械的に導出する
-  const RESERVED = [];
-  for (let layer = 17; layer <= 30; layer++) {
-    const chapter = LayerStoryData.getByLayer(layer);
-    const chapterId = chapter ? chapter.id : null;
-    RESERVED.push({
-      layerId: layer,
-      chapterId,
-      title: null,
-      environment: chapterId ? ENVIRONMENT_BY_CHAPTER[chapterId] : null,
-      eventId: null,
-      trigger: null,
-      dialogueId: null,
-      memoryId: null,
-      protocolId: null,
-      characterDiscovery: null,
-      relationshipChange: null,
-      locked: true
-    });
-  }
-
-  const ALL = IMPLEMENTED.concat(RESERVED);
+  // Layer21〜30もLayer1〜20と同じくIMPLEMENTEDへ実装済みとして統合したため（STEP39-2）、
+  // 予約（locked）プレースホルダーは不要になった。Layer31以降（Endless Research専用の
+  // Unknown Layer、docs/STORY_BIBLE.md 1章参照）はもともとLayer Narrative Systemの
+  // 対象外であり、getByLayer()がnullを返す（endless.js側は既存のnullセーフ処理のまま）
+  const ALL = IMPLEMENTED;
   const BY_LAYER = new Map(ALL.map(entry => [entry.layerId, entry]));
 
   /** @returns {Object|null} 指定Layerのレコード（Layer1〜30の範囲外はnull） */

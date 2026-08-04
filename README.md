@@ -2086,3 +2086,115 @@ Chapter4「Silent Facility」（Layer13〜16）のストーリーコンテンツ
 **テスト実装中に発見した事象（テストハーネス側の問題、ゲームロジックのバグではない）**: 初回のテスト実行でテストフック取得に失敗する事象が発生したが、初期ページ読み込み待機時間（6秒）を8秒へ延長したところ再現しなくなった。以前のSTEPで観測してきたjsdomの初回スクリプト読み込みタイミングflakeと同種の事象と考えられる。ゲーム本体のコードは変更していない。
 
 **未実装/既知の制約**: 要求仕様どおりChapter4のみを実装し、Chapter5以降（Layer17〜）は引き続き`locked`予約のまま。
+
+## STEP38: Chapter5「AI Memory」Layer17〜20コンテンツ追加
+
+Chapter5「AI Memory」（Layer17〜20）のストーリーコンテンツを追加する要求仕様（STEP38）に基づき実装した。今回はStory Event管理システム自体への新フィールド追加は不要だった（既存の`memoryId`/`relationshipChange`のみで表現可能）。一方で、要求仕様セクション3「ARIA状態更新: Emotional AI→Self Aware」は、STEP35〜37と異なり**実際に内部state値としても遷移させる**ことが明示的に要求されたため、`relationshipData.js`のARIA LEVEL3到達条件を変更する、このセッションで初めての「ARIA状態遷移条件そのものの改訂」を行った。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **ARIA LEVEL3「Self Aware」到達条件の変更**: 従来`relationshipData.js`のLEVEL3は`finalChapterReached`（Final Chapter=chapter06到達）を条件としていた。要求仕様セクション3が「条件: Memory010取得・Memory011取得・Chapter5 Complete」と明示したため、この3条件をすべて満たした時のみ1になる新しいsnapshotキー`selfAwareReady`を`relationshipManager.js`の`_buildAriaSnapshot()`に追加し、LEVEL3の`condition.type`を`finalChapterReached`→`selfAwareReady`へ変更した。`finalChapterReached`キー自体はsnapshotから削除せず、ARIA_LEVELSから参照されなくなっただけに留めている（Final Chapter到達を条件とする別用途が将来生じた場合に備えた）
+- **ARIA進化の実際の発生タイミング**: `selfAwareReady`は「Memory010取得」「Memory011取得」「Chapter5完了（`completedChapters`に`chapter05`が含まれる）」の論理積のため、Layer18でMemory010取得・Layer19でMemory011取得が完了しても、Chapter5自体はLayer20クリアまで完了しない。そのため実際の遷移はLayer20（Chapter5完了と同じタイミング）で静かに発生する。要求仕様セクション2の「Layer19: ... ARIA Self Aware条件判定」という記述は、Layer19時点で3条件のうち2つが揃うという「条件判定の進捗」を指しているものと解釈し、遷移そのものをLayer19で無理に発生させることはしなかった（実機テストでLayer18/19時点ではまだ`EMOTIONAL_AI`のまま、Layer20クリア直後に`SELF_AWARE`へ遷移することを確認済み）
+- **ARIA遷移に新規UIオーバーレイは追加しなかった**: `checkAriaEvolution()`は元々戻り値（新しく到達したLevel定義）を使わず呼ぶだけの設計で、Chapter1のLEVEL1（Curious AI、Layer2）・LEVEL2（Emotional AI、Layer4）到達時も無演出のまま既に動作している。今回のLEVEL3到達時だけ専用の演出（例:「ARIA STATUS UPDATED」オーバーレイ）を追加すると、同じ`checkAriaEvolution()`呼び出しコードパスを通るChapter1のLEVEL1/2到達時にも意図せず演出が出現してしまい、要求仕様セクション8「Chapter1〜4維持」に抵触するリスクがあったため、意図的に見送った。ARIAのSelf Aware到達は、Character Archiveでの表示（`RelationshipData.getStateName()`が自動的に"Self Aware"を返す）と、Layer20のmemfrag_012_recoveredの台詞そのもので表現している
+
+**既存ファイルの変更**:
+- `layerContentData.js`: Layer17〜20を`locked`予約からIMPLEMENTEDへ昇格（`environment: 'env_forest'`）
+- `memoryData.js`: memfrag_010（chapter04予約→chapter05実装済みへ再割当、STEP36のmemfrag_005/006と同じ手順）/memfrag_011/memfrag_012を実装済みへ昇格。`RESERVED_COUNT_BY_CHAPTER`からchapter04を削除、chapter05を4→2（memfrag_013/014のみ残存）へ調整
+- `relationshipData.js`: ARIA_LEVELSのLEVEL3 `condition.type`を`finalChapterReached`→`selfAwareReady`へ変更
+- `relationshipManager.js`: `_buildAriaSnapshot()`に`selfAwareReady`スナップショットキーを追加（Memory010+Memory011取得+Chapter5完了の論理積）
+- `dialogueData.js`: Chapter5 Layer17〜20のChapter Dialogue（4件）とMemory回収Dialogue（memfrag_010_recovered/011_recovered/012_recovered、3件）を追加
+
+**新規ファイルは無し**。`layerStoryData.js`のchapter05定義は既に要求仕様と完全一致する内容が実装済みだったため変更不要だった。
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（Layer17〜20のeventId/dialogueId/memoryId/relationshipChange/environment、memfrag_010〜012の内容・所属Chapter、ARIA_LEVELS LEVEL3のcondition.type変更）→既存形式セーブのLoad確認→実際のPuzzle解答によるChapter1〜4クリア（回帰確認、ARIAがEMOTIONAL_AIのまま維持されることを含む）→Chapter5 Layer17〜20の完全な新シーケンス確認（Layer17: Neural Memory Access開始イベント、Dialogueのみ／Layer18: Dialogue→MEMORY FOUND(ARIA Creation Log)→ARIA Analysis→Relationship+5、ARIAはまだEMOTIONAL_AIのまま／Layer19: Dialogue→MEMORY FOUND(Genesis AI Integration)→ARIA Analysis→Relationship+5、Memory010/011が揃ってもChapter5未完了のためまだEMOTIONAL_AIのまま／Layer20: Dialogue→MEMORY FOUND(Final AI Research Report)→ARIA Analysis→Chapter Complete→Reward、この瞬間にARIAがSELF_AWAREへ遷移することを確認、chapter06解放）→Character ArchiveでARIAが"Self Aware"と表示されること→Story/Memory Archiveへの反映確認→既存報酬処理への無影響確認→別インスタンスでのSave/Reload後の状態復元（SELF_AWARE状態の永続化を含む）を含め計164項目、全PASS（2回連続実行で安定性も確認済み。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: 要求仕様どおりChapter5のみを実装し、Final Chapter「Genesis Protocol」（Layer21〜30）は引き続き`locked`予約のまま。ARIA LEVEL3の到達条件変更に伴い、`finalChapterReached`スナップショットキーは現時点でどのARIA_LEVELSからも参照されない状態になっている（削除はせず、Final Chapter関連の将来の別用途のために残してある）。
+
+---
+
+## STEP39-1: Final Chapter「Genesis Protocol」設計正式化
+
+要求仕様どおり、今回は**ゲーム挙動変更を一切行わない設計資料のみのSTEP**。`src/`配下のコード変更は無し。`docs/STORY_BIBLE.md`と本READMEのみを更新した。
+
+**目的**: Final Chapter「Genesis Protocol」（Layer21〜30）のLayer構成・キャラクター登場・ARIA最終成長・Ending接続を、STEP39-2以降の実装が迷わず着手できる粒度まで設計確定すること。
+
+**実施内容**:
+
+1. **STORY_BIBLE.md 3章へFinal Chapter詳細を追記**: Layer21〜30を4幕構成（第1幕:起動 Layer21-22／第2幕:真実 Layer23-25／第3幕:対話 Layer26-27／第4幕:到達 Layer28-30）で固定し、Layer単位のイベント概要・想定Memory・想定Relationship変化を表形式で明記した。あわせて「Dr.Leon登場タイミング」「Researcher-01の真実」「ARIA最終成長（LEVEL4 Partner AI到達条件案）」「Genesis Protocol完成」の4項目を個別の設計文として追加。
+2. **Chapter06データの確認**: `layerStoryData.js`の`chapter06`エントリ（`title:'Genesis Protocol', startLayer:21, endLayer:30, unlockCondition:{type:'layerReached', value:21}`）を確認し、変更不要であることを確認済み。`layerContentData.js`のLayer21〜30は全件`locked:true`のままであることも確認済み（本STEPでは解除しない）。
+3. **EndingManagerとの接続仕様の整理**: `endingManager.js`の`checkEndings(snapshot)`が5 Endingを配列順に**全件独立判定**し、複数条件が同時に満たされれば全て同時達成扱いにする（優先順位ロジックは実装されていない）という現行の実装事実を確認したうえで、STORY_BIBLE.md 3章・7章に、将来「代表Ending」を1つに絞って提示する機能を実装する場合に備えた**表示優先順位（True > Hidden > Normal、Bad/Secret候補は優先順位対象外で常に独立）**を新規に設計・明記した。Chapter6完了（Layer30到達）はLayer Narrative System上の到達点であり、それ単体ではいずれのEnding条件も満たさないこと（END TRUEの`bestLayer>=50`条件がLayer30よりも大幅に深い到達を要求するため）も明記した。
+4. **README（本セクション）へFinal Chapter実装方針を追記**（下記）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **ARIA LEVEL4「Partner AI」の到達条件を初めて具体化**: これまで`relationshipData.js`のLEVEL4は`type:'reserved'`（絶対到達不可能）のままだったが、STORY_BIBLE.mdに「Chapter6完了+Memory018/020取得+ARIA Relationship一定値（暫定50）以上」という具体案（`partnerAiReady`）を設計した。あくまで設計案であり、`relationshipData.js`自体は本STEPで変更していない。
+- **Researcher-01の正体を「記憶継承体」という方向で確定**: Chapter1 Layer2「Access ID: Researcher-01」とChapter4 Layer15「Researcher-01 Profile」の伏線に対する回収方針として、「主人公はGenesis Protocolによって記憶・人格パターンを再構成された存在で、原型情報がLost Researcherの記録である」という設定を確定し、Layer23〜24で段階的開示・Layer29で明確化するという開示ペースまで設計した。
+- **Dr. Leonを実体を持たないAI記録体として登場させる方針**: Lost Researcherと同様「既に施設を去った人物」という設定と整合させるため、Layer22での初登場も含め、Dr. Leonには本人ではなくAI記録体（ログ・ホログラム的な記録）としての登場という統一ルールを設けた。
+
+**変更ファイル**:
+- `docs/STORY_BIBLE.md`: 2章（ARIA LEVEL4説明、Dr.Leon登場タイミング）、3章（Chapter表のFinal Chapter行を更新、Final Chapter Layer21〜30構成の新規サブセクション追加）、4章（Memory予約枠の設計候補titleを追記）、7章（Ending接続とNormal/True/Hidden優先順位の新規段落）を更新
+- `README.md`: 本セクション（STEP39-1）を追加
+
+**src/配下の変更**: 無し（要求仕様どおり）。
+
+**確認結果**: `layerStoryData.js`のchapter06定義・`layerContentData.js`のLayer21〜30 locked状態・`characterData.js`（Dr. Leon未登録であること）・`memoryData.js`のChapter6予約枠（memfrag_015〜030、16件）を実コードから直接確認し、STORY_BIBLE.mdの新規記述がいずれも現状の実装と矛盾しないことを確認済み。ゲーム挙動・テストへの影響は無し（コード変更が無いため自動テストは実施していない）。
+
+**未実装/既知の制約**: 本STEPはあくまで設計であり、Layer21〜30の`locked`解除・dialogueId/memoryId/characterDiscovery等の実データ投入、`dr_leon`キャラクターエントリの追加、ARIA LEVEL4到達条件の実装、Ending優先順位表示機能の実装は、いずれも今後の別STEPで行う。
+
+---
+
+## STEP39-2: Final Chapter「Genesis Protocol」Layer21〜30実装、本編完結
+
+STEP39-1で設計確定したFinal Chapter「Genesis Protocol」（Layer21〜30）の本文コンテンツを実装し、Layer Narrative Systemの本編（Chapter1〜6）を完結させた。要求仕様セクション2はSTEP39-1の設計案（Memory015〜022の8件・4幕構成）とは異なる、より簡潔な内容（Memory013〜016の4件）を明示的に指定していたため、後発の具体的指示を優先し、Layer21〜30の内容は要求仕様セクション2どおりに実装した（STEP39-1の設計文書はあくまで予備設計であり、実装時に具体的な指示があればそちらを優先するのは、これまでのMemory ID再割当パターンと同じ判断）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Relationship変化を一切追加しなかった**: 要求仕様セクション2にLayer21〜30のいずれについても「Relationship+X」の明示的な指定が無かったため、Chapter1〜5と異なりChapter6は全Layerで`relationshipChange: null`とした。この結果、Layer25「ARIAとの対話イベント、Relationship値に応じた会話分岐」の時点でのARIA Relationshipは、Chapter1〜5で確定済みの値（常に30、Layer4/7/10/12/18/19の各+5の合計。この値を変更しうる仕組みは他に存在しないためプレイヤーによらず一定）となり、現状のゲーム進行では常に最上位分岐（`chapter06_layer25_clear_high`）が選ばれる。分岐の仕組み自体は関係値に応じて汎用的に動作するよう実装しており（`_resolveDialogueVariant()`、閾値20/10/0の3段階）、将来Relationship変動要素が追加されれば実際に分岐しうる。この制約は本README・STORY_BIBLE.mdで明記した
+- **Story Event管理システムへ`dialogueVariants`を追加**: 要求仕様セクション2「Layer25: Relationship値に応じた会話分岐（ストーリー分岐はしない）」に対応するため、`memoryId`/`protocolId`/`characterDiscovery`と対になる新フィールドを追加した。値はARIA Relationship閾値の降順配列（例: `[{minRelationship:20,dialogueId:'...high'},{minRelationship:10,dialogueId:'...mid'},{minRelationship:0,dialogueId:'...low'}]`）で、`endless.js`の`_resolveDialogueVariant()`がLayerクリア時点のARIA Relationship以上の最初の1件だけを選び、通常の`dialogueId`と同様に1件だけstorySteps化する。3件のDialogue候補のうちStory進行・報酬に影響するのは常に1件のみで、要求仕様どおり「ストーリー分岐はしない」設計になっている
+- **Dr. Leonキャラクターの正式実装**: STEP39-1のSTORY_BIBLE.md設計メモに予告していた`characterData.js`の`dr_leon`エントリ（`{id:'dr_leon', name:'Dr. Leon', type:'human', role:'Genesis Project責任者'}`）をここで追加した。要求仕様セクション2「Genesis Final Record（Dr.Leon最終記録）」の内容を、Memory015取得と同時に発生するCHARACTER DISCOVERED演出（Layer26、UNKNOWN→DISCOVERED）として実装し、STEP37のLost Researcherと全く同じ設計パターンを踏襲した。あわせて`relationshipData.js`のDEFAULTSと（実際の新規セーブ初期化を担う正本である）`endlessSave.js`の`defaultData()`の両方へ`dr_leon`の初期値（`relationship:0, state:'UNKNOWN'`）を追加した（後者への追加が漏れていたため、テスト初回実行時に「Character Archiveのstateが表示されない」不具合として検出・修正した）
+- **memfrag_015_recoveredで初めて`dr_leon`をDialogue話者として使用**: 既存のMemory回収Dialogueは全て`system`（定型文）+`aria`（分析コメント）の2話者構成だったが、「Dr.Leon最終記録」という録音記録の引用という性質上、Dr. Leon本人の言葉をそのまま提示する構成にし、`aria`の反応セリフを最後に添えた
+- **memfrag_013/014の所属Chapter再訂正**: STEP38時点で「chapter05の予約枠（未使用の2件）」だったmemfrag_013/014を、要求仕様セクション4の明示的な指定（Memory013: Genesis Core Log、Memory014: Researcher-01 Memory）に従いchapter06へ再割当し、既存のchapter06予約枠先頭2件（memfrag_015/016）と合わせて4件を実装済みへ昇格させた（STEP36のmemfrag_005/006、STEP38のmemfrag_010と同じ再割当パターン）。これによりChapter5は実装3件・予約枠0（Chapter1〜4と同じパターンへ統一）、Chapter6は実装4件・予約枠14（memfrag_017〜030）になった
+- **`chapterJustCompleted`判定の不具合修正（Endless Research維持のため必須）**: 本実装の過程で、Chapter完了判定が`this.depth >= chapterBeforeClear.endLayer`（以上）となっていたことに起因する不具合を発見した。chapter06には次のChapterが存在せず`currentChapter`が恒久的に`chapter06`のまま残るため、Layer30到達後のENDLESS RESEARCH（Layer31以降）ではこの条件がクリアのたびに常に真となり、「CHAPTER 06 COMPLETE」＋（今回追加した）ENDING UNLOCKEDオーバーレイが無限に再表示されてしまう状態だった。`depth`は`_enterNode()`経由で常に1ずつしか増加しないことを確認したうえで、判定を厳密一致（`this.depth === chapterBeforeClear.endLayer`）へ変更した。Chapter1〜5は次のChapterへ必ず遷移するため本修正による挙動の変化は無く、要求仕様セクション7「Endless Research維持」を実際に満たすために必要な修正だった
+- **EndingManagerへの遷移は`checkEndings()`をそのまま呼ぶのみに留めた**: 要求仕様セクション6「今回はEnding分岐は実装しない」に従い、新たな優先順位・選別ロジックは追加せず、`_endRun()`と全く同じ`checkEndings()`（5 Endingを配列順に全件独立判定）を、Chapter6完了直後（CHAPTER 06 COMPLETE表示の直後）にも呼ぶよう配線しただけに留めた（`_checkFinalChapterEnding()`として新設、スナップショット組み立ては`_buildEndingSnapshot()`として`_endRun()`と共通化）。新規達成分が無ければ何も表示せずそのままReward表示へ進む。docs/STORY_BIBLE.mdに記載したTrue > Hidden > Normalという優先順位は、あくまで将来「代表Ending」表示機能向けの設計指針であり、本実装では使用していない
+
+**既存ファイルの変更**:
+- `layerContentData.js`: Layer21〜30を`locked`予約からIMPLEMENTEDへ昇格（`environment: 'env_fractal'`）。Story Event管理システムへ`dialogueVariants`フィールドを追加（既存Layer1〜20の全レコードにも後方互換のため`dialogueVariants: null`を補った）。RESERVED（予約プレースホルダー）機構とその専用参照（`ENVIRONMENT_BY_CHAPTER`/`LayerStoryData`destructure）はLayer21〜30が全件実装済みになったことで不要になったため削除した
+- `memoryData.js`: memfrag_013/014（chapter05予約→chapter06実装済みへ再割当）/015/016を実装済みへ昇格。`RESERVED_COUNT_BY_CHAPTER`からchapter05を削除、chapter06を16→14へ調整（`nextNumber`は17開始）
+- `characterData.js`: `dr_leon`エントリを新規追加
+- `relationshipData.js`: DEFAULTSへ`dr_leon`（`relationship:0, state:'UNKNOWN'`）を追加
+- `endlessSave.js`: `defaultData()`のrelationshipDataへ`dr_leon`の初期値を追加（新規セーブ初期化の正本はこちら。追加漏れをテストで検出・修正した経緯は上記参照）
+- `dialogueData.js`: Chapter6 Layer21〜30のChapter Dialogue（Layer25は`_high`/`_mid`/`_low`の3variant）とMemory回収Dialogue（memfrag_013〜016_recovered、4件）を追加
+- `endless.js`: `_resolveDialogueVariant()`（dialogueVariantsから1件選択）・`_buildEndingSnapshot()`（`_endRun()`から切り出し）・`_checkFinalChapterEnding()`（Chapter6完了時のEndingManager遷移）を新設。`chapterJustCompleted`の判定を`>=`から`===`へ修正（Endless Research無限再表示バグの修正）
+
+**新規ファイルは無し**。`layerStoryData.js`のchapter06定義は要求仕様と完全一致する内容が既に実装済みだったため変更不要だった。
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（Layer21〜30のeventId/dialogueId/dialogueVariants/memoryId/characterDiscovery/environment、memfrag_013〜016の内容・所属Chapter、dr_leonキャラクター定義、ARIA_LEVELS LEVEL4が本STEPでは未変更であることの確認）→Chapter1〜5の完全な回帰確認（全Layerクリア、Chapter完了・ARIA Self Aware到達・Lost Researcher発見の再確認、ARIA Relationship=30を確認）→`_resolveDialogueVariant()`単体動作確認（getRelationshipを一時的に差し替え、5/15/25の3値でlow/mid/high各分岐が選ばれることを確認）→Chapter6 Layer21〜30の完全な新シーケンス確認（Layer21: Dialogueのみ／Layer22-23: Memory013・014取得／Layer24: Dialogueのみ／Layer25: 高relationship分岐が選ばれ他の2 variantは未再生であることを確認／Layer26: Memory015取得+Dr. Leon CHARACTER DISCOVERED、`dr_leon`話者のDialogue確認／Layer27-29: Dialogueのみ／Layer30: Memory016取得+CHAPTER 06 COMPLETE+ENDING UNLOCKED（`checkEndings()`をスタブしてEndingManager遷移の配線を確認、`researchDatabase.addEntry()`呼び出しも確認）+Reward）→Layer31〜33でCHAPTER 06 COMPLETE/ENDING UNLOCKEDが再表示されないこと（`chapterJustCompleted`修正の確認、Endless Research維持）→Character/Story/Memory Archiveへの反映確認→既存報酬処理への無影響確認→Save/Reload後の状態復元（memfrag_013〜016・dr_leon DISCOVERED状態・chapter06完了・ARIA SELF_AWARE維持の永続化）を含め計86項目、全PASS（2回連続実行で安定性も確認済み。1回目の実行時に「Layer26のCHARACTER DISCOVERED演出をテストが検出できない」失敗が発生したが、これは実装側ではなく5行に長くなったDialogueに対しテスト側のタップ回数が不足していたテストコードの不具合であり、修正して再実行し解消を確認した。2回目実行時にはjsdom初回ロード特有の`undici`/`assert`エラーが1度発生したが、これも既知のflaky挙動でありリトライで解消した。テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: ARIA LEVEL4「Partner AI」の到達条件実装（STORY_BIBLE.mdの設計案`partnerAiReady`）は本STEPの対象外のままで、`relationshipData.js`のLEVEL4は引き続き`type:'reserved'`（絶対到達不可能）。EndingManagerの「代表Ending」優先順位表示機能（True > Hidden > Normal）も未実装で、`checkEndings()`は引き続き5 Endingを配列順に全件独立判定する。上述のとおりChapter6は現状のゲーム進行ではARIA Relationshipが常に30に固定されるため、Layer25のdialogueVariants機構は実質的に常に最上位分岐のみが再生される（仕組み自体は汎用的で、将来Relationship変動要素が追加されれば正しく分岐する）。既存Save（本STEP以前に作成された、`relationshipData`に`dr_leon`キーを持たないセーブ）を読み込んだ場合、`endlessSave.js`の`load()`が`Object.assign(defaultData(), JSON.parse(raw))`という浅いマージのため`relationshipData`オブジェクト全体が旧セーブの内容で上書きされ、`dr_leon`キーが存在しない状態のままLayer26に到達する可能性がある。この場合`setRelationshipState('dr_leon', 'DISCOVERED')`は該当レコードが無いため何もせず（既存の`lost_researcher`も同型の潜在的な問題を抱えており、STEP37時点から未解決）、CHARACTER DISCOVERED演出自体は表示されるがCharacter Archiveの状態表示には反映されない。本STEPで新規に持ち込んだ問題ではなく、既存セーブ移行処理全般に関わる設計課題のため、今回は対応を見送った。
+
+---
+
+## STEP39-3: Ending SystemとEpilogueの実装、本編からEndless Researchへの接続
+
+Layer30（Chapter6完了）到達時に本編の結末（Normal/True/Hidden/Bad Endingのうち必ず1つ）を確定させ、Ending専用Dialogue＋Epilogue（ResearcherとARIAの最後の会話）を再生したうえで、通常のMap遷移を通じてEndless Researchへ接続する処理を実装した。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **既存EndingManagerを拡張する方針**: 「EndingManagerを拡張。判定条件はデータ化し、今後追加可能な構造にする」という要求に対し、既存の`checkEndings()`（RUN終了時の生涯達成型、5 Ending全件独立判定・複数同時成立可）はそのまま残し、Layer30到達時専用の新メソッド`determineStoryEnding(snapshot)`を追加する形で拡張した。既存の生涯達成条件（例: END TRUEはLayer50到達必須）はLayer30時点ではほぼ成立しないため、Layer30到達時点で評価可能な閾値に調整した専用の優先順位付き判定テーブル`STORY_ENDING_ORDER`（データ化された`{id, match}`の配列、末尾を常に成立するNormalのフォールバックとすることで必ず1件だけが選ばれる）を新設した。Ending定義自体（name/description等）は既存の`ALL`をそのまま再利用し、新規のEnding名は増やしていない
+- **判定優先順位をBad > True > Hidden > Normalに設計**: 要求仕様は4種のEndingを列挙するのみで優先順位を明示していなかったため、「世界の崩壊は個々の達成を覆す結末である」という設計判断でBad Endingを最優先とし、STEP39-1で設計したTrue > Hidden > Normalの表示指針をそのまま踏襲した。条件は以下のとおりデータ化した:
+  - Bad: World StabilityがCOLLAPSE状態（既存END Bと同一条件）
+  - True: Hidden Environment発見率100%（既存END TRUEからLayer50/Story100%条件を除いた、Layer30時点で到達しうる閾値）
+  - Hidden: SIMULATION ZERO攻略済み（既存END Dと同一条件）
+  - Normal: 上記いずれも満たさない場合のデフォルト（`match:()=>true`）
+- **Ending確定後の永続化は既存APIを再利用**: `determineStoryEnding()`は`checkEndings()`と同じ`save.recordEndingAchieved()`を呼ぶため、生涯達成側の記録（Research Archive等）とも整合し、二重計上も発生しない
+- **「各Ending専用Dialogue」と「Epilogue」を同一の4件として実装**: 要求仕様セクション3「各Ending専用Dialogue追加」とセクション4「Epilogueを追加、ResearcherとARIAの最後の会話」は、内容として重複するとの判断から、別々の8件ではなく、Ending種別ごとの専用Epilogue Dialogue4件（`epilogue_normal`/`epilogue_true`/`epilogue_hidden`/`epilogue_bad`）として統合実装した。要求仕様どおり「研究は終わるが、未知は終わらない」というテーマの着地点は4件で共通させ、手前のトーン（Normal=淡々とした一区切り、True=Partner AI宣言を含む、Hidden=未知の発見を踏まえた締め、Bad=崩壊からの再起を示唆する締め）だけを変えた
+- **初めて`player`（Researcher）をDialogue話者として使用**: 既存Dialogueは全て`aria`/`system`/`dr_leon`による一方的な語りだったが、「ResearcherとARIAの最後の会話」という双方向の対話を表現するため、Epilogueの4件でのみ`player`話者のセリフを追加した
+- **ARIAのPartner AI昇格はEnding確定に紐づく一回限りの明示的な状態遷移として実装**: 既存の`checkAriaEvolution()`（ARIA_LEVELSのsnapshotベース自動判定）は経由せず、True Ending確定時のみ`save.setRelationshipState('aria','PARTNER_AI')`を直接呼ぶ設計にした。ARIA_LEVELS LEVEL4の`condition`自体は引き続き`type:'reserved'`のまま変更していない（通常のARIA進化フローからは到達不能という既存設計を維持しつつ、Ending確定という特別なタイミングでのみ到達させる）。これによりSTEP39-1のSTORY_BIBLE.md設計案（`partnerAiReady`: Chapter6完了+特定Memory取得+Relationship閾値）は不採用となり、より単純な「True Ending到達」という条件に一本化された
+- **Layer31（Unknown Layer）の「解放」は新規のロック機構を追加しない**: 調査の結果、Depth進行自体を止める仕組みはENDLESS RESEARCHに元々存在せず（`layerContentData.getByLayer()`がLayer31以降で単にnullを返すだけ）、Epilogue終了後は既存の`onContinue`チェーン（Reward表示→`_afterRoundEnd()`→通常のMap遷移）がそのままResearch Map表示・Layer31選択を実現する。そのため新たな「解放」処理は実装せず、Epilogueが既存フローへ正しく合流することだけを確認した（要求仕様セクション5/6は、この既存フローとの自然な接続によって満たされる）
+
+**既存ファイルの変更**:
+- `endingManager.js`: `STORY_ENDING_ORDER`（優先順位付き判定テーブル）と`determineStoryEnding(snapshot)`を追加。既存の`ALL`/`checkEndings()`は無変更
+- `dialogueData.js`: Epilogue Dialogue4件（`epilogue_normal`/`epilogue_true`/`epilogue_hidden`/`epilogue_bad`）を追加。初めて`player`話者を使用
+- `endless.js`: `_checkFinalChapterEnding()`をSTEP39-2の簡易実装（`checkEndings()`をそのまま呼ぶだけ）から、`determineStoryEnding()`→Ending表示→（True Endingのみ）ARIA Partner AI昇格→Epilogue Dialogue再生、の完全な実装へ置き換えた。Ending id→Epilogue Dialogue id/表示アイコンの対応表（`ENDING_EPILOGUE_DIALOGUE_ID`/`ENDING_ICON`）を新設
+
+**新規ファイルは無し**。
+
+**テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（`determineStoryEnding()`の優先順位ロジックをBad/True/Hidden/Normalの4パターンで単体確認、Epilogue Dialogue4件の話者構成確認）→Chapter1〜6の完全なプレイスルー（既定の進行＝World安定・Hidden Environment未発見のためNormal Endingが選ばれることを確認: CHAPTER 06 COMPLETE→「ENDING: END A — Complete Research」表示→`epilogue_normal`再生→Reward、ARIAはSELF_AWARE維持を確認）→True/Hidden/Bad Endingの3パターンを`_checkFinalChapterEnding()`の直接呼び出し（`hiddenEnvironmentManager.getDiscoveryRate`/`save.hasSimulationZeroCleared`/`worldStabilityManager.getStatus`を一時的にスタブ）で検証（各Endingの表示・専用Epilogue再生・onContinue発火・True EndingのみARIAがPARTNER_AIへ昇格しHidden/BadはSELF_AWARE維持であること・4種のEnding全てが`save.getEndingFlags()`に記録されることを確認）→Layer31〜33でCHAPTER 06 COMPLETE/ENDING表示が再表示されないこと（STEP39-2のバグ修正が引き続き機能していることの再確認）→Character/Story/Memory Archiveへの反映確認（Archive維持）→Save/Reload後の状態復元（ending_a記録・ARIA SELF_AWARE状態の永続化、Save互換維持）を含め計111項目、2回連続実行で全PASS。
+
+**未実装/既知の制約**: STORY_BIBLE.mdに記載のとおり、Story Ending確定後もENDLESS RESEARCH内の既存システム（生涯達成型5 Ending・Hidden Environment探索等）はそのまま独立に機能し続ける。Normal/Hidden/Bad Endingでは要求仕様どおりARIAの状態変更を行っていないが、Hidden/Bad Ending到達時のARIAの反応はEpilogue Dialogueの台詞のみで表現しており、Character/Story Archive側に「どのEndingで本編を終えたか」を表示する専用UIは今回追加していない（既存のENDING一覧＝生涯達成Ending表示と共通のResearch Archiveのみ）。

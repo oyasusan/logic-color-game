@@ -19,6 +19,14 @@
  * `snapshot[condition.type]||0 >= condition.value`で判定するため、snapshotに存在しない
  * キーは常に0として扱われ、条件を満たすことが無い）。将来Partner AIへの実際の到達条件を
  * 設計する際は、この`condition`を実際の判定可能な値へ差し替えるだけでよい。
+ *
+ * 【STEP38追記: LEVEL3到達条件の変更】要求仕様セクション3「ARIA状態更新: Emotional AI→
+ * Self Aware、条件: Memory010取得・Memory011取得・Chapter5 Complete」に対応するため、
+ * LEVEL3の`condition.type`を`finalChapterReached`から`selfAwareReady`へ変更した
+ * （STORY_BIBLE.mdもこの変更に合わせて更新済み。詳細はREADME.md STEP38セクション参照）。
+ * `finalChapterReached`のsnapshotキー自体は`relationshipManager.js`に残してあり
+ * （Final Chapter到達を必要とする将来の別用途のために保持）、ARIA_LEVELSからの参照が
+ * 無くなっただけで削除はしていない。
  */
 (function (global) {
   'use strict';
@@ -29,7 +37,11 @@
   const DEFAULTS = {
     player: { characterId: 'player', relationship: 0, state: 'RESEARCHER' },
     aria: { characterId: 'aria', relationship: 0, state: 'LOGICAL_AI' },
-    lost_researcher: { characterId: 'lost_researcher', relationship: 0, state: 'UNKNOWN' }
+    lost_researcher: { characterId: 'lost_researcher', relationship: 0, state: 'UNKNOWN' },
+    // STEP39-2: Final Chapter Layer26でcharacterDiscoveryさせるため、lost_researcherと
+    // 同じ`UNKNOWN`初期状態を用意した（Character Archiveのstate表示が'null'にならない
+    // ようにするための最小限の追加。詳細はcharacterData.js/layerContentData.jsのコメント参照）
+    dr_leon: { characterId: 'dr_leon', relationship: 0, state: 'UNKNOWN' }
   };
 
   // 要求仕様セクション4のARIA状態変化テーブル。conditionはrelationshipManager.jsが
@@ -41,7 +53,7 @@
     { level: 0, state: 'LOGICAL_AI', name: 'Logical AI', condition: null },
     { level: 1, state: 'CURIOUS_AI', name: 'Curious AI', condition: { type: 'memoryCount', value: 1 } },
     { level: 2, state: 'EMOTIONAL_AI', name: 'Emotional AI', condition: { type: 'importantMemoryCollected', value: 1 } },
-    { level: 3, state: 'SELF_AWARE', name: 'Self Aware', condition: { type: 'finalChapterReached', value: 1 } },
+    { level: 3, state: 'SELF_AWARE', name: 'Self Aware', condition: { type: 'selfAwareReady', value: 1 } },
     // 将来拡張用の予約枠（現時点では到達不可能。上部コメント参照）
     { level: 4, state: 'PARTNER_AI', name: 'Partner AI', condition: { type: 'reserved', value: 1 }, reserved: true }
   ];

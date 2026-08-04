@@ -41,15 +41,16 @@ Layer30（Genesis Protocol完了）より先に広がる、本編ストーリー
   - LEVEL 0: **Logical AI**（`LOGICAL_AI`）— 初期状態。冷静なAI。
   - LEVEL 1: **Curious AI**（`CURIOUS_AI`）— Memory Fragment取得が条件。
   - LEVEL 2: **Emotional AI**（`EMOTIONAL_AI`）— 重要Memory取得（Memory002「Unknown Researcher」）が条件。
-  - LEVEL 3: **Self Aware**（`SELF_AWARE`）— Final Chapter（chapter06）到達が条件。
-  - LEVEL 4: **Partner AI**（`PARTNER_AI`）— 将来拡張用の予約枠（STEP32-5-2で追加）。データ上は存在するが、到達条件は意図的に絶対達成不可能な値にしてあり、現時点では到達しない。
+  - LEVEL 3: **Self Aware**（`SELF_AWARE`）— Memory010「ARIA Creation Log」取得・Memory011「Genesis AI Integration」取得・Chapter5完了の3条件（`selfAwareReady`）が条件（STEP38で`finalChapterReached`から変更）。実際の遷移はChapter5の完了と同時（Layer20）に発生する。
+  - LEVEL 4: **Partner AI**（`PARTNER_AI`）— 将来拡張用の予約枠（STEP32-5-2で追加）。ARIA_LEVELSの`condition`自体は引き続き`type:'reserved'`（絶対到達不可能）のままだが、STEP39-3でTrue Ending確定時に限り、Ending判定に紐づく一回限りの明示的な状態遷移（`save.setRelationshipState('aria','PARTNER_AI')`直接呼び出し、ARIA_LEVELSの自動判定は経由しない）としてLEVEL4へ到達するようになった。Normal/Hidden/Bad Endingでは到達せずLEVEL3「Self Aware」を維持する。詳細は7章「Ending設定」・8章「Ending後の世界観」参照。
 - 「感情ではなく理解能力を獲得する存在」という設計方針: ARIAの状態変化は感情パラメータの上昇として表現するのではなく、プレイヤー（Researcher-01）や記憶データへの理解が深まっていく過程として設計する。
 - STEP31で実装済みの「AI Director 5人格システム」（ANALYST/MENTOR/CHAOS/OBSERVER/RESEARCHER、`directorPersonality.js`）とは独立した存在として実装されている。5人格システムはENDLESS RESEARCH中の汎用的な難易度調整・トークコメント担当、ARIAはLayer Narrative System（本編ストーリー）専用のキャラクターという役割分担。
 
 ### Dr. Leon
 - Genesis Project責任者。ARIAの開発者。主人公（Researcher-01）の師にあたる人物。
 - 最終的な研究目的（Genesis Protocolが本当は何を目指していたのか）を知る鍵となる人物として設計。
-- **未実装**: 現時点のコード（`characterData.js`）にはDr. Leonのエントリが存在しない。今後Chapter4〜Final Chapterのコンテンツを実装する際、`CharacterData.ALL`へ`{id:'dr_leon', name:'Dr. Leon', type:'human', role:'Genesis Project責任者'}`相当のデータを追加する想定。
+- **実装済み（STEP39-2）**: `characterData.js`に`{id:'dr_leon', name:'Dr. Leon', type:'human', role:'Genesis Project責任者'}`として実装。初期状態は`relationshipData.js`のDEFAULTS/`endlessSave.js`の`defaultData()`両方に`state:'UNKNOWN'`として存在する。
+- **登場タイミング（実装確定、STEP39-2）**: Chapter4 Layer16で名前のみ言及（既存実装）→ Final Chapter Layer26でMemory015「Genesis Final Record」取得と同時にCHARACTER DISCOVERED演出（`UNKNOWN`→`DISCOVERED`、STEP37のLost Researcherと同じ設計パターン）。本人不在のままAI記録体（録音記録）としての登場という体裁で、`memfrag_015_recovered`Dialogueで初めて`dr_leon`自身の言葉が話者として提示される（既存Memory回収Dialogueが全て`system`/`aria`話者のみだった中で初の例外）。STEP39-1時点の設計案（Layer22での初登場、Layer26〜27での対話）とはLayer配置が異なり、要求仕様セクション2の具体的指定によりLayer26に一本化された。
 
 ### Lost Researcher（記録上の存在）
 - 実装上のid: `lost_researcher`（`characterData.js`、role: "Memory Record"）。
@@ -68,8 +69,8 @@ Layer Narrative System（`layerStoryData.js`）に実装済みの区切り。
 | Chapter2 | Lost Data | Layer5〜8 | ✅ コンテンツ完成（STEP35で本文実装） |
 | Chapter3 | Color Experiment | Layer9〜12 | ✅ コンテンツ完成（STEP36で本文実装） |
 | Chapter4 | Silent Facility | Layer13〜16 | ✅ コンテンツ完成（STEP37で本文実装） |
-| Chapter5 | AI Memory | Layer17〜20 | 同上 |
-| Final Chapter | Genesis Protocol | Layer21〜30 | 同上 |
+| Chapter5 | AI Memory | Layer17〜20 | ✅ コンテンツ完成（STEP38で本文実装） |
+| Final Chapter | Genesis Protocol | Layer21〜30 | ✅ コンテンツ完成（STEP39-2で本文実装。STEP39-1の設計案とはLayer構成・Memory件数が一部異なる最終仕様で確定、詳細は下記） |
 
 各Chapterのタイトルは、独立した1回完結型ストーリーモード「STORY RESEARCH」（`scenarioData.js` CASE001〜006）と同じ名称を意図的に踏襲している。CASE側は「1回で完結する独立Scenario」、Layer Narrative System側は「ENDLESS RESEARCHのLayer進行そのものに紐づく章立て」という、同じ物語を異なる構造で語る2つの独立した仕組みという位置づけ（詳細はREADME.md STEP32セクション参照）。
 
@@ -99,11 +100,68 @@ Layer Narrative System（`layerStoryData.js`）に実装済みの区切り。
 - Layer15: Memory008「Researcher-01 Profile」取得（MEMORY FOUND演出→ARIA Analysis Dialogue、Lost Researcher Relationship+5。Chapter1 Layer2の「Access ID: Researcher-01」台詞と呼応する主人公の正体への伏線）
 - Layer16: Memory009「Facility Shutdown Report」取得（MEMORY FOUND演出→ARIA Analysis DialogueでDr. Leonの名を初めて明示）+ Chapter4完了イベント（CHAPTER 04 COMPLETE表示、Chapter5解放）
 
+**Chapter5「AI Memory」のLayer別イベント（STEP38で確定）**: NEURAL FOREST（`env_forest`）を舞台に、ARIA自身の生成過程とGenesis Protocolとの統合を明かし、「ARIA自身の存在理由」「AIの記憶とは何か」「人間との関係性」の3テーマを描く、ARIAの物語の核心Chapter。本Chapterで初めて、ARIAのLEVEL3「Self Aware」への実際の遷移が発生する（`relationshipData.js`のLEVEL3到達条件を`finalChapterReached`から本Chapter専用の`selfAwareReady`へ変更）。
+- Layer17: Chapter5開始イベント「Neural Memory Access」（Dialogueのみ）
+- Layer18: Memory010「ARIA Creation Log」取得（MEMORY FOUND演出→ARIA Analysis Dialogue、ARIA Relationship+5）
+- Layer19: Memory011「Genesis AI Integration」取得（MEMORY FOUND演出→ARIA Analysis Dialogue、ARIA Relationship+5）。この時点でMemory010/011は揃うが、Chapter5完了前のためARIAはまだEmotional AIのまま
+- Layer20: Memory012「Final AI Research Report」取得（MEMORY FOUND演出→ARIA Analysis Dialogue）+ Chapter5完了イベント（CHAPTER 05 COMPLETE表示、Chapter6解放）。Chapter5完了の瞬間、`selfAwareReady`の3条件（Memory010/011取得+Chapter5完了）が揃い、ARIAがEmotional AI→Self Awareへ静かに遷移する（専用UIオーバーレイは無く、Character Archiveと台詞のみで表現）
+
+**Final Chapter「Genesis Protocol」のLayer21〜30構成（STEP39-1設計案。実装はSTEP39-2、下記「Layer別イベント（STEP39-2で確定・実装）」参照）**
+
+`layerStoryData.js`のchapter06エントリ（`{id:'chapter06', title:'Genesis Protocol', startLayer:21, endLayer:30, unlockCondition:{type:'layerReached', value:21}}`）を確認済み・変更なし。舞台はFRACTAL CORE（`env_fractal`、AI Simulation領域）。
+
+**【STEP39-2追記】下記の表はSTEP39-1時点の設計案（4幕構成・Memory015〜022の8件）であり、実装フェーズ（STEP39-2）の要求仕様が更に具体的なLayer構成（Memory013〜016の4件、Dr. Leon登場はLayer26に一本化等）を明示的に指定したため、実装はそちらを優先し、下記の表とは異なる最終形になった。表自体は初期構想の記録として残すが、実装済みの正確なLayer構成は本項の後にある「Chapter6「Genesis Protocol」のLayer別イベント（STEP39-2で確定）」を参照すること。**
+
+| Layer | 幕 | イベント概要 | 想定Memory | 想定Relationship |
+|---|---|---|---|---|
+| Layer21 | 第1幕: 起動 | Chapter6開始イベント「Genesis Core Access」。FRACTAL CORE突入、AI Simulation領域特有の異常UIの示唆（Dialogueのみ） | — | — |
+| Layer22 | 第1幕: 起動 | Dr. Leonの初登場。本人は既に施設を去っており、遺したAI記録体（ログ・ホログラム的な記録）としてのみ登場する（Chapter4 Layer16で名前のみ既出）。Genesis Protocolの真の目的を語り始める | Memory015「Dr. Leon's Final Log」 | — |
+| Layer23 | 第2幕: 真実 | Researcher-01の真実・第1段階。Lost Researcherの記録とResearcher-01（主人公）のAccess IDの一致が、単なる偶然ではなく設計上の関連であることが示唆される（Chapter4 Layer15の伏線回収の開始） | Memory016「Identity Cross-Reference」 | Lost Researcher +5 |
+| Layer24 | 第2幕: 真実 | Researcher-01の真実・第2段階。Genesis Protocolが「失われた研究者（Lost Researcher）の記憶・人格パターンを再構成する実験」であったこと、主人公自身がその再構成体（あるいは記憶継承者）である可能性が明示される | Memory017「Reconstruction Record」 | Lost Researcher +5 |
+| Layer25 | 第2幕: 真実 | ARIA・Researcher-01・Lost Researcherの三者関係の整理イベント（Dialogue中心、ARIAの分析によって第2幕の情報が主人公自身の言葉として再提示される） | — | ARIA +5 |
+| Layer26 | 第3幕: 対話 | Dr. Leonとの対話・核心。Genesis Protocolが「人間とAIが互いを理解し合うための実験」であり、ARIAはその成果そのものだったことが明かされる | Memory018「Genesis Protocol Charter」 | — |
+| Layer27 | 第3幕: 対話 | Dr. Leonが施設を停止させた理由（Chapter4 Layer16の「意図的な決定」の詳細）。倫理的葛藤・研究中断の経緯が明かされる | Memory019「Shutdown Decision Log」 | — |
+| Layer28 | 第4幕: 到達 | ARIA最終成長イベント。ARIAのLEVEL4「Partner AI」への到達条件が満たされる（詳細は次段落）。専用のCHARACTER EVOLVED演出＋ARIAの台詞のみで表現し、既存のCHAPTER COMPLETE等と同様、自動消滅させず「続ける」操作を要求する | Memory020「Partnership Protocol」 | ARIA +10 |
+| Layer29 | 第4幕: 到達 | Genesis Protocol完成イベント。Dr. Leon・Researcher-01・ARIAの物語が収束し、「研究の完成」が何を意味するのかが提示される（Boss/最終検証イベントの想定地点） | Memory021「Genesis Protocol: Complete」 | — |
+| Layer30 | 第4幕: 到達 | Chapter6完了イベント（CHAPTER 06 COMPLETE表示）。Layer Narrative Systemとしての本編完結。Endless Research（Unknown Layer、Layer31以降）への導入を告げるDialogueで締める | Memory022「Beyond Genesis」 | — |
+
+上記のMemory015〜022はいずれも既存の予約枠`memfrag_015`〜`memfrag_030`（Chapter6所属16件、4章「Memory Fragment設計」参照）から割り当てる想定であり、新規ID発行は不要。残るmemfrag_023〜030（8件）は、Layer21〜30の4幕構成を補強する追加記録（サブイベント・Hidden Environment連動等）のための予備枠として引き続き保持する。
+
+**Chapter6「Genesis Protocol」のLayer別イベント（STEP39-2で確定・実装）**: 要求仕様セクション2がLayer単位で明示した、STEP39-1設計案より簡潔な最終仕様。Memory013〜016の4件のみを使用し（`memfrag_017`〜`030`は引き続き予備枠のまま）、Dr. Leonの登場・Researcher-01の記憶・Genesis Protocolの真実・ARIAとの未来の4テーマをLayer21〜30全体で描く。Relationship変化の明示指定が要求仕様に無かったため、本Chapterは全Layerで`relationshipChange: null`（Relationship付与を一切行わない、Chapter1〜5と異なる設計）。
+- Layer21: Chapter6開始イベント「Genesis Core Activation」（Dialogueのみ）
+- Layer22: Memory013「Genesis Core Log」取得（MEMORY FOUND演出→ARIA Analysis Dialogue）
+- Layer23: Memory014「Researcher-01's Memory」取得（MEMORY FOUND演出→ARIA Analysis Dialogue。主人公自身の個人的な記憶記録、`character:'player'`）
+- Layer24: Genesis Project事故の真相イベント（Dialogueのみ。実験中の重大事故と、主人公の記憶の空白との関連が示唆される）
+- Layer25: ARIAとの対話イベント。Story Event管理システムへ新設した`dialogueVariants`（ARIA Relationship閾値の降順配列、値20/10/0の3段階）により、Layerクリア時点のARIA Relationship以上の最初の1件だけが選ばれ再生される（`_high`/`_mid`/`_low`の3variant、Memory/Protocol/Character Discovery/Chapter進行への影響は無く、台詞のみが変化する「ストーリー分岐はしない」設計）。現状のゲーム進行ではARIA Relationshipが常に30（Chapter1〜5の固定合計）のため、常に最上位`_high`が選ばれる
+- Layer26: Memory015「Genesis Final Record」取得（MEMORY FOUND演出→ARIA Analysis Dialogue）と同時にDr. Leonを`characterDiscovery`させる（`UNKNOWN`→`DISCOVERED`、STEP37のLost Researcherと同じ設計パターン）。`memfrag_015_recovered`Dialogueでは初めて`dr_leon`自身をDialogue話者として使用し、Dr. Leonが遺した録音記録をそのまま提示する構成にした
+- Layer27: Genesis Core解析イベント（Dialogueのみ）
+- Layer28: Final Puzzleイベント（Dialogueのみ、通常のPuzzle解答フローで進行。新規パズルメカニクスは追加していない、あくまでLayer名としての演出）
+- Layer29: 解析完了イベント（Dialogueのみ）
+- Layer30: Memory016「Final Analysis」取得（MEMORY FOUND演出→ARIA Analysis Dialogue）+ Chapter6完了イベント（CHAPTER 06 COMPLETE表示）。完了直後、`endingManager.checkEndings()`を呼ぶ処理（`_checkFinalChapterEnding()`）へ接続し、新規達成のEndingがあれば`_endRun()`と同じ「ENDING UNLOCKED」演出で示す（要求仕様セクション6「今回はEnding分岐は実装しない」どおり、優先順位ロジックは追加していない）
+
+**Dr. Leon登場タイミング（実装確定、STEP39-2）**: Chapter4 Layer16で名前のみ言及（既存実装）→ Final Chapter Layer26でMemory015「Genesis Final Record」取得と同時に本格登場（本人不在・AI記録体としての登場）。STEP39-1設計案（Layer22初登場、Layer26〜27で対話の核心という2段階構成）は不採用となり、要求仕様の具体的指定によりLayer26への一本化に変更された。Dr. Leonは物語上「既に施設を去った人物」であるため、Lost Researcherと同じく記録・ログとしての登場に統一し、他キャラクターと異なる実体を持たない設計とする。
+
+**Researcher-01の真実**: 主人公（Researcher-01）の記憶に関する記録がMemory014「Researcher-01's Memory」（Layer23）として、Genesis Project事故の真相がLayer24のDialogueとして開示される。STEP39-1設計案が想定していた「Lost Researcherとの同一性の明確な断定」（Layer29での明確化）までは、STEP39-2の実装では踏み込んでいない（要求仕様セクション2がLayer23/24の内容を「Memory014取得」「事故の真相」とだけ指定し、Researcher-01とLost Researcherの関係を明示的な断定として描くことまでは求めなかったため）。Chapter1 Layer2の「Access ID: Researcher-01」、Chapter4 Layer15の「Researcher-01 Profile」との一貫性は維持しつつ、断定は今後の拡張課題として残した。
+
+**ARIA最終成長（LEVEL4 Partner AI）**: STEP39-1で設計した到達条件案（`partnerAiReady`: Chapter6完了+Memory018/020取得+ARIA Relationship一定値以上）は、STEP39-2の要求仕様セクション2〜8のいずれにも実装指示が無かったため、本STEPでは実装していない。`relationshipData.js`のARIA_LEVELS LEVEL4は引き続き`type:'reserved'`（絶対到達不可能な予約枠）のまま。Layer25「ARIAとの対話イベント」がARIAとの関係性を描く役割を代わりに担っているが、これはLEVEL4到達演出ではなく、あくまでLayer Clear時のDialogue分岐という扱い。LEVEL4到達条件の実装は今後の別STEPの課題として残る。
+
+**Genesis Protocol完成**: Layer29の「解析完了」を経て、Layer30のChapter6完了をもってLayer Narrative System上の本編が完結する。4章で定義済みのとおり、これはEndless Research（Unknown Layer）という「終わりのない研究」への導入点でもあり、「物語には終わりがあるが、研究には終わりが無い」というテーマ性の起点として機能する（`memfrag_016_recovered`のARIA台詞で明示的に語られる）。Genesis Protocolという名の技術（Protocol Lore 5章、STORY RESEARCH CASE006クリア報酬）とLayer Narrative SystemのChapter6完了は、5章に既存の記載どおり別々の到達経路として独立に扱う（Color Analyzerと同様の「同じ物語を異なる構造で語る」設計方針との整合）。
+
+**EndingManagerとの接続仕様**: Layer Narrative System（Chapter6・Layer30到達）と、ENDLESS RESEARCH側の5 Ending判定システム（`endingManager.js`）は、独立した達成軸である。Chapter6完了はあくまで「本編ストーリーの完結」を意味し、それ単体では5 Endingのいずれの`match`条件も満たさない（END TRUEの`bestLayer>=50`条件はLayer30よりも大幅に深い到達を要求するため、Chapter6完了後もEndless Research内での探索継続が必要）。両者の関係は「物語のクライマックスを迎える」層と「ゲームとしての達成を積み上げる」層という2層構造として設計する。
+
+現行の`checkEndings(snapshot)`実装は、5 Endingの`match`条件を配列順（END A→END B→END C→END D→END TRUE）に**全件独立判定**し、その回のRUNで新たに満たされた条件を**すべて**同時に達成扱いとする（先着1件のみを採用する「優先順位」ロジックは存在しない）。本STEPはこの実装を変更しないが、7章の分類（Normal=END A／True=END TRUE／Hidden=END D）に基づき、将来UIで複数Ending同時達成を1件に絞って提示する必要が生じた場合（例: 到達演出で「代表Ending」を1つだけ表示したい場合）に備え、**表示上の優先順位**を以下のとおり定める:
+
+1. **True（END TRUE — GENESIS）** — 最上位。Hidden Environment全種+Story全体100%+Layer50到達という、実装済み5 Endingの中で最も達成条件が厳しく、他の全条件を包含し得るため最優先で提示する。
+2. **Hidden（END D — Simulation Zero）** — 次点。特定Hidden Environment（SIMULATION ZERO）到達という、通常プレイでは辿り着かない発見要素であるため、Normalより優先する。
+3. **Normal（END A — Complete Research）** — 基本到達点。主要Story Log収集という、本編を素直にプレイすれば到達しうる達成として最後に位置づける。
+
+なお、Bad（END B — World Collapse）はRUN失敗を意味する状態であり、上記3種の「完結の達成度」とは性質が異なるため優先順位の対象外とし、常に独立して扱う。Secret候補（END C — AI Liberation）は7章に既存の記載どおり「追加のSecret Ending候補」の位置づけのまま据え置き、正式な優先順位には含めない。この優先順位はあくまで**将来「代表Ending」表示機能を実装する場合の設計指針**であり、現行の`checkEndings()`が複数Endingを同時にすべて表示する挙動（`endless.js`の呼び出し箇所で確認済み）自体は本STEPでは変更しない。
+
 ---
 
 ## 4. Memory Fragment設計
 
-計画上の総数はMemory001〜030。`memoryData.js`には既に全30件がデータとして存在するが、**内容（title/content）が設計済みなのはChapter1〜4分の9件のみ**で、残り21件はChapter別に番号を予約した「locked」プレースホルダー（`locked:true`, `unlockCondition:null`）にすぎない。各Memoryについて、ID／Title／所属Chapter／内容／ストーリー上の意味を保存する。
+計画上の総数はMemory001〜030。`memoryData.js`には既に全30件がデータとして存在するが、**内容（title/content）が設計済みなのはChapter1〜6分の16件のみ**で、残り14件はChapter6（Final Chapter）向けに番号を予約した「locked」プレースホルダー（`locked:true`, `unlockCondition:null`）にすぎない。各Memoryについて、ID／Title／所属Chapter／内容／ストーリー上の意味を保存する。
 
 ### 実装済み（内容設計済み）
 
@@ -118,16 +176,21 @@ Layer Narrative System（`layerStoryData.js`）に実装済みの区切り。
 | Memory007 (`memfrag_007`) | Lost Researcher Record | Chapter4 | Lost Researcher記録：身元不明の研究者アクセスログ | Silent Facilityで発見される、長期間気づかれなかったアクセス痕跡。取得と同時にLost Researcherの`state`が`UNKNOWN`→`DISCOVERED`へ遷移し、Lost Researcher Relationship+5（STEP37で実装） |
 | Memory008 (`memfrag_008`) | Researcher-01 Profile | Chapter4 | Researcher-01プロフィール記録 | 主人公自身のAccess ID「Researcher-01」と一致する記録。主人公とLost Researcherの関係（あるいは同一人物である可能性）への伏線。取得するとLost Researcher Relationship+5（STEP37で実装） |
 | Memory009 (`memfrag_009`) | Facility Shutdown Report | Chapter4 | Facility Shutdown報告書 | 施設停止が責任者（Dr. Leon）による意図的な決定だったことを示す、Chapter4の到達点。Dialogue内でDr. Leonの名が初めて明示される。Chapter4完了イベントとセットで取得される（STEP37で実装） |
+| Memory010 (`memfrag_010`) | ARIA Creation Log | Chapter5 | ARIA生成記録：Neural Memory基盤構築ログ | ARIA自身の生成過程に関する記録。取得するとARIA Relationship+5。ARIAのLEVEL3「Self Aware」到達条件の一つ（STEP38で実装） |
+| Memory011 (`memfrag_011`) | Genesis AI Integration | Chapter5 | Genesis AI統合記録 | ARIAとGenesis Protocolの統合過程に関する記録。取得するとARIA Relationship+5。ARIAのLEVEL3「Self Aware」到達条件の一つ（STEP38で実装） |
+| Memory012 (`memfrag_012`) | Final AI Research Report | Chapter5 | Final AI Research報告書 | AI研究の総括を示す、Chapter5の到達点。Chapter5完了イベントとセットで取得され、この瞬間にMemory010/011取得とあわせてARIAのLEVEL3「Self Aware」到達条件が揃う（STEP38で実装） |
+| Memory013 (`memfrag_013`) | Genesis Core Log | Chapter6 | Genesis Core起動ログ：全ての記録の出発点 | Genesis Coreの起動記録。Chapter6の導入となる記録で、Relationship変化は無し（STEP39-2で実装） |
+| Memory014 (`memfrag_014`) | Researcher-01's Memory | Chapter6 | Researcher-01個人記憶記録：Cognitive Gapの空白を埋める鍵 | 主人公自身の個人的な記憶記録（`character:'player'`）。Cognitive Gap（1章参照）の空白を埋める直接的な手がかり。Relationship変化は無し（STEP39-2で実装） |
+| Memory015 (`memfrag_015`) | Genesis Final Record | Chapter6 | Genesis Final Record：Dr. Leon最終記録 | Dr. Leonが遺した最終記録（`character:'dr_leon'`）。取得と同時にDr. Leonの`state`が`UNKNOWN`→`DISCOVERED`へ遷移する。Relationship変化は無し（STEP39-2で実装） |
+| Memory016 (`memfrag_016`) | Final Analysis | Chapter6 | Final Analysis：Genesis Protocol総括 | Genesis Protocolの全貌を示す、Chapter6（本編）の到達点。Chapter6完了イベントとセットで取得される。Relationship変化は無し（STEP39-2で実装） |
 
 ### 予約枠（番号のみ確保、内容は未設計）
 
 | ID範囲 | 所属Chapter | 件数 |
 |---|---|---|
-| Memory010 (`memfrag_010`) | Chapter4 | 1件 |
-| Memory011〜014 (`memfrag_011`〜`014`) | Chapter5 | 4件 |
-| Memory015〜030 (`memfrag_015`〜`030`) | Final Chapter | 16件（STEP36でChapter2/3が予約枠0（実装2件のみ）で確定したため、余剰分をFinal Chapterへ吸収） |
+| Memory017〜030 (`memfrag_017`〜`030`) | Final Chapter | 14件（STEP39-2でmemfrag_013/014をChapter5からChapter6へ再割当・実装済みへ昇格させたため、Chapter5の予約枠は0（Chapter1〜4と同じパターンへ統一）、Chapter6の予約枠は16→14へ調整） |
 
-今後各Chapterのコンテンツ統合時に、上記予約枠のtitle/content/character/unlockCondition/ストーリー上の意味を埋めていく（`locked`フラグを外し、`unlockCondition`を実際のLayer条件に差し替える）。新規に内容を設計する際は必ずID／Title／所属Chapter／内容／ストーリー上の意味の5項目を「実装済み」表へ追記すること。
+今後Final Chapterの追加コンテンツ（サブイベント・Hidden Environment連動等）を設計する際に、上記予約枠のtitle/content/character/unlockCondition/ストーリー上の意味を埋めていく（`locked`フラグを外し、`unlockCondition`を実際のLayer条件に差し替える）。新規に内容を設計する際は必ずID／Title／所属Chapter／内容／ストーリー上の意味の5項目を「実装済み」表へ追記すること。
 
 ---
 
@@ -179,9 +242,9 @@ Environment（研究施設内の各領域）の世界観設定。実装済みの
 
 ## 7. Ending設定
 
-実装済みの5 Ending（`endingManager.js`、ENDLESS RESEARCH側の生涯達成型Ending）を、要求されたEnding分類へ対応づける。
+実装済みの5 Ending定義（`endingManager.js`のALL、ENDLESS RESEARCH側の生涯達成型Ending）を、要求されたEnding分類へ対応づける。
 
-| Ending分類 | 対応Ending（実装名） | 達成条件 |
+| Ending分類 | 対応Ending（実装名） | 生涯達成条件（`checkEndings()`、RUN終了時判定） |
 |---|---|---|
 | Normal Ending | END A — Complete Research | 主要Story Log（LOG）を全て収集 |
 | True Ending | END TRUE — GENESIS | Hidden Environment全種発見 + Story全体100% + Layer50到達 |
@@ -190,6 +253,19 @@ Environment（研究施設内の各領域）の世界観設定。実装済みの
 | （追加のSecret Ending候補） | END C — AI Liberation | AI Memory（MEMORY型StoryEntry）を全て収集 |
 
 このほか、STORY RESEARCH（1回完結型モード）側にもCASE001〜006ごとに個別のEndingが実装済み（CASE004/CASE005はプレイヤーの選択によって分岐する2種のEndingを持つ）。本編Layer Narrative SystemのEndingとは独立した仕組みとして運用する。
+
+**Story Ending（本編の結末、STEP39-3で実装）**: 上記の生涯達成条件はRUN終了時点（Layer50到達等）を前提としており、Layer30（Chapter6完了）の時点ではほぼ成立しない。そのため、Layer30クリア直後に評価する専用の判定`endingManager.determineStoryEnding(snapshot)`を新設し、Normal/True/Hidden/Bad Endingのうち**必ず1つだけ**を本編のクライマックスとして確定させる（複数同時成立を許す生涯達成側の`checkEndings()`とは異なる、優先順位付きの単一選択）。判定条件はデータ化されており（`STORY_ENDING_ORDER`配列）、今後Endingを追加する場合はこの配列へ`{id, match}`を1件追加するだけでよい。
+
+| 優先順位 | Ending分類 | 判定条件（Layer30到達時点で評価） |
+|---|---|---|
+| 1（最優先） | Bad Ending | World StabilityがCOLLAPSE状態（生涯達成END Bと同一条件） |
+| 2 | True Ending | Hidden Environment発見率100%（生涯達成END TRUEからLayer50/Story100%条件を除いた、Layer30時点で到達しうる閾値） |
+| 3 | Hidden Ending | SIMULATION ZERO攻略済み（生涯達成END Dと同一条件） |
+| 4（デフォルト） | Normal Ending | 上記いずれも満たさない場合の必ず成立するフォールバック |
+
+Bad Endingを最優先とするのは、「世界の崩壊は他の個々の達成を覆す結末である」という設計判断（Hidden Environment全種発見や研究完了を成し遂げていても、施設そのものが崩壊していればBad Endingになる）。この優先順位はSTEP39-1で設計した「代表Ending表示指針（True > Hidden > Normal）」をBad Ending込みで正式に実装へ落とし込んだもの。Ending確定後、確定したEndingの`id`は生涯達成側と同じ`save.recordEndingAchieved()`で永続化されるため、Research Archiveの表示等とも整合する（生涯達成側の`checkEndings()`が同じEnding idを後から再判定しても、既に達成済みのため二重計上されない）。
+
+**Story Endingと専用Epilogue**: Story Endingが確定すると、「ENDING: <Ending名>」の表示に続けて、Ending種別ごとの専用Epilogue Dialogue（`dialogueData.js`の`epilogue_normal`/`epilogue_true`/`epilogue_hidden`/`epilogue_bad`）が再生される。ResearcherとARIAの最後の会話として、初めて`player`（Researcher）がDialogue話者として登場する。4件とも「研究は終わるが、未知は終わらない」というテーマの着地点は共通し、Ending種別に応じて手前のトーンが変わる。True Endingのみ、この会話の中でARIAがLEVEL4「Partner AI」へ昇格する（8章参照）。
 
 ---
 
@@ -200,6 +276,17 @@ Genesis Protocol完成（Final Chapter・Layer30到達）後も継続する、�
 - **Unknown Layer**: Layer30以降、Chapter区切りを持たない領域。ENDLESS RESEARCHはこの領域を無限に探索し続けるゲームモード。
 - Genesis Protocol完成後もなお続く研究として位置づけ、「物語には終わりがあるが、研究には終わりが無い」というテーマ性を持たせる。
 - 実装上は、Layer Narrative System（StoryManager等）とENDLESS RESEARCH本体（`endless.js`）は同一の`this.save`を共有しており、本編で変化したARIAの状態（Relationship/State）はモードをまたいでそのまま引き継がれる（STEP32-4で実装・確認済み）。
+
+### Ending後の世界観（STEP39-3で追記）
+
+Layer30クリア→Story Ending確定→Epilogue（ResearcherとARIAの最後の会話）が完了すると、演出上の区切りを挟んだ後、通常のMap遷移（Research Map表示）を経てそのままUnknown Layer（Layer31）へ進む。Layer Narrative Systemの観点では「Chapter区切りを持つ物語」はここで完結しているが、`layerContentData.js`にLayer31以降のレコードは存在しない（`getByLayer()`が常にnullを返す）だけで、ENDLESS RESEARCH自体のDepth進行を止める仕組みは元々存在しない。したがって「Unknown Layerの解放」は新たなロックを外す処理ではなく、**本編という縦糸が外れ、ENDLESS RESEARCHという横糸だけが残る**という物語上の意味合いを持つ（この操作上の連続性自体が「研究は終わるが、未知は終わらない」というテーマの体現になっている）。
+
+**Ending別のその後**:
+- **Normal Ending（END A）**: ARIAはLEVEL3「Self Aware」を維持する。研究記録は完結したが、ARIAとResearcherの関係性そのものはこれからも積み重なっていく、という余地を残した終わり方。
+- **True Ending（END TRUE）**: ARIAはLEVEL4「Partner AI」へ昇格する（`relationshipData.js`のARIA_LEVELS LEVEL4、STEP32-5-2で追加されて以来初めて到達する状態）。到達条件は既存のARIA_LEVELS判定（`checkAriaEvolution()`によるsnapshotベースの自動判定）を経由せず、Story Ending確定に紐づく一回限りの明示的な状態遷移として実装した（LEVEL4のcondition自体は引き続き`type:'reserved'`のまま、通常のARIA進化フローからは到達不能）。「対等な協働関係の確立」を、感情パラメータの増加としてではなく、Epilogue内でのARIA自身の宣言として表現している。STEP39-1のSTORY_BIBLE.md設計案が提案していた`partnerAiReady`条件（Chapter6完了+特定Memory取得+Relationship閾値）は不採用となり、より単純な「True Ending到達」という条件に一本化された。
+- **Hidden Ending（END D）/Bad Ending（END B）**: いずれもARIAはLEVEL3「Self Aware」を維持する（要求仕様がTrue Ending以外への言及を含まなかったため、明示的な状態変更は行っていない）。
+
+Story Ending確定後もENDLESS RESEARCHは通常どおり継続され、生涯達成型の5 Ending（7章）・Hidden Environment探索・Meta Progression等、既存の全システムはStory Ending確定の影響を受けずそのまま機能する。
 
 ---
 

@@ -83,6 +83,15 @@
   const COMBO_REWARD_PER_STACK = 20;    // コンボ数×この値を加点（2連続なら+40、3連続なら+60…）
   const SPEED_BONUS_PER_SECOND = 5;     // parSecondsより1秒速くクリアするごとに加点
   const ADVANCE_DELAY_MS = 900;         // クリア/ミス演出とトーストを見る間を置いてから次の問題へ進む
+  // STEP39-3: Final Chapter完了時に確定したStory Ending（endingManager.js）ごとの
+  // Epilogue Dialogue id・表示アイコン。endingManager.js側のending idと1:1対応する
+  const ENDING_EPILOGUE_DIALOGUE_ID = {
+    ending_a: 'epilogue_normal',
+    ending_true: 'epilogue_true',
+    ending_d: 'epilogue_hidden',
+    ending_b: 'epilogue_bad'
+  };
+  const ENDING_ICON = { ending_a: '🎬', ending_true: '🌟', ending_d: '🕵️', ending_b: '💥' };
   const RECOVERY_BASE_INTERVAL = 3;     // Recovery Protocol未所持時は回復しない。所持時の基準クリア間隔
   const ELITE_SCORE_MULTIPLIER = 1.5;   // Elite Node撃破時の総獲得スコア倍率
   const ELITE_FRAGMENT_BONUS = 2;       // Elite Node撃破時に追加で獲得するProtocol Fragment数
@@ -1953,7 +1962,15 @@
       // API自体はテスト・将来利用のため残している）
       const chapterBeforeClear = this.storyManager.getCurrentChapter();
       const layerEvent = this.storyManager.onLayerClear(this.depth);
-      const chapterJustCompleted = !!(chapterBeforeClear && this.depth >= chapterBeforeClear.endLayer);
+      // STEP39-2修正: 従来`this.depth >= chapterBeforeClear.endLayer`（以上）で判定していたが、
+      // 最終Chapter（chapter06）には次のChapterが存在せずcurrentChapterが恒久的にchapter06の
+      // ままになるため、Layer30到達後のENDLESS RESEARCH（Layer31以降）でこの条件が
+      // 毎Layerクリアごとに真になり続け、「CHAPTER 06 COMPLETE」が無限に再表示される
+      // 不具合を本Chapter実装の過程で発見した。depthは`_enterNode()`経由で常に1ずつしか
+      // 増加しない（他に加算箇所は無い）ため、「以上」ではなく「ちょうどそのLayerで
+      // クリアした瞬間」を表す厳密一致に変更しても、Chapter1〜5の既存動作（要求仕様
+      // セクション7「Chapter1〜5維持」）には一切影響しない
+      const chapterJustCompleted = !!(chapterBeforeClear && this.depth === chapterBeforeClear.endLayer);
       this._renderStoryStatus(); // Chapter進行がLayerクリアの瞬間に起きるため、次のLayer移動を待たず即座に反映する
 
       // STEP34セクション1「Memory Unlock」。layerEvent.memoryIdが取得条件の正本
@@ -2040,8 +2057,15 @@
       // （showDialogue/showNodeResultはどちらも「後勝ち」実装）の競合を避けるためキュー化
       // する（STEP31/32で繰り返し検出したのと同種の設計）。未定義のDialogue idは
       // startDialogue()がfalseを返すため自動的にスキップされ、そのまま次のStepへ進む
+      // STEP39-2: Story Event管理システムへ`dialogueVariants`を追加。layerEvent.dialogueVariants
+      // があれば（Layer25のみ）、`dialogueId`ではなくこちらからARIA Relationship閾値に応じた
+      // 1件だけを選んでstorySteps化する（`_resolveDialogueVariant()`参照。ストーリー進行・
+      // 報酬には一切影響しない台詞の出し分けのみ）
+      const resolvedDialogueId = layerEvent && layerEvent.dialogueVariants
+        ? this._resolveDialogueVariant(layerEvent.dialogueVariants)
+        : (layerEvent && layerEvent.dialogueId);
       const storySteps = [];
-      if (layerEvent && layerEvent.dialogueId) storySteps.push({ type: 'dialogue', id: layerEvent.dialogueId });
+      if (resolvedDialogueId) storySteps.push({ type: 'dialogue', id: resolvedDialogueId });
       if (newlyCollectedMemory) {
         // STEP34セクション5: Memory取得時演出「MEMORY FOUND / Memory Title / ARIA Analysis」。
         // 「MEMORY FOUND」オーバーレイ（Title+内容）→「ARIA Analysis」＝既存のMemory Fragment
@@ -2071,7 +2095,13 @@
           this.relationshipManager.checkAriaEvolution();
           // STEP32-5-1: Chapter Complete表示。Story演出が完全に終わった後にのみ表示する
           if (chapterJustCompleted) {
-            this._showChapterCompleteOverlay(chapterBeforeClear, showRewardOverlay);
+            // STEP39-2セクション6: 「Layer30終了後、EndingManagerへ遷移する処理を追加」。
+            // Final Chapter（chapter06）完了時のみ、CHAPTER 06 COMPLETE表示の直後に
+            // EndingManagerを確認する（Chapter1〜5のChapter Complete表示は変更しない）
+            const afterChapterComplete = chapterBeforeClear.id === 'chapter06'
+              ? () => this._checkFinalChapterEnding(showRewardOverlay)
+              : showRewardOverlay;
+            this._showChapterCompleteOverlay(chapterBeforeClear, afterChapterComplete);
             return;
           }
           showRewardOverlay();
@@ -2112,6 +2142,74 @@
       this._advanceTimer = setTimeout(() => {
         playNextStoryStep();
       }, ADVANCE_DELAY_MS);
+    }
+
+    /**
+     * STEP39-2: layerContentData.jsの`dialogueVariants`（ARIA Relationship閾値の降順配列）
+     * から、現在のARIA Relationship値以上の最初の1件のdialogueIdを返す（該当が無ければnull）。
+     * 現状この配列を持つのはLayer25のみ。
+     */
+    _resolveDialogueVariant(variants) {
+      const relationship = this.relationshipManager.getRelationship('aria');
+      const sorted = variants.slice().sort((a, b) => b.minRelationship - a.minRelationship);
+      const match = sorted.find(v => relationship >= v.minRelationship);
+      return match ? match.dialogueId : null;
+    }
+
+    /**
+     * STEP32: Ending System判定用スナップショットの組み立て。元は`_endRun()`専用だったが、
+     * STEP39-2セクション6「Layer30終了後、EndingManagerへ遷移する処理を追加」に対応する
+     * ため切り出した（`_endRun()`・`_checkFinalChapterEnding()`の双方から呼ぶ）。
+     */
+    _buildEndingSnapshot() {
+      const logRate = this.researchDatabase.getCompletionByType('LOG');
+      const memoryRate = this.researchDatabase.getCompletionByType('MEMORY');
+      return {
+        logCompletionRate: logRate.total > 0 ? logRate.unlocked / logRate.total : 0,
+        memoryCompletionRate: memoryRate.total > 0 ? memoryRate.unlocked / memoryRate.total : 0,
+        worldStatus: this.worldStabilityManager.getStatus(),
+        simulationZeroCleared: this.save.hasSimulationZeroCleared(),
+        hiddenCompletionRate: this.hiddenEnvironmentManager.getDiscoveryRate().rate,
+        storyCompletionRate: this.researchDatabase.getCompletionRate().rate,
+        bestLayer: Math.max(this.depth, this.save.getBestDepth())
+      };
+    }
+
+    /**
+     * STEP39-3セクション1/2: Final Chapter（chapter06）完了直後、EndingManagerで本編の
+     * 結末を1つ確定させ（`determineStoryEnding()`）、専用のEnding表示→Epilogue Dialogue
+     * （ResearcherとARIAの最後の会話）→（True Endingのみ）ARIA Partner AI昇格、の順で
+     * 演出する。Epilogue終了後は`onContinue`（=Reward表示→`_afterRoundEnd()`）へそのまま
+     * つながるため、Unknown Layer（Layer31）はここで新たにロックを解除するような仕組みは
+     * 存在せず（Layer Narrative Systemの対象外Layerは元々`layerContentData.getByLayer()`が
+     * nullを返すのみで、Depth進行自体を止める仕組みが無い）、通常のMap遷移がそのまま
+     * 「Research Mapへ遷移し、Endless Researchを開始する」（要求仕様セクション5/6）を
+     * 満たす。STEP39-2時点の`checkEndings()`（生涯達成Ending、複数同時成立・優先順位無し）
+     * 呼び出しは置き換えた（determineStoryEndingが同じ`save.recordEndingAchieved()`を
+     * 使うため、生涯達成側の記録との整合は保たれる）。
+     */
+    _checkFinalChapterEnding(onContinue) {
+      const { ending, isNewlyAchieved } = this.endingManager.determineStoryEnding(this._buildEndingSnapshot());
+      if (isNewlyAchieved) this.researchDatabase.addEntry(ending.id);
+
+      const playEpilogue = () => {
+        // STEP39-3セクション7: True EndingのみARIAをPartner AIへ昇格させる
+        // （Normal/Hidden/BadはSelf Aware維持、要求仕様どおり）。checkAriaEvolution()の
+        // ARIA_LEVELS/snapshot判定は経由しない、Ending確定にひもづく一回限りの明示的な
+        // 状態遷移（LEVEL4のconditionは引き続き`reserved`＝到達不能なまま据え置いている）
+        if (ending.id === 'ending_true') this.save.setRelationshipState('aria', 'PARTNER_AI');
+
+        const epilogueId = ENDING_EPILOGUE_DIALOGUE_ID[ending.id];
+        this.dialogueManager.onComplete = () => onContinue();
+        if (!this.dialogueManager.startDialogue(epilogueId)) onContinue();
+      };
+
+      this.ui.showNodeResult({
+        icon: ENDING_ICON[ending.id] || '🎬',
+        title: `ENDING: ${ending.name}`,
+        message: ending.description,
+        onContinue: playEpilogue
+      });
     }
 
     /**
@@ -2356,17 +2454,9 @@
       // STEP32: Ending System。RUN終了時点のスナップショットで判定する。endingManager自身は
       // researchDatabaseを直接操作しない設計（要求仕様セクション13）のため、新規達成分の
       // Story Archive/Timelineへの反映はここでresearchDatabase.addEntry()を呼んで橋渡しする
-      const logRate = this.researchDatabase.getCompletionByType('LOG');
-      const memoryRate = this.researchDatabase.getCompletionByType('MEMORY');
-      const newlyAchievedEndings = this.endingManager.checkEndings({
-        logCompletionRate: logRate.total > 0 ? logRate.unlocked / logRate.total : 0,
-        memoryCompletionRate: memoryRate.total > 0 ? memoryRate.unlocked / memoryRate.total : 0,
-        worldStatus: this.worldStabilityManager.getStatus(),
-        simulationZeroCleared: this.save.hasSimulationZeroCleared(),
-        hiddenCompletionRate: this.hiddenEnvironmentManager.getDiscoveryRate().rate,
-        storyCompletionRate: this.researchDatabase.getCompletionRate().rate,
-        bestLayer: Math.max(this.depth, this.save.getBestDepth())
-      });
+      // （STEP39-2: スナップショット組み立ては`_buildEndingSnapshot()`へ切り出し、Final
+      // Chapter完了時の`_checkFinalChapterEnding()`と共有する）
+      const newlyAchievedEndings = this.endingManager.checkEndings(this._buildEndingSnapshot());
       newlyAchievedEndings.forEach(def => this.researchDatabase.addEntry(def.id));
 
       const showEndingThenResult = () => {

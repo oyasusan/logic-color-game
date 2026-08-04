@@ -161,7 +161,11 @@
       relationshipData: {
         player: { characterId: 'player', relationship: 0, state: 'RESEARCHER' },
         aria: { characterId: 'aria', relationship: 0, state: 'LOGICAL_AI' },
-        lost_researcher: { characterId: 'lost_researcher', relationship: 0, state: 'UNKNOWN' }
+        lost_researcher: { characterId: 'lost_researcher', relationship: 0, state: 'UNKNOWN' },
+        // STEP39-2: Final Chapter Layer26でcharacterDiscoveryさせるDr. Leon用の初期値
+        // （relationshipData.jsのDEFAULTSと同じ値。実際の新規セーブ初期化はこちらの
+        // defaultData()が正本のため、両方を更新する必要がある）
+        dr_leon: { characterId: 'dr_leon', relationship: 0, state: 'UNKNOWN' }
       },
 
       // ---- STEP33: Research Archive System ----

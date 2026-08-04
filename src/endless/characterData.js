@@ -19,6 +19,11 @@
     { id: 'player', name: 'Researcher', type: 'human' },
     { id: 'aria', name: 'ARIA', type: 'ai', role: 'AI Director' },
     { id: 'lost_researcher', name: 'Unknown Researcher', type: 'human', role: 'Memory Record' },
+    // STEP39-2: Final Chapter「Genesis Protocol」Layer26で本格利用開始。docs/STORY_BIBLE.md
+    // 2章で予告済みだった`dr_leon`エントリを、Memory015「Genesis Final Record」取得と
+    // 同時に発生するCHARACTER DISCOVERED演出・memfrag_015_recovered Dialogueの話者解決の
+    // ために追加した
+    { id: 'dr_leon', name: 'Dr. Leon', type: 'human', role: 'Genesis Project責任者' },
     // STEP32-3: Memory Fragment Systemセクション6の「SYSTEM: Memory Fragment recovered.」
     // という発言者を解決するために追加した、施設システム自身を表す疑似キャラクター
     { id: 'system', name: 'SYSTEM', type: 'system' }
