@@ -67,7 +67,7 @@
 
     /**
      * Event発生判定（副作用無し）。
-     * @param {{mutationActive?:boolean, stabilityStatus?:string}} [context]
+     * @param {{mutationActive?:boolean, stabilityStatus?:string, directorRateBonus?:number}} [context]
      * @returns {Object|null} 発生させるべきEvent定義（無ければnull）。既にActive中のEventが
      *   あれば常にnullを返す（多重発生防止、worldMutationManagerと同じ設計）
      */
@@ -78,6 +78,9 @@
       let rate = BASE_TRIGGER_RATE;
       if (context.mutationActive) rate = Math.max(rate, MUTATION_ACTIVE_TRIGGER_RATE);
       if (context.stabilityStatus === 'CRITICAL') rate = Math.max(rate, STABILITY_CRITICAL_TRIGGER_RATE);
+      // STEP31: AI Director System「Event Recommendation」（要求仕様セクション7）。
+      // 「長時間Eventなし」のDirector推奨分を、既存のmax()判定とは独立にさらに加算する
+      rate = Math.min(0.95, rate + Math.max(0, context.directorRateBonus || 0));
 
       if (Math.random() >= rate) return null;
 

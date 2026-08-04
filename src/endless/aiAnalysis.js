@@ -44,11 +44,11 @@
   }
 
   function recommendationFor(threatLevel, rewardPrediction) {
-    if (threatLevel === null) return 'Analysis Required';
-    if (threatLevel >= 4 && rewardPrediction >= 80) return 'Advanced Protocol Recommended';
-    if (threatLevel >= 3) return 'Proceed With Caution';
-    if (threatLevel <= 1) return 'Safe To Proceed';
-    return 'Standard Protocol Sufficient';
+    if (threatLevel === null) return '解析が必要';
+    if (threatLevel >= 4 && rewardPrediction >= 80) return '高度なProtocol推奨';
+    if (threatLevel >= 3) return '慎重に進行';
+    if (threatLevel <= 1) return '安全に進行可能';
+    return '通常のProtocolで十分';
   }
 
   /**
@@ -59,7 +59,7 @@
   function analyze(node) {
     const type = node.type;
     if (type === 'unknown') {
-      return { threatLevel: null, rewardPrediction: null, confidenceLevel: 'LOW', threatStars: '???', recommendation: 'Analysis Required' };
+      return { threatLevel: null, rewardPrediction: null, confidenceLevel: 'LOW', threatStars: '???', recommendation: '解析が必要' };
     }
 
     const hash = hashString(node.id || type);

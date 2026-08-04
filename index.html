@@ -198,6 +198,37 @@
     text-align: center;
   }
 
+  /* UI改修: MODE SELECTヘッダーへ⚙️アイコンボタンを追加したため、既存の
+     stageselect用ヘッダーレイアウトと同じflex構成を明示的に適用する */
+  #screen-modeselect .select-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  #screen-modeselect .select-header h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  #screen-archivehub .select-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  #screen-archivehub .select-header h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
   .stage-card,
   #tutorialCard,
   #dailyPuzzleCard {
@@ -766,11 +797,15 @@
     letter-spacing: 1px;
   }
 
+  /* UI改修: 画面下部（最下部バー付近）は見逃しやすいとの指摘を受け、各画面の
+     ヘッダー操作（BACK/タイトル等）と被らない上部寄りの位置へ変更した */
   #toast {
     position: fixed;
     left: 50%;
-    bottom: calc(var(--safe-bottom) + 16px);
-    transform: translateX(-50%) translateY(20px);
+    top: calc(var(--safe-top) + 64px);
+    transform: translateX(-50%) translateY(-16px);
+    max-width: min(92vw, 420px);
+    text-align: center;
     background: var(--panel-2);
     border: 1px solid var(--line);
     padding: 8px 16px;
@@ -838,21 +873,51 @@
     color: var(--gold);
   }
 
+  /* UI改修: MODE SELECTの統計表示のみ、2段の別々のflex行だったものを1つのgridへ
+     統合し5項目をバランス良く3列で折り返す（他画面の.endless-best-statsは
+     項目数が画面ごとに異なるため、この変更はMODE SELECT限定でスコープする） */
+  #screen-modeselect .endless-best-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-bottom: 16px;
+  }
+  #screen-modeselect .endless-stat { padding: 10px 6px; gap: 3px; }
+  #screen-modeselect .endless-stat-label { font-size: 11px; }
+  #screen-modeselect .endless-stat-value { font-size: 18px; }
+
   #screen-modeselect .primary-btn {
     align-self: center;
   }
 
   /* ENDLESS RESEARCH中のGAME画面HUD */
+  /* UI改修: 常時表示は要約行のみとし、残りの項目は「詳細」ボタンで開閉する
+     （盤面の視認性を優先するための整理） */
   .endless-hud {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
     padding: 8px 10px;
     border-radius: 12px;
     border: 1px solid var(--gold);
     background: var(--panel);
     box-shadow: 0 0 16px rgba(255, 213, 74, 0.15);
+  }
+
+  .endless-hud-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .endless-hud-detail-toggle { border-color: var(--gold); color: var(--gold); }
+
+  #endlessHudDetailBody.map-env-detail-body {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
   }
 
   .endless-hud-item {
@@ -1325,6 +1390,38 @@
     font-size: 20px;
   }
 
+  /* UI改修: ルート選択カードを既定で要約表示（アイコン+名前+脅威度バッジ）にとどめ、
+     詳細（SIGNAL DETECTED/Environmentタグ/AI Analysis/推奨/説明文）は
+     「詳細」ボタンで開閉する。複数カードが並ぶ画面での視認性を優先した整理 */
+  .map-node-card-compact {
+    padding-top: 14px;
+    cursor: pointer;
+  }
+  .map-node-card-compact .map-node-icon {
+    position: static;
+    font-size: 22px;
+  }
+  .map-node-summary {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+  }
+  .map-node-summary .lab-card-name { flex: 1; }
+  .map-node-threat-badge {
+    font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 8px;
+    border: 1px solid currentColor; white-space: nowrap;
+  }
+  .map-node-threat-badge.threat-0, .map-node-threat-badge.threat-1 { color: var(--green); }
+  .map-node-threat-badge.threat-2                                   { color: var(--blue); }
+  .map-node-threat-badge.threat-3                                   { color: var(--gold); }
+  .map-node-threat-badge.threat-4, .map-node-threat-badge.threat-5 {
+    color: var(--red); text-shadow: 0 0 8px rgba(255, 63, 107, 0.5);
+  }
+  .map-node-detail-toggle {
+    margin-top: 8px; font-size: 13px; padding: 4px 11px; border-radius: 8px;
+    border: 1px solid var(--line); background: transparent; color: var(--text-dim);
+  }
+  .map-node-detail-body { margin-top: 8px; width: 100%; }
+  .map-node-detail-body.hidden { display: none; }
+
   .map-node-risk {
     font-size: 12px;
     font-weight: 800;
@@ -1791,6 +1888,17 @@
 
   .endless-risk-chain-badge.hidden { display: none; }
 
+  /* STEP31: AI Director HUD。既存の警告バッジと同じ並びに収まる最小限の1行バッジ */
+  .director-hud-badge {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    padding: 4px 10px; margin: 0 auto 4px; width: fit-content;
+    border-radius: 10px; border: 1px solid var(--text-dim); color: var(--text-dim);
+  }
+  .director-hud-badge.hidden { display: none; }
+  .director-hud-label { opacity: 0.7; }
+  .director-hud-name, .director-hud-status { color: var(--blue); font-weight: 800; }
+
   .endless-hud-value.endless-research-data { color: var(--gold); }
 
   /* Reward Choice（Elite Nodeクリア後の3択報酬） */
@@ -2054,6 +2162,9 @@
   .env-analysis-effects-label { font-size: 11px; color: var(--text-dim); margin-top: 6px; letter-spacing: 1px; }
   .env-analysis-effects { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
   .env-analysis-effect { font-size: 12px; color: var(--gold); }
+  /* UI改修: environmentHudPanelの折りたたみ本文内にネストされる際の軽量版
+     （枠線・背景を持たせず、外側パネルのカード装飾と二重にならないようにする） */
+  .env-analysis-panel-inline { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
 
   /* ---- STEP30-3: Environment Visual / HUD Evolution ---- */
 
@@ -2087,18 +2198,25 @@
   .env-transition-progress-fill { height: 100%; width: 0%; background: var(--world-env-color); transition: width 0.15s linear; }
   .env-transition-progress-percent { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 
-  /* Environment HUD（常時表示、fixed配置） */
+  /* UI改修: 旧右上固定パネルからMAP画面内の通常配置パネルへ変更。さらに、常時見える
+     要約行（eh-summary-row）と「詳細」ボタンで開閉する本文（map-env-detail-body）に
+     分割し、ルート選択カードの視認性を優先する構成にした */
   .environment-hud-panel {
-    position: fixed; top: 8px; right: 8px; z-index: 15;
-    max-width: 180px; padding: 8px 12px; border-radius: 10px;
-    border: 1px solid var(--world-env-color); background: rgba(8, 10, 18, 0.85);
-    box-shadow: 0 0 16px var(--world-env-color);
+    width: 100%; max-width: 360px; margin: 0 auto 10px; padding: 8px 14px;
+    border-radius: 12px; border: 1px solid var(--world-env-color); background: var(--panel);
   }
+  .eh-summary-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
   .eh-layer { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim); }
-  .eh-env-name { font-size: 14px; font-weight: 800; color: var(--world-env-color); }
+  .eh-env-name { font-size: 13px; font-weight: 800; color: var(--world-env-color); flex: 1; }
+  .eh-stability-inline { font-size: 11px; font-weight: 800; color: var(--green); letter-spacing: 1px; }
   .eh-stability-row { font-size: 10px; color: var(--green); margin-top: 2px; letter-spacing: 1px; }
-  .eh-modifier-list { margin-top: 4px; display: flex; flex-direction: column; gap: 1px; }
-  .eh-modifier-row { font-size: 10px; color: var(--gold); }
+
+  .map-env-detail-toggle {
+    font-size: 12px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--world-env-color);
+    background: transparent; color: var(--world-env-color); white-space: nowrap;
+  }
+  .map-env-detail-body { margin-top: 8px; }
+  .map-env-detail-body.hidden { display: none; }
 
   /* STEP30-4: World Stability HUD拡張 */
   .eh-stability-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-top: 4px; }
@@ -2236,19 +2354,68 @@
   .hidden-found-theme { font-size: 13px; color: var(--text-dim); margin-bottom: 14px; }
   .hidden-discovery-skip-btn { border-color: var(--hidden-purple); color: var(--hidden-purple); }
 
+  /* UI改修: 左上固定パネルからENDLESS HUDバー内の1行バッジへ変更 */
   .hidden-hud-panel {
-    position: fixed; top: 8px; left: 8px; z-index: 16;
-    max-width: 170px; padding: 8px 12px; border-radius: 10px;
-    border: 1px solid var(--hidden-red); background: rgba(10, 0, 6, 0.9);
-    box-shadow: 0 0 16px var(--hidden-purple);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    padding: 4px 10px; margin: 0 auto 4px; width: fit-content;
+    border-radius: 10px; border: 1px solid var(--hidden-red); color: var(--hidden-red);
   }
-  .hidden-hud-label { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: var(--hidden-red); }
-  .hidden-hud-name { font-size: 14px; font-weight: 800; color: var(--hidden-purple); }
-  .hidden-hud-danger { font-size: 10px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
-  .hidden-hud-danger-value { color: var(--hidden-red); font-weight: 800; }
+  .hidden-hud-panel.hidden { display: none; }
+  .hidden-hud-label { color: var(--hidden-red); opacity: 0.9; }
+  .hidden-hud-name { font-weight: 800; color: var(--hidden-purple); }
 
   .hidden-archive-btn { border-color: var(--hidden-purple); color: var(--hidden-purple); }
   .hidden-environment-archive-card.unlocked { border-color: var(--hidden-purple); }
+
+  /* ---- STEP32: Narrative & Story System（RESEARCH DATABASE画面） ---- */
+  #screen-storyarchive .select-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  }
+  #screen-storyarchive .select-header h2 {
+    flex: 1; margin: 0; font-size: 18px; letter-spacing: 2px; color: var(--text-dim); text-align: center;
+  }
+  /* 4項目(LOG/MEMORY/FILES/ENDING)をMODE SELECTと同じ考え方で1グリッドへ統合する */
+  #screen-storyarchive .story-archive-stats {
+    display: grid; grid-template-columns: repeat(2, 1fr); margin-bottom: 14px;
+  }
+  #screen-storyarchive .endless-stat-value { font-size: 16px; }
+
+  .story-codex-panel, .story-timeline-panel {
+    width: 100%; max-width: 360px; margin: 0 auto 12px; padding: 10px 14px;
+    border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
+  }
+  .story-codex-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: var(--gold); margin-bottom: 6px; }
+  .story-codex-list { display: flex; flex-direction: column; gap: 4px; }
+  .codex-row { display: flex; justify-content: space-between; font-size: 13px; }
+  .codex-label { color: var(--text-dim); }
+  .codex-value { color: var(--gold); font-weight: 700; }
+
+  .rt-list { display: flex; flex-direction: column; align-items: center; gap: 2px; max-height: 160px; overflow-y: auto; }
+  .rt-item { font-size: 13px; color: var(--text); padding: 2px 0; }
+  .rt-arrow { font-size: 12px; color: var(--text-dim); }
+  .rt-empty { font-size: 13px; color: var(--text-dim); padding: 8px 0; }
+
+  .story-archive-tabs {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 10px;
+  }
+  .story-tab-btn {
+    font-size: 12px; padding: 5px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: transparent; color: var(--text-dim);
+  }
+  .story-tab-btn.active { border-color: var(--gold); color: var(--gold); }
+
+  .story-entries-list { display: flex; flex-direction: column; gap: 8px; }
+  .story-entry-card {
+    width: 100%; max-width: 360px; margin: 0 auto; padding: 10px 14px;
+    border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column; gap: 2px; text-align: left;
+  }
+  .story-entry-card.locked { opacity: 0.5; }
+  .story-entry-title { font-size: 14px; font-weight: 800; color: var(--gold); }
+  .story-entry-category { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; }
+  .story-entry-content { font-size: 13px; color: var(--text); margin-top: 4px; line-height: 1.5; }
+  .story-entry-desc { font-size: 12px; color: var(--text-dim); }
 
   /* Surface Arrival演出 */
   .surface-arrival-card { max-width: 300px; text-align: center; }
@@ -2354,30 +2521,81 @@
     <div class="select-header">
       <button type="button" id="modeSelectBackBtn" class="ghost-btn">‹ TITLE</button>
       <h2>ENDLESS RESEARCH</h2>
-      <span style="width:56px"></span>
+      <!-- UI改修: 下部の縦積みボタン群から移動。使用頻度の低い設定のため
+           ヘッダーの小さいアイコンボタンに格納した -->
+      <button type="button" id="performanceModeBtn" class="icon-btn" aria-label="描画負荷設定">⚙️</button>
     </div>
     <div class="endless-intro">
       <p>生成された問題を連続で解き、どこまで深く進めるかに挑戦するモード。</p>
       <p>ライフは3。制限時間内にクリアできないとライフが1減り、0になるとRUN終了。</p>
     </div>
+    <!-- UI改修: 2段に分かれていた統計表示を1つのグリッドへ統合し、見やすく整理した -->
     <div class="endless-best-stats">
       <div class="endless-stat"><span class="endless-stat-label">BEST DEPTH</span><span id="endlessBestDepth" class="endless-stat-value">0</span></div>
       <div class="endless-stat"><span class="endless-stat-label">BEST SCORE</span><span id="endlessBestScore" class="endless-stat-value">0</span></div>
       <div class="endless-stat"><span class="endless-stat-label">TOTAL RUNS</span><span id="endlessTotalRuns" class="endless-stat-value">0</span></div>
-    </div>
-    <div class="endless-best-stats">
       <div class="endless-stat"><span class="endless-stat-label">BOSS CLEARS</span><span id="endlessTotalBossClear" class="endless-stat-value">0</span></div>
       <div class="endless-stat"><span class="endless-stat-label">MEMORY FRAGMENTS</span><span id="endlessMemoryFragments" class="endless-stat-value">0</span></div>
     </div>
     <button type="button" id="endlessStartBtn" class="primary-btn">START RUN</button>
     <button type="button" id="neuralLabModeSelectBtn" class="ghost-btn">🧪 NEURAL RESEARCH LAB</button>
     <button type="button" id="researchProfileModeSelectBtn" class="ghost-btn">🧑‍🔬 RESEARCH PROFILE</button>
+    <!-- UI改修: 5種類あったArchiveボタンを1つのハブ画面への入口へ統合した -->
+    <button type="button" id="archiveHubBtn" class="ghost-btn">📚 ARCHIVE</button>
+  </section>
+
+  <!-- ============ UI改修: ARCHIVE HUB (5種のArchive画面への入口をまとめる) ============ -->
+  <section id="screen-archivehub" class="screen">
+    <div class="select-header">
+      <button type="button" id="archiveHubBackBtn" class="ghost-btn">‹ MODE SELECT</button>
+      <h2>ARCHIVE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <p class="lab-instruction">これまでの研究で発見・記録した内容を振り返る</p>
     <button type="button" id="protocolArchiveBtn" class="ghost-btn">PROTOCOL ARCHIVE</button>
     <button type="button" id="environmentArchiveBtn" class="ghost-btn">ENVIRONMENT ARCHIVE</button>
     <button type="button" id="worldEnvArchiveModeSelectBtn" class="ghost-btn">🌍 WORLD ENVIRONMENT ARCHIVE</button>
     <button type="button" id="envEventArchiveModeSelectBtn" class="ghost-btn">✨ ENVIRONMENT EVENT ARCHIVE</button>
     <button type="button" id="hiddenArchiveModeSelectBtn" class="ghost-btn hidden-archive-btn">🌑 HIDDEN ENVIRONMENT ARCHIVE</button>
-    <button type="button" id="performanceModeBtn" class="ghost-btn">PERFORMANCE: NORMAL</button>
+    <!-- STEP32: Narrative & Story System -->
+    <button type="button" id="storyArchiveModeSelectBtn" class="ghost-btn">📖 RESEARCH DATABASE</button>
+  </section>
+
+  <!-- ============ STEP32: RESEARCH DATABASE (Narrative & Story System) ============ -->
+  <section id="screen-storyarchive" class="screen story-archive-screen">
+    <div class="select-header">
+      <button type="button" id="storyArchiveBackBtn" class="ghost-btn">‹ ARCHIVE</button>
+      <h2>RESEARCH DATABASE</h2>
+      <span style="width:56px"></span>
+    </div>
+    <div class="endless-best-stats story-archive-stats">
+      <div class="endless-stat"><span class="endless-stat-label">LOG</span><span id="storyArchiveLogCount" class="endless-stat-value">0 / 0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">MEMORY</span><span id="storyArchiveMemoryCount" class="endless-stat-value">0 / 0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">FILES</span><span id="storyArchiveFileCount" class="endless-stat-value">0 / 0</span></div>
+      <div class="endless-stat"><span class="endless-stat-label">ENDING</span><span id="storyArchiveEndingCount" class="endless-stat-value">0 / 0</span></div>
+    </div>
+
+    <!-- 要求仕様セクション10: Research Codex統合（他Systemとの横断的な完成率） -->
+    <div class="story-codex-panel">
+      <div class="story-codex-title">RESEARCH COMPLETION</div>
+      <div id="storyArchiveCodexList" class="story-codex-list"></div>
+    </div>
+
+    <!-- 要求仕様セクション7: Research Timeline -->
+    <div class="story-timeline-panel">
+      <div class="story-codex-title">RESEARCH TIMELINE</div>
+      <div id="researchTimelineList" class="rt-list"></div>
+    </div>
+
+    <div id="storyArchiveTypeTabs" class="story-archive-tabs">
+      <button type="button" class="story-tab-btn active" data-type="LOG">LOG</button>
+      <button type="button" class="story-tab-btn" data-type="MEMORY">MEMORY</button>
+      <button type="button" class="story-tab-btn" data-type="FILE">FILE</button>
+      <button type="button" class="story-tab-btn" data-type="EVENT">EVENT</button>
+      <button type="button" class="story-tab-btn" data-type="AUDIO">AUDIO</button>
+      <button type="button" class="story-tab-btn" data-type="ENDING">ENDING</button>
+    </div>
+    <div id="storyArchiveEntries" class="story-entries-list"></div>
   </section>
 
   <!-- ============ STEP29: IDENTITY SELECT (新規プレイ開始時、一度だけ研究者タイプを選ぶ) ============ -->
@@ -2539,12 +2757,29 @@
       </button>
     </div>
     <p class="lab-instruction">進む先を1つ選択する（Node種類ごとにrisk/rewardが異なる）</p>
-    <!-- STEP30-2: ENVIRONMENT ANALYSIS（AI Analysis UI Integration） -->
-    <div id="mapEnvironmentAnalysis" class="env-analysis-panel hidden">
-      <div class="env-analysis-title">ENVIRONMENT ANALYSIS</div>
-      <div class="env-analysis-current">Current: <span id="mapEnvAnalysisName">DIGITAL GRID</span></div>
-      <div class="env-analysis-effects-label">Active Effects</div>
-      <div id="mapEnvAnalysisEffects" class="env-analysis-effects"></div>
+    <!-- UI改修: Environment Analysis（Active Effects）とLayer/World Stability詳細を
+         1つの折りたたみ可能なパネルへ統合。常時見えるのは要約行のみとし、
+         「詳細」ボタンで展開するまでActive Effects/Mutation情報は隠す
+         （ルート選択カードの視認性を優先するための整理） -->
+    <div id="environmentHudPanel" class="environment-hud-panel hidden">
+      <div class="eh-summary-row">
+        <span id="ehLayerValue" class="eh-layer">LAYER 1</span>
+        <span id="ehEnvName" class="eh-env-name">DIGITAL GRID</span>
+        <span id="ehStabilityValue" class="eh-stability-inline">STABLE</span>
+        <span id="ehStabilityPercent" class="eh-stability-percent">100%</span>
+        <button type="button" id="mapEnvDetailToggle" class="map-env-detail-toggle" aria-expanded="false">詳細 ▾</button>
+      </div>
+      <div id="mapEnvDetailBody" class="map-env-detail-body hidden">
+        <div class="eh-stability-label">世界の安定度</div>
+        <div class="eh-stability-bar-track"><div id="ehStabilityBarFill" class="eh-stability-bar-fill"></div></div>
+        <div id="ehMutationRow" class="eh-mutation-row hidden">変異: <span id="ehMutationValue"></span></div>
+        <!-- STEP30-2: ENVIRONMENT ANALYSIS（AI Analysis UI Integration） -->
+        <div id="mapEnvironmentAnalysis" class="env-analysis-panel-inline hidden">
+          <div class="env-analysis-current">現在の環境: <span id="mapEnvAnalysisName">DIGITAL GRID</span></div>
+          <div class="env-analysis-effects-label">有効な効果</div>
+          <div id="mapEnvAnalysisEffects" class="env-analysis-effects"></div>
+        </div>
+      </div>
     </div>
     <div id="mapNodeCards" class="map-node-cards"></div>
   </section>
@@ -2679,19 +2914,19 @@
     <!-- Surface Arrival演出（RUN終了後の帰還直後、一時的に表示） -->
     <div id="surfaceArrivalOverlay" class="overlay hidden">
       <div class="clear-card surface-arrival-card">
-        <div class="surface-arrival-title">SURFACE ARRIVAL</div>
-        <div class="surface-arrival-message">Uploading Research Data...</div>
+        <div class="surface-arrival-title">地上帰還</div>
+        <div class="surface-arrival-message">研究データをアップロード中...</div>
         <div class="surface-arrival-progress-track"><div id="surfaceArrivalProgressFill" class="surface-arrival-progress-fill"></div></div>
-        <div id="surfaceArrivalNewTech" class="surface-arrival-new-tech hidden">NEW TECHNOLOGY AVAILABLE</div>
+        <div id="surfaceArrivalNewTech" class="surface-arrival-new-tech hidden">新技術が利用可能</div>
       </div>
     </div>
 
     <!-- Technology Installed演出（Research Tree購入・Protocol Evolution時） -->
     <div id="technologyInstalledOverlay" class="overlay hidden">
       <div class="clear-card tech-installed-card">
-        <div class="tech-installed-title">TECHNOLOGY INSTALLED</div>
+        <div class="tech-installed-title">技術を導入した</div>
         <div id="techInstalledName" class="tech-installed-name"></div>
-        <div class="tech-installed-status">Activated</div>
+        <div class="tech-installed-status">有効化</div>
       </div>
     </div>
   </section>
@@ -2708,51 +2943,74 @@
 
     <main>
       <div id="tutorialBanner" class="hidden"></div>
-      <!-- ENDLESS RESEARCH中のみ表示するHUD（endless.jsがhidden切り替えを管理） -->
+      <!-- ENDLESS RESEARCH中のみ表示するHUD（endless.jsがhidden切り替えを管理）。
+           UI改修: 盤面の視認性を優先し、常時表示は最重要4項目（DEPTH/LIFE/SCORE/TIME）
+           +警告系バッジ（Risk Chain/秘匿領域）のみとし、残りは「詳細」ボタンで開閉する -->
       <div id="endlessHud" class="endless-hud hidden">
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">PROTOCOL</span>
-          <span id="endlessProtocolValue" class="endless-hud-value endless-protocol">-</span>
+        <div class="endless-hud-summary-row">
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">DEPTH</span>
+            <span id="endlessDepthValue" class="endless-hud-value">0</span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">LIFE</span>
+            <span id="endlessLifeValue" class="endless-hud-value endless-life"></span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">SCORE</span>
+            <span id="endlessScoreValue" class="endless-hud-value">0</span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">TIME</span>
+            <span id="endlessTimeValue" class="endless-hud-value endless-time">00:00</span>
+          </div>
+          <button type="button" id="endlessHudDetailToggle" class="map-env-detail-toggle endless-hud-detail-toggle" aria-expanded="false">詳細 ▾</button>
         </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">ENV</span>
-          <span id="endlessEnvironmentValue" class="endless-hud-value endless-environment">-</span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">DEPTH</span>
-          <span id="endlessDepthValue" class="endless-hud-value">0</span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">LIFE</span>
-          <span id="endlessLifeValue" class="endless-hud-value endless-life"></span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">SCORE</span>
-          <span id="endlessScoreValue" class="endless-hud-value">0</span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">COMBO</span>
-          <span id="endlessComboValue" class="endless-hud-value">-</span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">TIME</span>
-          <span id="endlessTimeValue" class="endless-hud-value endless-time">00:00</span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">DATA</span>
-          <span id="endlessResearchDataValue" class="endless-hud-value endless-research-data">0</span>
-        </div>
-        <div class="endless-hud-item">
-          <span class="endless-hud-label">ZONE</span>
-          <span id="endlessWorldEnvValue" class="endless-hud-value endless-world-env">-</span>
+        <div id="endlessHudDetailBody" class="map-env-detail-body hidden">
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">PROTOCOL</span>
+            <span id="endlessProtocolValue" class="endless-hud-value endless-protocol">-</span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">ENV</span>
+            <span id="endlessEnvironmentValue" class="endless-hud-value endless-environment">-</span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">COMBO</span>
+            <span id="endlessComboValue" class="endless-hud-value">-</span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">DATA</span>
+            <span id="endlessResearchDataValue" class="endless-hud-value endless-research-data">0</span>
+          </div>
+          <div class="endless-hud-item">
+            <span class="endless-hud-label">ZONE</span>
+            <span id="endlessWorldEnvValue" class="endless-hud-value endless-world-env">-</span>
+          </div>
+          <!-- 発動中のProtocol Synergy表示（endless.jsが更新する。未発動の間はhidden） -->
+          <div id="endlessSynergyBadge" class="endless-synergy-badge hidden"></div>
+          <!-- 取得済みアップグレードのバッジ一覧（endless.jsが更新する。無い間は空のまま） -->
+          <div id="endlessUpgradeList" class="endless-upgrade-list"></div>
         </div>
       </div>
-      <!-- 発動中のProtocol Synergy表示（endless.jsが更新する。未発動の間はhidden） -->
-      <div id="endlessSynergyBadge" class="endless-synergy-badge hidden"></div>
-      <!-- STEP27: Risk Chain（高危険Node連続選択時の警告）表示。chainCount=0の間はhidden -->
+      <!-- STEP31: AI Director HUD。プレイ中に常時目に入らず気づきにくいとの指摘を受け、
+           Risk Chain/秘匿領域バッジと同じく折りたたみ対象外の常時表示バッジへ変更した -->
+      <div id="directorHudBadge" class="director-hud-badge hidden">
+        <span class="director-hud-label">DIRECTOR</span>
+        <span id="directorHudName" class="director-hud-name">ANALYST</span>
+        <span class="director-hud-label">STATUS</span>
+        <span id="directorHudStatus" class="director-hud-status">OBSERVING</span>
+      </div>
+      <!-- STEP27: Risk Chain（高危険Node連続選択時の警告）表示。chainCount=0の間はhidden。
+           警告系のため折りたたみ対象外とし、発生中は常時見える位置に残す -->
       <div id="endlessRiskChainBadge" class="endless-risk-chain-badge hidden"></div>
-      <!-- 取得済みアップグレードのバッジ一覧（endless.jsが更新する。無い間は空のまま） -->
-      <div id="endlessUpgradeList" class="endless-upgrade-list"></div>
+      <!-- UI改修: 左上固定パネルだったHidden Environment（SECRET AREA）表示をENDLESS HUDバー内の
+           バッジへ変更し、常時フローティング表示による視界の圧迫を解消した。入場中の状況表示
+           のため折りたたみ対象外とする -->
+      <div id="hiddenHudPanel" class="hidden-hud-panel hidden">
+        <span class="hidden-hud-label">⚠ 秘匿領域</span>
+        <span id="hiddenHudName" class="hidden-hud-name">VOID MEMORY</span>
+      </div>
       <div id="statusBar">
         <span id="moveCount">MOVES: 0</span>
         <span id="timer">TIME: 00:00</span>
@@ -2840,6 +3098,28 @@
       <div id="endlessResultAiObservation" class="ai-observation-text">""</div>
       <div class="ai-recommendation-row">Recommended: <span id="endlessResultAiRecommendation">-</span></div>
 
+      <!-- STEP31: AI Director Report（要求仕様セクション12） -->
+      <h3 class="research-report-title">AI DIRECTOR REPORT</h3>
+      <div class="endless-result-grid research-report-grid">
+        <div class="endless-result-item">
+          <span class="endless-result-label">AVG SOLVE TIME</span>
+          <span id="directorReportSolveTime" class="endless-result-value">0s</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">ACCURACY</span>
+          <span id="directorReportAccuracy" class="endless-result-value">0%</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">RISK</span>
+          <span id="directorReportRisk" class="endless-result-value">0%</span>
+        </div>
+        <div class="endless-result-item">
+          <span class="endless-result-label">FAVORITE ENV</span>
+          <span id="directorReportFavoriteEnv" class="endless-result-value">-</span>
+        </div>
+      </div>
+      <div class="ai-recommendation-row">Recommendation: <span id="directorReportRecommendation">-</span></div>
+
       <div class="endless-result-buttons">
         <button type="button" id="endlessResultTitleBtn" class="ghost-btn">TITLE</button>
         <button type="button" id="endlessRetryBtn" class="primary-btn">RETRY</button>
@@ -2891,15 +3171,15 @@
   <div id="environmentScanOverlay" class="overlay env-scan-overlay hidden">
     <div class="clear-card env-scan-card">
       <div id="environmentScanPhaseScanning" class="env-scan-phase">
-        <div class="env-scan-title">SCANNING AREA...</div>
-        <div class="env-scan-subtitle">Analyzing Structure...</div>
+        <div class="env-scan-title">領域スキャン中...</div>
+        <div class="env-scan-subtitle">構造解析中...</div>
         <div class="env-scan-progress-track"><div id="environmentScanProgressFill" class="env-scan-progress-fill"></div></div>
         <div id="environmentScanProgressPercent" class="env-scan-progress-percent">0%</div>
       </div>
       <div id="environmentScanPhaseIdentified" class="env-scan-phase hidden">
-        <div class="env-scan-title">ENVIRONMENT IDENTIFIED</div>
+        <div class="env-scan-title">環境特定完了</div>
         <div id="environmentScanName" class="env-scan-name">DIGITAL GRID</div>
-        <div class="env-scan-access">Research Access Granted</div>
+        <div class="env-scan-access">研究アクセス許可</div>
         <div id="environmentScanLogMessage" class="env-scan-log">"Stable data structure detected."</div>
         <div id="environmentScanStatusLogMessage" class="env-scan-log env-scan-status-log"></div>
       </div>
@@ -2910,43 +3190,31 @@
   <!-- ============ STEP30-3: ENVIRONMENT TRANSITION (Environment変更時) ============ -->
   <div id="environmentTransitionOverlay" class="overlay env-transition-overlay hidden">
     <div class="clear-card env-transition-card">
-      <div class="env-transition-title">ENVIRONMENT SHIFT</div>
-      <div class="env-transition-row"><span class="env-transition-key">Previous</span><span id="environmentTransitionPrevious" class="env-transition-value">-</span></div>
-      <div class="env-transition-row"><span class="env-transition-key">New</span><span id="environmentTransitionNew" class="env-transition-value">-</span></div>
-      <div class="env-transition-sync">Synchronizing...</div>
+      <div class="env-transition-title">環境遷移</div>
+      <div class="env-transition-row"><span class="env-transition-key">遷移前</span><span id="environmentTransitionPrevious" class="env-transition-value">-</span></div>
+      <div class="env-transition-row"><span class="env-transition-key">遷移後</span><span id="environmentTransitionNew" class="env-transition-value">-</span></div>
+      <div class="env-transition-sync">同期中...</div>
       <div class="env-transition-progress-track"><div id="environmentTransitionProgressFill" class="env-transition-progress-fill"></div></div>
       <div id="environmentTransitionProgressPercent" class="env-transition-progress-percent">0%</div>
       <button type="button" id="environmentTransitionSkipBtn" class="ghost-btn env-scan-skip-btn">続ける</button>
     </div>
   </div>
 
-  <!-- ============ STEP30-3: ENVIRONMENT HUD (常時表示、fixed配置でGAME/MAP両画面に表示) ============ -->
-  <div id="environmentHudPanel" class="environment-hud-panel hidden">
-    <div id="ehLayerValue" class="eh-layer">LAYER 1</div>
-    <div id="ehEnvName" class="eh-env-name">DIGITAL GRID</div>
-    <div class="eh-stability-label">WORLD STABILITY</div>
-    <div class="eh-stability-bar-track"><div id="ehStabilityBarFill" class="eh-stability-bar-fill"></div></div>
-    <div id="ehStabilityPercent" class="eh-stability-percent">100%</div>
-    <div class="eh-stability-row">STATUS: <span id="ehStabilityValue">STABLE</span></div>
-    <div id="ehMutationRow" class="eh-mutation-row hidden">MUTATION: <span id="ehMutationValue"></span></div>
-    <div id="ehModifierList" class="eh-modifier-list"></div>
-  </div>
-
   <!-- ============ STEP30-5: MUTATION SEQUENCE (Warning→処理→Complete。続けるボタン必須) ============ -->
   <div id="mutationSequenceOverlay" class="overlay mutation-sequence-overlay hidden">
     <div class="clear-card mutation-sequence-card">
       <div id="mutationPhaseWarning" class="mutation-phase">
-        <div class="mutation-warning-title">SYSTEM WARNING</div>
-        <div class="mutation-warning-subtitle">WORLD STRUCTURE INSTABILITY</div>
+        <div class="mutation-warning-title">システム警告</div>
+        <div class="mutation-warning-subtitle">世界構造の不安定化</div>
         <button type="button" id="mutationWarningContinueBtn" class="ghost-btn env-scan-skip-btn">続ける</button>
       </div>
       <div id="mutationPhaseProcessing" class="mutation-phase hidden">
-        <div class="mutation-processing-title">ANALYZING WORLD STRUCTURE...</div>
+        <div class="mutation-processing-title">世界構造を解析中...</div>
         <div class="mutation-processing-spinner"></div>
       </div>
       <div id="mutationPhaseComplete" class="mutation-phase hidden">
-        <div class="mutation-complete-title">WORLD MUTATION</div>
-        <div id="mutationCompleteName" class="mutation-complete-name">DATA STORM DETECTED</div>
+        <div class="mutation-complete-title">世界変異</div>
+        <div id="mutationCompleteName" class="mutation-complete-name">DATA STORM を検知</div>
         <div id="mutationCompleteDesc" class="mutation-complete-desc"></div>
         <button type="button" id="mutationCompleteContinueBtn" class="primary-btn">続ける</button>
       </div>
@@ -2956,14 +3224,14 @@
   <!-- ============ STEP30-5: MUTATION CHOICE EVENT (Stabilize/Exploit選択) ============ -->
   <div id="mutationChoiceOverlay" class="overlay mutation-choice-overlay hidden">
     <div class="clear-card mutation-choice-card">
-      <div class="mutation-choice-title">SYSTEM INSTABILITY</div>
+      <div class="mutation-choice-title">システム不安定化</div>
       <div class="mutation-choice-subtitle">World Stabilityが臨界値に近づいています</div>
       <button type="button" id="mutationChoiceStabilizeBtn" class="lab-card mutation-choice-option">
-        <span class="lab-card-name">① Stabilize</span>
+        <span class="lab-card-name">① 安定化</span>
         <span class="lab-card-desc">Stability +20 / 報酬は通常のまま</span>
       </button>
       <button type="button" id="mutationChoiceExploitBtn" class="lab-card mutation-choice-option">
-        <span class="lab-card-name">② Exploit</span>
+        <span class="lab-card-name">② 活用</span>
         <span class="lab-card-desc">Mutationを受け入れる / 報酬+50%・リスク上昇</span>
       </button>
     </div>
@@ -2983,12 +3251,12 @@
   <!-- ============ STEP30-6: ENVIRONMENT EVENT CHOICE (Unknown Signal ANALYZE?選択) ============ -->
   <div id="environmentEventChoiceOverlay" class="overlay hidden">
     <div class="clear-card mutation-choice-card">
-      <div class="mutation-choice-title">UNKNOWN SIGNAL DETECTED</div>
+      <div class="mutation-choice-title">未確認信号を検知</div>
       <div id="envEventChoiceName" class="mutation-choice-subtitle">UNKNOWN SIGNAL</div>
-      <div id="envEventChoiceDesc" class="mutation-choice-subtitle">Analyze?</div>
+      <div id="envEventChoiceDesc" class="mutation-choice-subtitle">解析するか？</div>
       <button type="button" id="envEventChoiceYesBtn" class="lab-card mutation-choice-option">
         <span class="lab-card-name">YES</span>
-        <span class="lab-card-desc">Rare Protocol / Large Reward / Stability -10</span>
+        <span class="lab-card-desc">Rare Protocol獲得 / 大きな報酬 / 安定度 -10</span>
       </button>
       <button type="button" id="envEventChoiceNoBtn" class="lab-card mutation-choice-option">
         <span class="lab-card-name">NO</span>
@@ -3001,26 +3269,19 @@
   <div id="hiddenDiscoveryOverlay" class="overlay hidden-discovery-overlay hidden">
     <div class="clear-card hidden-discovery-card">
       <div id="hiddenPhaseSignal" class="hidden-discovery-phase hidden-glitch-text">
-        <div class="hidden-discovery-title">UNKNOWN SIGNAL</div>
+        <div class="hidden-discovery-title">未確認信号</div>
       </div>
       <div id="hiddenPhaseDecrypting" class="hidden-discovery-phase hidden">
-        <div class="hidden-discovery-title">Decrypting...</div>
+        <div class="hidden-discovery-title">解読中...</div>
         <div class="env-scan-progress-track"><div id="hiddenDecryptProgressFill" class="env-scan-progress-fill hidden-progress-fill"></div></div>
       </div>
       <div id="hiddenPhaseFound" class="hidden-discovery-phase hidden">
-        <div class="hidden-discovery-title hidden-flash-text">SECRET ENVIRONMENT FOUND</div>
+        <div class="hidden-discovery-title hidden-flash-text">秘匿領域を発見</div>
         <div id="hiddenFoundName" class="hidden-found-name">VOID MEMORY</div>
         <div id="hiddenFoundTheme" class="hidden-found-theme"></div>
       </div>
       <button type="button" id="hiddenDiscoverySkipBtn" class="ghost-btn env-scan-skip-btn hidden-discovery-skip-btn">続ける</button>
     </div>
-  </div>
-
-  <!-- ============ STEP30-7: HIDDEN HUD (SECRET AREA、入場中のみ表示、紫・黒・赤テーマ) ============ -->
-  <div id="hiddenHudPanel" class="hidden-hud-panel hidden">
-    <div class="hidden-hud-label">⚠ SECRET AREA</div>
-    <div id="hiddenHudName" class="hidden-hud-name">VOID MEMORY</div>
-    <div class="hidden-hud-danger">DANGER LEVEL: <span class="hidden-hud-danger-value">UNKNOWN</span></div>
   </div>
 
   <!-- ============ NODE RESULT (Recovery/Eventなど、盤面を介さず即座に解決するNodeの結果表示) ============ -->
@@ -3046,13 +3307,13 @@
   <div id="extractOverlay" class="overlay hidden">
     <div class="clear-card extract-card">
       <div class="extract-title">EXTRACT ANALYSIS</div>
-      <div class="extract-row"><span class="extract-key">Current Data</span><span id="extractCurrentData" class="extract-value">0</span></div>
-      <div class="extract-row"><span class="extract-key">Potential Reward</span><span id="extractPotentialReward" class="extract-value">+0</span></div>
-      <div class="extract-row"><span class="extract-key">Failure Probability</span><span id="extractFailureProbability" class="extract-value">0%</span></div>
-      <div class="extract-recommendation">AI Recommendation: <span id="extractRecommendation">RETURN</span></div>
+      <div class="extract-row"><span class="extract-key">現在のデータ量</span><span id="extractCurrentData" class="extract-value">0</span></div>
+      <div class="extract-row"><span class="extract-key">想定報酬</span><span id="extractPotentialReward" class="extract-value">+0</span></div>
+      <div class="extract-row"><span class="extract-key">失敗確率</span><span id="extractFailureProbability" class="extract-value">0%</span></div>
+      <div class="extract-recommendation">AI推奨: <span id="extractRecommendation">帰還推奨</span></div>
       <div class="extract-buttons">
-        <button type="button" id="extractContinueBtn" class="ghost-btn">CONTINUE RESEARCH</button>
-        <button type="button" id="extractReturnBtn" class="primary-btn">RETURN TO SURFACE</button>
+        <button type="button" id="extractContinueBtn" class="ghost-btn">研究を継続</button>
+        <button type="button" id="extractReturnBtn" class="primary-btn">地上へ帰還</button>
       </div>
     </div>
   </div>
@@ -3112,6 +3373,17 @@
   <script src="src/endless/hiddenEnvironmentManager.js"></script>
   <script src="src/endless/hiddenEnvironmentRenderer.js"></script>
   <script src="src/endless/hiddenEnvironmentArchive.js"></script>
+  <script src="src/endless/playerProfile.js"></script>
+  <script src="src/endless/directorPersonality.js"></script>
+  <script src="src/endless/directorDialogue.js"></script>
+  <script src="src/endless/directorHud.js"></script>
+  <script src="src/endless/aiDirector.js"></script>
+  <script src="src/endless/storyData.js"></script>
+  <script src="src/endless/storyUnlockManager.js"></script>
+  <script src="src/endless/researchDatabase.js"></script>
+  <script src="src/endless/researchTimeline.js"></script>
+  <script src="src/endless/endingManager.js"></script>
+  <script src="src/endless/storyArchiveUI.js"></script>
   <script src="src/endless/researchTree.js"></script>
   <script src="src/endless/metaProgression.js"></script>
   <script src="src/endless/upgrades.js"></script>

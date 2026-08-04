@@ -36,7 +36,14 @@
 
         // STEP29: AI Feedback System
         aiObservation: document.getElementById('endlessResultAiObservation'),
-        aiRecommendation: document.getElementById('endlessResultAiRecommendation')
+        aiRecommendation: document.getElementById('endlessResultAiRecommendation'),
+
+        // STEP31: AI Director Report
+        directorSolveTime: document.getElementById('directorReportSolveTime'),
+        directorAccuracy: document.getElementById('directorReportAccuracy'),
+        directorRisk: document.getElementById('directorReportRisk'),
+        directorFavoriteEnv: document.getElementById('directorReportFavoriteEnv'),
+        directorRecommendation: document.getElementById('directorReportRecommendation')
       };
 
       if (this.el.retryBtn) {
@@ -53,8 +60,10 @@
      *   unknownAnalysisCount?:number}} runStats
      * @param {{bestDepth:number, isNewBestDepth:boolean, isNewBestScore:boolean}} saveInfo
      * @param {{observation:string, recommendation:string}} [aiFeedback] STEP29: AI Feedback System
+     * @param {{averageSolveTime:number, accuracy:number, risk:number, favoriteEnvironment:string|null,
+     *   recommendation:{name:string}|null}} [directorReport] STEP31: AI Director System
      */
-    render(runStats, saveInfo, aiFeedback) {
+    render(runStats, saveInfo, aiFeedback, directorReport) {
       if (!this.el.depth) return;
       this.el.depth.textContent = String(runStats.depth);
       this.el.score.textContent = String(runStats.score);
@@ -75,6 +84,17 @@
       if (aiFeedback) {
         if (this.el.aiObservation) this.el.aiObservation.textContent = `"${aiFeedback.observation}"`;
         if (this.el.aiRecommendation) this.el.aiRecommendation.textContent = aiFeedback.recommendation;
+      }
+
+      // STEP31: AI Director Report（要求仕様セクション12）
+      if (directorReport) {
+        if (this.el.directorSolveTime) this.el.directorSolveTime.textContent = `${directorReport.averageSolveTime || 0}s`;
+        if (this.el.directorAccuracy) this.el.directorAccuracy.textContent = `${Math.round((directorReport.accuracy || 0) * 100)}%`;
+        if (this.el.directorRisk) this.el.directorRisk.textContent = `${Math.round((directorReport.risk || 0) * 100)}%`;
+        if (this.el.directorFavoriteEnv) this.el.directorFavoriteEnv.textContent = directorReport.favoriteEnvironment || '-';
+        if (this.el.directorRecommendation) {
+          this.el.directorRecommendation.textContent = directorReport.recommendation ? directorReport.recommendation.name : 'None';
+        }
       }
     }
   }

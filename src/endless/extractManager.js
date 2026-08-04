@@ -55,7 +55,7 @@
       const failureProbability = Math.max(5, Math.min(95,
         10 + state.riskChainLevel * 15 + (state.maxLife - state.life) * 10
       ));
-      const recommend = (state.life <= 1 || state.riskChainLevel >= 3) ? 'RETURN' : 'CONTINUE';
+      const recommend = (state.life <= 1 || state.riskChainLevel >= 3) ? '帰還推奨' : '続行推奨';
 
       if (this.el.currentData) this.el.currentData.textContent = String(state.researchData);
       if (this.el.potentialReward) this.el.potentialReward.textContent = `+${bonus}`;

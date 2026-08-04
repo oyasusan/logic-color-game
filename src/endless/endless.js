@@ -56,7 +56,9 @@
     EnvironmentScan, TransitionManager, EnvironmentHUD, EnvironmentRenderer, WorldEnvironmentArchive,
     WorldStabilityManager, WorldMutationManager, MutationRenderer,
     EnvironmentEventManager, EnvironmentEventPanel, EnvironmentEventArchive,
-    HiddenEnvironmentManager, HiddenEnvironmentRenderer, HiddenEnvironmentArchive, HiddenEnvironmentData
+    HiddenEnvironmentManager, HiddenEnvironmentRenderer, HiddenEnvironmentArchive, HiddenEnvironmentData,
+    AIDirector, DirectorHud,
+    StoryData, StoryUnlockManager, ResearchDatabase, ResearchTimeline, EndingManager, StoryArchiveUI
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -123,15 +125,31 @@
       this.environmentEventManager = new EnvironmentEventManager({ save: this.save, worldEnvironmentManager: this.worldEnvironmentManager });
       this.environmentEventPanel = new EnvironmentEventPanel();
       this.environmentEventArchive = new EnvironmentEventArchive({ ui, save: this.save });
-      this.environmentEventArchive.onBack = () => this.showModeSelect();
+      this.environmentEventArchive.onBack = () => this._showArchiveHub();
 
       // ---- STEP30-7: Hidden Environment System ----
       this.hiddenEnvironmentManager = new HiddenEnvironmentManager({ save: this.save });
       this.hiddenEnvironmentRenderer = new HiddenEnvironmentRenderer();
       this.hiddenEnvironmentArchive = new HiddenEnvironmentArchive({ ui, save: this.save, hiddenEnvironmentManager: this.hiddenEnvironmentManager });
-      this.hiddenEnvironmentArchive.onBack = () => this.showModeSelect();
+      this.hiddenEnvironmentArchive.onBack = () => this._showArchiveHub();
       this.unknownSuccessStreakThisRun = 0; // VOID MEMORYの解放条件（Unknown Node成功5連続）判定用
       this.researchLabVisitsThisRun = 0;    // GENESIS LABの解放条件（生涯Research Lab到達10回）判定用
+
+      // ---- STEP31: AI Director System ----
+      this.aiDirector = new AIDirector({ save: this.save });
+      this.directorHud = new DirectorHud();
+
+      // ---- STEP32: Narrative & Story System ----
+      this.researchDatabase = new ResearchDatabase({ save: this.save });
+      this.researchTimeline = new ResearchTimeline({ researchDatabase: this.researchDatabase });
+      this.endingManager = new EndingManager({ save: this.save });
+      this.storyArchiveUI = new StoryArchiveUI({
+        ui, researchDatabase: this.researchDatabase, researchTimeline: this.researchTimeline,
+        // 要求仕様セクション10「Research Codex統合」。既存Systemへは読み取り専用の
+        // 集計関数経由でのみアクセスし、storyArchiveUI自身は他Managerを直接参照しない
+        getCodexSummary: () => this._buildResearchCodexSummary()
+      });
+      this.storyArchiveUI.onBack = () => this._showArchiveHub();
 
       // ---- STEP30-3: Environment Visual / HUD Evolution ----
       this.environmentScan = new EnvironmentScan({ ui });
@@ -139,7 +157,7 @@
       this.environmentHud = new EnvironmentHUD();
       this.environmentRenderer = new EnvironmentRenderer({ save: this.save });
       this.worldEnvironmentArchive = new WorldEnvironmentArchive({ ui, save: this.save });
-      this.worldEnvironmentArchive.onBack = () => this.showModeSelect();
+      this.worldEnvironmentArchive.onBack = () => this._showArchiveHub();
       this._previousWorldEnvDef = null; // RUN内で直前に確定していたEnvironment（Transition表示用、RUN開始時にnullへリセット）
 
       // ---- STEP28: Meta Progression / Permanent Research System ----
@@ -156,10 +174,11 @@
         environmentModifierManager: this.environmentModifierManager,
         worldMutationManager: this.worldMutationManager,
         environmentEventManager: this.environmentEventManager,
-        hiddenEnvironmentManager: this.hiddenEnvironmentManager
+        hiddenEnvironmentManager: this.hiddenEnvironmentManager,
+        aiDirector: this.aiDirector
       });
       this.result = new EndlessResultScreen({
-        onRetry: () => this._showNeuralLab(true),
+        onRetry: () => { this.aiDirector.recordRetry(); this._showNeuralLab(true); },
         onTitle: () => this._exitToTitle()
       });
       this.neuralLab = new NeuralLab({ ui, save: this.save, metaProgression: this.metaProgression, identityManager: this.identityManager });
@@ -258,7 +277,10 @@
         worldEnvArchiveBtn: document.getElementById('worldEnvArchiveModeSelectBtn'),
         envEventArchiveBtn: document.getElementById('envEventArchiveModeSelectBtn'),
         hiddenArchiveBtn: document.getElementById('hiddenArchiveModeSelectBtn'),
+        storyArchiveBtn: document.getElementById('storyArchiveModeSelectBtn'),
         performanceModeBtn: document.getElementById('performanceModeBtn'),
+        archiveHubBtn: document.getElementById('archiveHubBtn'),
+        archiveHubBackBtn: document.getElementById('archiveHubBackBtn'),
         endlessBestDepth: document.getElementById('endlessBestDepth'),
         endlessBestScore: document.getElementById('endlessBestScore'),
         endlessTotalRuns: document.getElementById('endlessTotalRuns'),
@@ -269,6 +291,8 @@
         mapExtractBtn: document.getElementById('mapExtractBtn'),
 
         endlessHud: document.getElementById('endlessHud'),
+        endlessHudDetailToggle: document.getElementById('endlessHudDetailToggle'),
+        endlessHudDetailBody: document.getElementById('endlessHudDetailBody'),
         endlessProtocolValue: document.getElementById('endlessProtocolValue'),
         endlessSynergyBadge: document.getElementById('endlessSynergyBadge'),
         endlessEnvironmentValue: document.getElementById('endlessEnvironmentValue'),
@@ -306,13 +330,13 @@
         this.el.protocolArchiveBtn.addEventListener('click', () => this.protocolArchive.show());
       }
       if (this.el.protocolArchiveBackBtn) {
-        this.el.protocolArchiveBackBtn.addEventListener('click', () => this.showModeSelect());
+        this.el.protocolArchiveBackBtn.addEventListener('click', () => this._showArchiveHub());
       }
       if (this.el.environmentArchiveBtn) {
         this.el.environmentArchiveBtn.addEventListener('click', () => this.environmentArchive.show());
       }
       if (this.el.environmentArchiveBackBtn) {
-        this.el.environmentArchiveBackBtn.addEventListener('click', () => this.showModeSelect());
+        this.el.environmentArchiveBackBtn.addEventListener('click', () => this._showArchiveHub());
       }
       if (this.el.neuralLabBtn) {
         this.el.neuralLabBtn.addEventListener('click', () => this._showNeuralLab(false));
@@ -332,12 +356,29 @@
       if (this.el.hiddenArchiveBtn) {
         this.el.hiddenArchiveBtn.addEventListener('click', () => this.hiddenEnvironmentArchive.show());
       }
+      if (this.el.storyArchiveBtn) {
+        this.el.storyArchiveBtn.addEventListener('click', () => this.storyArchiveUI.show());
+      }
+      if (this.el.archiveHubBtn) {
+        this.el.archiveHubBtn.addEventListener('click', () => this._showArchiveHub());
+      }
+      if (this.el.archiveHubBackBtn) {
+        this.el.archiveHubBackBtn.addEventListener('click', () => this.showModeSelect());
+      }
       if (this.el.performanceModeBtn) {
         this.el.performanceModeBtn.addEventListener('click', () => this._cyclePerformanceMode());
         this._renderPerformanceModeBtn();
       }
       if (this.el.mapOverviewBtn) {
         this.el.mapOverviewBtn.addEventListener('click', () => this._showResearchMap());
+      }
+      // UI改修: ENDLESS HUDの「詳細」ボタン。既定では閉じておき、盤面の視認性を優先する
+      if (this.el.endlessHudDetailToggle && this.el.endlessHudDetailBody) {
+        this.el.endlessHudDetailToggle.addEventListener('click', () => {
+          const collapsed = this.el.endlessHudDetailBody.classList.toggle('hidden');
+          this.el.endlessHudDetailToggle.textContent = collapsed ? '詳細 ▾' : '閉じる ▴';
+          this.el.endlessHudDetailToggle.setAttribute('aria-expanded', String(!collapsed));
+        });
       }
       if (this.el.mapExtractBtn) {
         this.el.mapExtractBtn.addEventListener('click', () => this._showExtract());
@@ -360,6 +401,9 @@
       this._extractedThisRun = true; // STEP29: AI Feedback Systemの分析材料
       // STEP30-4: 「Extract成功」+5
       this.worldStabilityManager.increaseStability(STABILITY_DELTA_EXTRACT_SUCCESS, { layer: this.depth, event: 'Extract成功' });
+      // STEP31: Dialogue System。直後の_endRun()が'runEnd'トーストで即座に上書きするため、
+      // ここではAIログへの記録のみ行いトースト表示は省略する
+      this._showDirectorDialogue('extract', false);
       this._endRun();
     }
 
@@ -402,6 +446,35 @@
       this.ui.showScreen('modeSelect');
     }
 
+    /** UI改修: 5種のArchive画面への入口をまとめたハブ画面を表示する */
+    _showArchiveHub() {
+      this.ui.showScreen('archiveHub');
+    }
+
+    /**
+     * STEP32セクション10「Research Codex統合」。既存の各System/Save APIを読むだけの
+     * 集計関数。storyArchiveUIへ関数として注入し、UI側から他Systemへ直接アクセス
+     * させない（要求仕様セクション13のアーキテクチャルール対応）。
+     * @returns {Object<string, {unlocked:number, total:number}>}
+     */
+    _buildResearchCodexSummary() {
+      const uniqueMutations = new Set(
+        this.worldMutationManager.getMutationHistory().map(h => h.id)
+      );
+      return {
+        PROTOCOL: { unlocked: this.save.getUnlockedProtocols().length, total: G.Protocols.ALL.length },
+        ENVIRONMENT: { unlocked: this.save.getUnlockedWorldEnvironments().length, total: G.WorldEnvironment.ALL.length },
+        MUTATION: { unlocked: uniqueMutations.size, total: G.MutationData.ALL.length },
+        EVENT: { unlocked: this.save.getDiscoveredEnvironmentEvents().length, total: G.EnvironmentEventData.ALL.length },
+        HIDDEN: { unlocked: this.save.getHiddenUnlockFlags().length, total: G.HiddenEnvironmentData.ALL.length },
+        ACHIEVEMENT: { unlocked: this.save.getCompletedAchievements().length, total: G.Achievements.ALL.length },
+        STORY: (() => {
+          const rate = this.researchDatabase.getCompletionRate();
+          return { unlocked: rate.unlocked, total: rate.total };
+        })()
+      };
+    }
+
     /** STEP30-3: Performance Control。high→normal→low→highの順に巡回させる */
     _cyclePerformanceMode() {
       const order = ['high', 'normal', 'low'];
@@ -413,9 +486,13 @@
       this.environmentRenderer.render(this.worldEnvironmentManager.getCurrentEnvironment());
     }
 
+    /** UI改修: 下部の縦積みボタンからヘッダーの⚙️アイコンボタンへ変更したため、
+     *  現在値はtitle（ツールチップ）とaria-labelで示す */
     _renderPerformanceModeBtn() {
       if (!this.el.performanceModeBtn) return;
-      this.el.performanceModeBtn.textContent = `PERFORMANCE: ${this.environmentRenderer.getPerformanceMode().toUpperCase()}`;
+      const mode = this.environmentRenderer.getPerformanceMode().toUpperCase();
+      this.el.performanceModeBtn.title = `描画負荷設定: ${mode}（タップで切替）`;
+      this.el.performanceModeBtn.setAttribute('aria-label', `描画負荷設定: ${mode}`);
     }
 
     _exitToTitle() {
@@ -530,6 +607,10 @@
       this.hiddenEnvironmentRenderer.hideHud();
       this.unknownSuccessStreakThisRun = 0;
       this.researchLabVisitsThisRun = 0;
+      // STEP31: AI DirectorのRUNスコープ状態も同様にRUN開始時は必ず解除する（PlayerProfile/Personalityは維持）
+      this.aiDirector.reset();
+      // UI改修: 前RUN終了時の表示が新RUN開始直後に一瞬残らないよう、明示的にhideする
+      this.directorHud.hide();
 
       // Research Environment: 選んだ（Unstable Systemなら実際に解決された分も）Environmentを発見済みとして記録する
       if (this.environmentManager.getSelectedId()) {
@@ -635,26 +716,29 @@
       if (action === 'merge' && def) {
         this.protocolManager.merge(def.id);
         this._recalculateMaxLife();
-        message = `PROTOCOL MERGED: ${def.name}`;
+        message = `Protocolを追加: ${def.name}`;
       } else if (action === 'replace' && def && targetId) {
         this.protocolManager.replace(targetId, def.id);
         this._recalculateMaxLife();
-        message = `PROTOCOL REPLACED: ${def.name}`;
+        message = `Protocolを入替: ${def.name}`;
       } else {
-        message = 'SIGNAL IGNORED';
+        message = '信号を無視した';
       }
 
       const synergies = this.protocolManager.getActiveSynergies();
       if (synergies.length > 0) {
-        message += ` / SYNERGY: ${synergies.map(s => s.name).join(', ')}`;
+        message += ` / SYNERGY発動: ${synergies.map(s => s.name).join(', ')}`;
         this._grantIdentityExp('synergyActive'); // STEP29: Protocol EngineerのEXP源
       }
-      this.ui.showToast(message);
 
-      this.ui.showScreen('game');
       this._renderProtocolBadge();
       this._renderHud();
-      this._showMapChoices();
+      this.ui.showNodeResult({
+        icon: '📡',
+        title: 'PROTOCOL SIGNAL',
+        message,
+        onContinue: () => { this.ui.showScreen('game'); this._showMapChoices(); }
+      });
     }
 
     /** ---------------- MAP GENERATION SYSTEM ---------------- */
@@ -702,6 +786,15 @@
      */
     _handleMapNodeSelected(node) {
       this.depth++;
+
+      // STEP31: AI Director System。「AIは毎Layer更新」（要求仕様セクション5）に従い、
+      // Adaptive Difficulty/DirectorStateをこのLayer移動のたびに再計算する。所持Protocolの
+      // タリーもここで記録し（favoriteProtocol算出用）、Layer開始のDialogueを1つ表示する
+      this.aiDirector.updateLayer();
+      this.aiDirector.recordActiveProtocols(this.protocolManager.getActiveIds());
+      this._showDirectorDialogue('layerStart');
+      this.directorHud.render(this.aiDirector.getState());
+      this._checkStoryUnlocks(); // STEP32: Narrative & Story System
 
       // Phase C: 到達Depthに応じたProtocol Fragment獲得（DEPTH_MILESTONE_INTERVALごと。
       // Deep Research Environment所持時は_gainProtocolFragments内で倍率がかかる）
@@ -770,7 +863,7 @@
           this.hiddenEnvironmentManager.tickDuration();
           if (wasInHidden && !this.hiddenEnvironmentManager.getCurrentHiddenEnvironment()) {
             this.hiddenEnvironmentRenderer.hideHud();
-            this.ui.showToast('SECRET AREA CLOSED');
+            this.ui.showToast('秘匿領域から離脱した');
           }
           this._checkHiddenEnvironmentTrigger(() => this._enterNode(node));
         });
@@ -787,10 +880,12 @@
     _checkEnvironmentEventTrigger(onDone) {
       const def = this.environmentEventManager.checkEventTrigger({
         mutationActive: !!this.worldMutationManager.getActiveMutation(),
-        stabilityStatus: this.worldStabilityManager.getStatus()
+        stabilityStatus: this.worldStabilityManager.getStatus(),
+        directorRateBonus: this.aiDirector.getEventTriggerRateBonus() // STEP31: Event Recommendation
       });
       if (!def) { if (onDone) onDone(); return; }
 
+      this.aiDirector.notifyEventTriggered(); // STEP31: 「長時間Eventなし」判定用カウンタをリセット
       this.environmentEventManager.triggerEvent(def.id, { run: this.save.getTotalRuns() + 1, layer: this.depth });
 
       if (def.choices) {
@@ -818,19 +913,19 @@
       const reveal = this.environmentEventManager.getInstantEffect('revealNextNode');
       if (reveal) {
         this.mapUI.forceRevealNext();
-        return 'Next node data will be revealed on the following scan.';
+        return '次のスキャンでNode情報が事前に開示される。';
       }
 
       const route = this.environmentEventManager.getInstantEffect('revealRouteHistory');
       if (route) {
         const recent = this.visitedNodes.slice(-5).map(n => n.name).join(' → ');
-        return recent ? `Route: ${recent}` : 'No route history yet.';
+        return recent ? `経路: ${recent}` : 'まだ経路履歴が無い。';
       }
 
       const lab = this.environmentEventManager.getInstantEffect('forceLabSpawn');
       if (lab) {
         this._forceLabOnNextMap = true;
-        return 'A Research Lab will appear on the next map.';
+        return '次のMapにResearch Labが出現する。';
       }
 
       const life = this.environmentEventManager.getInstantEffect('lifeRecoveryInstant');
@@ -838,7 +933,7 @@
         const before = this.life;
         this.life = Math.min(this.maxLife, this.life + life.value);
         const recovered = this.life - before;
-        return recovered > 0 ? `Life +${recovered}` : 'Life is already full.';
+        return recovered > 0 ? `ライフ +${recovered}` : 'ライフはすでに満タン。';
       }
 
       const fragment = this.environmentEventManager.getInstantEffect('protocolFragmentInstant');
@@ -867,7 +962,7 @@
      */
     _resolveEnvironmentEventChoice(def, choiceId, onDone) {
       const choice = def.choices.find(c => c.id === choiceId);
-      let message = 'SIGNAL IGNORED';
+      let message = '信号を無視した';
       let rewardValue = 0;
 
       if (choice && choiceId === 'yes') {
@@ -907,13 +1002,13 @@
         // 空きSlotが無い、または追加できるProtocolが無い場合はProtocol Fragmentで代替する
         // （_applyBossShortcutの「代替報酬」と同じ設計判断）
         this._gainProtocolFragments(8);
-        return 'No Protocol Slot available — Protocol Fragment +8 instead';
+        return '空きProtocol Slotが無い — 代わりにProtocol Fragment +8';
       }
       const pickedId = candidateIds[Math.floor(Math.random() * candidateIds.length)];
       this.protocolManager.merge(pickedId);
       this._recalculateMaxLife();
       const def = ProtocolUnlock ? ProtocolUnlock.getById(pickedId) : null;
-      return `Rare Protocol acquired: ${def ? def.name : pickedId}`;
+      return `Rare Protocol獲得: ${def ? def.name : pickedId}`;
     }
 
     /** ---------------- STEP30-7: Hidden Environment System ---------------- */
@@ -943,7 +1038,10 @@
       this.hiddenEnvironmentRenderer.showDiscovery(def, () => {
         this.hiddenEnvironmentManager.enterHiddenEnvironment(def.id, { run: this.save.getTotalRuns() + 1, layer: this.depth });
         this.hiddenEnvironmentRenderer.showHud(def);
-        this.ui.showToast(`SECRET AREA: ${def.name}`);
+        this.ui.showToast(`秘匿領域: ${def.name}`);
+        // STEP31: Dialogue System。直上の「SECRET AREA」トーストを上書きしてしまうため、
+        // ここではAIログへの記録のみ行いトースト表示は省略する
+        this._showDirectorDialogue('hiddenFound', false);
 
         const exclusiveEvent = HiddenEnvironmentData.getExclusiveEventForEnvironment(def);
         const exclusiveReward = HiddenEnvironmentData.getExclusiveRewardForEnvironment(def);
@@ -958,7 +1056,7 @@
         if (messages.length === 0) { if (onDone) onDone(); return; }
         this.ui.showNodeResult({
           icon: '🌑',
-          title: `${def.name} — SECRET AREA`,
+          title: `${def.name} — 秘匿領域`,
           message: messages.join(' / '),
           onContinue: onDone
         });
@@ -981,18 +1079,18 @@
         case 'lifeRecoveryInstant': {
           const before = this.life;
           this.life = Math.min(this.maxLife, this.life + effect.value);
-          return `${label}: Life +${this.life - before}`;
+          return `${label}: ライフ +${this.life - before}`;
         }
         case 'freeUpgradeInstant': {
           const candidates = G.Upgrades ? G.Upgrades.ALL.filter(u => !this.upgradeManager.isMaxed(u.id)) : [];
-          if (candidates.length === 0) return `${label}: No Upgrade available`;
+          if (candidates.length === 0) return `${label}: 獲得できるUpgradeが無かった`;
           const picked = candidates[Math.floor(Math.random() * candidates.length)];
           this.upgradeManager.acquire(picked.id);
-          return `${label}: ${picked.name} acquired for free`;
+          return `${label}: ${picked.name}を無償で獲得`;
         }
         case 'revealLastRunRoute': {
           const route = this.save.getLastRunVisitedNodes().slice(-5).map(n => n.name).join(' → ');
-          return `${label}: ${route || 'No previous RUN route recorded'}`;
+          return `${label}: ${route || '前回RUNの経路記録が無い'}`;
         }
         case 'stabilityDelta':
           this.worldStabilityManager.decreaseStability(Math.abs(effect.value), { layer: this.depth, event: label });
@@ -1000,6 +1098,62 @@
         default:
           return label;
       }
+    }
+
+    /** ---------------- STEP31: AI Director System ---------------- */
+
+    /**
+     * 要求仕様セクション10のDialogue Systemトリガーポイント（layerStart/mutation/
+     * extract/hiddenFound/bossBefore/bossAfter/runEnd）で呼ぶ。短い一言をトースト表示する
+     * （既存の`ui.showToast`と同じ「短い一行の状況通知」扱い。フィードバック
+     * 「情報系オーバーレイは自動消滅させない」の対象外＝トーストのまま自動消滅でよい）。
+     * @param {string} trigger
+     */
+    /**
+     * @param {string} trigger
+     * @param {boolean} [showToast=true] falseの場合、AIログへの記録のみ行いトースト表示は
+     *   省略する（直後に別のトースト表示が続き、同一tickの`ui.showToast`の
+     *   「後勝ち（textContent上書き）」仕様でこちらが即座に消されてしまう箇所
+     *   ＝extract/hiddenFoundで使用。実装中にトースト上書きを実テストで検出した）
+     */
+    _showDirectorDialogue(trigger, showToast) {
+      const line = this.aiDirector.getDialogue(trigger);
+      if (line && showToast !== false) this.ui.showToast(`🤖 ${this.aiDirector.getPersonality().name}: "${line}"`);
+      return line;
+    }
+
+    /** ---------------- STEP32: Narrative & Story System ---------------- */
+
+    /**
+     * StoryUnlockManager経由でのStory解放判定（要求仕様セクション5）。Layer進行時
+     * （_handleMapNodeSelected）に呼ぶ。新規解放はトースト通知のみに留める
+     * （Mutation/Event/Hidden Environment発見の一連の演出チェーンへ、さらに
+     * 「続ける」ボタン付きオーバーレイを積み増さないための設計判断）。
+     * Story Stageが進んだ瞬間はAI Directorの世界観Dialogueを別途トースト表示する。
+     */
+    _checkStoryUnlocks() {
+      const snapshot = {
+        layerReached: Math.max(this.depth, this.save.getBestDepth()),
+        protocolCount: this.save.getUnlockedProtocols().length,
+        mutationExperienced: this.worldMutationManager.getMutationHistory().length,
+        eventEncountered: this.save.getTotalEventCount() + this.eventCountThisRun,
+        bossDefeated: this.save.getTotalBossClear() + this.bossClearCount,
+        researchDataAccumulated: this.save.getResearchDataTotal() + this.researchData,
+        totalRuns: this.save.getTotalRuns(),
+        hiddenUnlockedIds: this.save.getHiddenUnlockFlags()
+      };
+
+      // UI改修: `ui.showToast`は単一スロットの「後勝ち」実装のため、新規解放通知と
+      // Stage遷移通知が同一tickで連続発火すると片方が消される（STEP31のDialogue System実装時に
+      // 発見したのと同種のバグ。実テストで再現・検出した）。ここでは1つのトーストへ統合する
+      const messages = [];
+      const newlyUnlocked = StoryUnlockManager.findNewlyUnlockable(snapshot, this.researchDatabase);
+      newlyUnlocked.forEach(entry => messages.push(`📖 ${entry.title}を解放した`));
+
+      const newStage = this.researchDatabase.checkStageTransition();
+      if (newStage) messages.push(`🤖 ${StoryData.STAGE_DIALOGUE[newStage]}`);
+
+      if (messages.length > 0) this.ui.showToast(messages.join(' / '));
     }
 
     /**
@@ -1013,10 +1167,16 @@
      *   トリガーされなかった場合は即座に）呼ばれる
      */
     _checkMutationTrigger(extraContext, onDone) {
+      // STEP31: AI Director System「Mutation Recommendation」（要求仕様セクション8）。
+      // プレイヤーが簡単すぎればlevel===0からの引き上げを、苦戦中ならlevel>0からの
+      // 抑制を、既存のStability/追加Trigger判定とは独立に推奨する
+      const directorBias = this.aiDirector.getMutationTriggerBias();
       const context = Object.assign({
         consecutiveUnknownAnalyses: this.consecutiveUnknownAnalysesThisRun,
         riskChainLevel: this.riskChain.getChainLevel(),
-        inUnknownDimension: this.worldEnvironmentManager.getCurrentEnvironment().id === 'env_unknown'
+        inUnknownDimension: this.worldEnvironmentManager.getCurrentEnvironment().id === 'env_unknown',
+        directorBoost: directorBias.boost,
+        directorSuppress: directorBias.suppress
       }, extraContext);
 
       const level = this.worldMutationManager.checkMutationTrigger(context);
@@ -1031,8 +1191,10 @@
       if (level === 3) {
         // Collapse Mutationは問答無用で発生する（要求仕様セクション7）
         const def = this.worldMutationManager.triggerMutation(3, historyContext);
-        if (def) this.mutationRenderer.show(def, afterMutationUiUpdate);
-        else if (onDone) onDone();
+        if (def) {
+          this._showDirectorDialogue('mutation'); // STEP31: Dialogue System
+          this.mutationRenderer.show(def, afterMutationUiUpdate);
+        } else if (onDone) onDone();
         return;
       }
 
@@ -1045,8 +1207,10 @@
         onExploit: () => {
           const def = this.worldMutationManager.triggerMutation(level, historyContext);
           this.worldMutationManager.markExploitBonus();
-          if (def) this.mutationRenderer.show(def, afterMutationUiUpdate);
-          else afterMutationUiUpdate();
+          if (def) {
+            this._showDirectorDialogue('mutation'); // STEP31: Dialogue System
+            this.mutationRenderer.show(def, afterMutationUiUpdate);
+          } else afterMutationUiUpdate();
         }
       });
     }
@@ -1089,11 +1253,19 @@
       this.visitedNodes.push({ depth: this.depth, type: node.type, name: node.name, icon: node.icon });
 
       // STEP27: このNodeの脅威度をRisk Chainへ反映する（Elite/Boss選択が連続するとスコア倍率が上がる）
-      this._registerRiskChain((AIAnalysis.analyze(node)).threatLevel);
+      const nodeAnalysis = AIAnalysis.analyze(node);
+      this._registerRiskChain(nodeAnalysis.threatLevel);
+      // STEP31: AI Director System「プレイヤー解析」。このNodeの脅威度・所属Environmentを記録する
+      this.aiDirector.recordNodeSelection(nodeAnalysis, this.worldEnvironmentManager.getCurrentEnvironment().id);
 
       switch (node.type) {
-        case 'elite':
         case 'boss':
+          this._showDirectorDialogue('bossBefore'); // STEP31: Dialogue System
+          this.ui.showScreen('game');
+          this.round.start(this.depth, node);
+          this._renderNodeIndicator();
+          break;
+        case 'elite':
         case 'puzzle':
           this.ui.showScreen('game'); // Map画面から遷移するため、Puzzle開始前に明示的に切り替える
           this.round.start(this.depth, node);
@@ -1139,9 +1311,11 @@
       // STEP30-2: QUANTUM NETWORKの「Rare Reward +20%」/NEURAL FORESTの「Unknown Analysis Success +10%」
       // STEP30-5: SIGNAL NOISE Mutationの「Rare Reward +15%」もさらに合算する
       // STEP30-6: SIGNAL INTERFERENCE Eventの「Rare Reward +50%」もさらに合算する
+      // STEP31: 「5連敗」等の苦戦時、AI DirectorのReward Recommendationもさらに合算する
       const event = UnknownEvents.pickEvent(this.metaProgression.getRankNumber(), {
         rareBoost: this.environmentModifierManager.getRareEventWeightBoost() + this.worldMutationManager.getRareEventWeightBoost()
-          + this.environmentEventManager.getEventRareEventWeightBoost() + this.hiddenEnvironmentManager.getHiddenRareEventWeightBoost(),
+          + this.environmentEventManager.getEventRareEventWeightBoost() + this.hiddenEnvironmentManager.getHiddenRareEventWeightBoost()
+          + this.aiDirector.getDirectorRareEventWeightBoost(),
         successBoost: this.environmentModifierManager.getUnknownSuccessBoost()
       });
       this.unknownAnalysisCount++;
@@ -1176,8 +1350,8 @@
       this._renderHud();
       this.ui.showNodeResult({
         icon: '❓',
-        title: 'UNKNOWN SIGNAL ANALYSIS COMPLETE',
-        message: `Result: ${event.name} — ${message}`,
+        title: '未確認信号 解析完了',
+        message: `結果: ${event.name} — ${message}`,
         onContinue: () => this._afterUnknownResolved()
       });
     }
@@ -1196,10 +1370,10 @@
       switch (event.effect.type) {
         case 'rareUpgrade': {
           const candidates = (G.RareUpgrades ? G.RareUpgrades.ALL : []).filter(u => !this.upgradeManager.isMaxed(u.id));
-          if (candidates.length === 0) return 'No Rare Upgrade available';
+          if (candidates.length === 0) return '獲得できるRare Upgradeが無かった';
           const picked = candidates[Math.floor(Math.random() * candidates.length)];
           this.upgradeManager.acquire(picked.id);
-          return `Rare Upgrade acquired: ${picked.name}`;
+          return `Rare Upgrade獲得: ${picked.name}`;
         }
         case 'protocolFragment': {
           // STEP29: ExplorerのUnknown Reward倍率をUnknown Node由来の報酬にのみ適用する
@@ -1216,7 +1390,7 @@
           this.life = Math.max(0, this.life - event.effect.value);
           // STEP30-5: 追加Trigger「Special Event」（System Corruption発生時）
           this._checkMutationTrigger({ specialEventTriggered: true });
-          return `Life -${event.effect.value}`;
+          return `ライフ -${event.effect.value}`;
         case 'secretRoom': {
           const unknownMultiplier = this.identityManager.getUnknownRewardMultiplier();
           const fragmentBonus = Math.round(3 * unknownMultiplier);
@@ -1248,10 +1422,10 @@
       const bossDepths = Object.keys(G.Boss.BOSS_DEPTHS).map(Number).filter(d => d > this.depth).sort((a, b) => a - b);
       if (bossDepths.length === 0) {
         this.researchData += 200;
-        return 'No BOSS ahead to shortcut — Research Data +200 instead';
+        return 'この先にBOSSは存在しない — 代わりにResearch Data +200';
       }
       this.depth = bossDepths[0] - 1; // 次にMAP選択を表示するdepth+1が丁度Boss Depthになるよう合わせる
-      return `Route shortcut to DEPTH ${bossDepths[0]} BOSS`;
+      return `DEPTH ${bossDepths[0]} のBOSSへ経路短絡`;
     }
 
     /**
@@ -1274,7 +1448,7 @@
       }
 
       if (after > before && after >= AI_WARNING_CHAIN_THRESHOLD) {
-        this.ui.showToast(`⚠ RESEARCH INSTABILITY Lv.${after} — Reward x${this.riskChain.getMultiplier().toFixed(1)} (System stability decreasing)`);
+        this.ui.showToast(`⚠ 研究不安定化 Lv.${after} — 報酬倍率 x${this.riskChain.getMultiplier().toFixed(1)}（システム安定性低下中）`);
       }
     }
 
@@ -1293,16 +1467,20 @@
     /** Reward Choice画面での選択（rewardChoice.onSelect経由）。Elite Nodeクリア直後にのみ表示される */
     _handleRewardChoiceSelected(opt) {
       const message = this._applyRewardChoiceEffect(opt);
-      this.ui.showToast(`REWARD SELECTED: ${opt.name} — ${message}`);
       this._renderHud();
-      this._showMapChoices();
+      this.ui.showNodeResult({
+        icon: '🎁',
+        title: `報酬獲得: ${opt.name}`,
+        message,
+        onContinue: () => this._showMapChoices()
+      });
     }
 
     _applyRewardChoiceEffect(opt) {
       switch (opt.effect.type) {
         case 'rareUpgrade': {
           const candidates = (G.RareUpgrades ? G.RareUpgrades.ALL : []).filter(u => !this.upgradeManager.isMaxed(u.id));
-          if (candidates.length === 0) return 'No Rare Upgrade available';
+          if (candidates.length === 0) return '獲得できるRare Upgradeが無かった';
           const picked = candidates[Math.floor(Math.random() * candidates.length)];
           this.upgradeManager.acquire(picked.id);
           return `${picked.name}を獲得`;
@@ -1618,45 +1796,65 @@
       const rewardBeforeHidden = Math.round(rewardBeforeEvent * this.environmentEventManager.getEventRewardModifier());
       this.environmentEventManager.addRewardContribution(rewardBeforeHidden - rewardBeforeEvent);
       // STEP30-7: SIMULATION ZERO/PARADOX CORE等のReward Integrationをさらに独立に適用する
-      reward = Math.round(rewardBeforeHidden * this.hiddenEnvironmentManager.getHiddenRewardModifier());
+      const rewardBeforeDirector = Math.round(rewardBeforeHidden * this.hiddenEnvironmentManager.getHiddenRewardModifier());
+      // STEP31: AI Director System「Reward Recommendation」（要求仕様セクション9）。
+      // 5連敗等の苦戦時のみ1より大きくなる（通常時は1.0で無変化）
+      reward = Math.round(rewardBeforeDirector * this.aiDirector.getDirectorRewardModifier());
       const mutationAdjustedResearchData = Math.round(envAdjustedReward.researchData * this.worldMutationManager.getResearchDataMultiplier());
       const eventAdjustedResearchData = Math.round(mutationAdjustedResearchData * this.environmentEventManager.getEventResearchDataMultiplier());
       this.environmentEventManager.addRewardContribution(eventAdjustedResearchData - mutationAdjustedResearchData);
       const hiddenAdjustedResearchData = Math.round(eventAdjustedResearchData * this.hiddenEnvironmentManager.getHiddenResearchDataMultiplier());
+      const directorAdjustedResearchData = Math.round(hiddenAdjustedResearchData * this.aiDirector.getDirectorResearchDataMultiplier());
 
       this.score += reward;
       // STEP27: Research Data（Extract Systemで使う蓄積リソース）は総獲得スコアの一部として
       // クリアのたびに少量加算される
-      this.researchData += hiddenAdjustedResearchData;
+      this.researchData += directorAdjustedResearchData;
 
       const recovered = this._tickLifeRegen();
       this._checkProtocolUnlocks();
       this.clearsThisRun++;
+      // STEP32: END D「Simulation Zero」の解放条件。SIMULATION ZERO内でのクリアを生涯フラグとして記録する
+      const currentHidden = this.hiddenEnvironmentManager.getCurrentHiddenEnvironment();
+      if (currentHidden && currentHidden.id === 'simulation_zero') this.save.setSimulationZeroCleared();
       this._grantIdentityExp('puzzleClear'); // STEP29: 全Identity共通の基礎EXP
       if (perfect) this._grantIdentityExp('perfectClear'); // STEP29: AnalystのEXP源
-      if (stats.isBoss) this._grantIdentityExp('bossClear'); // STEP29: SurvivalistのEXP源
+      // STEP31: Dialogue System。直後の`ui.showToast(message)`が即座に上書きしてしまうため、
+      // トースト表示はせずAIログへの記録のみ行い、返り値の一言を下のmessageへ統合して1つの
+      // トーストにまとめる（実装中にトースト上書きを実テストで検出した）
+      let directorLine = null;
+      if (stats.isBoss) {
+        this._grantIdentityExp('bossClear'); // STEP29: SurvivalistのEXP源
+        directorLine = this._showDirectorDialogue('bossAfter', false);
+      }
+      // STEP31: AI Director System「プレイヤー解析」。Adaptive Difficultyの入力(Solve Time/Accuracy)を更新する
+      this.aiDirector.recordPuzzleResult({ cleared: true, elapsedSeconds: stats.elapsedSeconds, hintUsed: stats.hintUsed });
 
-      let message = stats.isBoss
-        ? `${stats.bossName} DEFEATED! +${reward}`
-        : stats.isElite
-          ? `ELITE CLEAR! +${reward}`
-          : `DEPTH ${this.depth} CLEAR! +${reward}`;
-      if (perfect) message += ' PERFECT';
-      if (speedBonus > 0) message += ` SPEED+${speedBonus}`;
-      if (recovered) message += ' ❤+1';
-      this.ui.showToast(message);
+      const title = stats.isBoss ? `${stats.bossName} DEFEATED!` : stats.isElite ? 'ELITE CLEAR' : `DEPTH ${this.depth} CLEAR`;
+      const details = [`スコア +${reward}`];
+      if (perfect) details.push('PERFECT');
+      if (speedBonus > 0) details.push(`スピードボーナス +${speedBonus}`);
+      if (recovered) details.push('ライフ +1');
+      let message = details.join(' / ');
+      if (directorLine) message += ` / 🤖 "${directorLine}"`;
 
       this._renderHud();
       this._recordPuzzleHistory(stats, true);
-      // クリア演出・トーストを読む間を置いてから次の問題（またはRESEARCH LAB）へ進む
+      // UI改修: クリア演出（盤面のライン消灯・効果音）を見る間を置いてから、
+      // 「続ける」ボタン付きの結果オーバーレイを表示する（以前は同じ待ち時間の後トースト
+      // 表示のみで自動的に次へ進んでいたが、結果を読み逃しやすいとの指摘を受けて変更した）
       clearTimeout(this._advanceTimer);
       // HINT使用によるライフ消費（_handleHintUsed）が、ちょうどこのクリアと同じHINTで
       // ライフを0にしていた場合はここでRUNを終える（クリア報酬は既に加算済みのまま終了する）
-      if (this.life <= 0) {
-        this._advanceTimer = setTimeout(() => this._endRun(), ADVANCE_DELAY_MS);
-      } else {
-        this._advanceTimer = setTimeout(() => this._afterRoundEnd(), ADVANCE_DELAY_MS);
-      }
+      const nextStep = this.life <= 0 ? () => this._endRun() : () => this._afterRoundEnd();
+      this._advanceTimer = setTimeout(() => {
+        this.ui.showNodeResult({
+          icon: stats.isBoss ? '👑' : stats.isElite ? '⚔️' : '✅',
+          title,
+          message,
+          onContinue: nextStep
+        });
+      }, ADVANCE_DELAY_MS);
     }
 
     /**
@@ -1696,6 +1894,9 @@
 
     /** 制限時間切れ（ミス）時（endlessGame.jsのonTimeout経由） */
     _handleRoundTimeout(stats) {
+      // STEP31: AI Director System「プレイヤー解析」。Adaptive Difficultyの入力(mistakeRate)を更新する
+      this.aiDirector.recordPuzzleResult({ cleared: false, elapsedSeconds: stats.elapsedSeconds, hintUsed: stats.hintUsed });
+
       // Critical Logic Environment所持時、ミスで失うライフが倍加する。
       // STEP29: SurvivalistのRisk Control（Perk含む）はここで軽減方向に働く
       let lifeLoss = Math.max(1, Math.round(
@@ -1725,14 +1926,17 @@
 
       clearTimeout(this._advanceTimer);
       if (this.life <= 0) {
-        this.ui.showToast('TIME UP! RUN終了');
-        this._advanceTimer = setTimeout(() => this._endRun(), ADVANCE_DELAY_MS);
+        this._advanceTimer = setTimeout(() => {
+          this.ui.showNodeResult({ icon: '⏱️', title: 'TIME UP', message: '制限時間切れによりRUNが終了した', onContinue: () => this._endRun() });
+        }, ADVANCE_DELAY_MS);
       } else if (revived) {
-        this.ui.showToast('PHOENIX PROTOCOL発動! ライフ1で復活した');
-        this._advanceTimer = setTimeout(() => this._afterRoundEnd(), ADVANCE_DELAY_MS);
+        this._advanceTimer = setTimeout(() => {
+          this.ui.showNodeResult({ icon: '🔥', title: 'PHOENIX PROTOCOL発動', message: 'ライフ1で復活した', onContinue: () => this._afterRoundEnd() });
+        }, ADVANCE_DELAY_MS);
       } else {
-        this.ui.showToast(`TIME UP! -${lifeLoss} LIFE (残り${this.life})`);
-        this._advanceTimer = setTimeout(() => this._afterRoundEnd(), ADVANCE_DELAY_MS);
+        this._advanceTimer = setTimeout(() => {
+          this.ui.showNodeResult({ icon: '⏱️', title: 'TIME UP', message: `ライフ -${lifeLoss}（残り${this.life}）`, onContinue: () => this._afterRoundEnd() });
+        }, ADVANCE_DELAY_MS);
       }
     }
 
@@ -1760,9 +1964,10 @@
         } else {
           this.round.stop();
           this.round.locked = true;
-          this.ui.showToast('LIFE DEPLETED! RUN終了');
           clearTimeout(this._advanceTimer);
-          this._advanceTimer = setTimeout(() => this._endRun(), ADVANCE_DELAY_MS);
+          this._advanceTimer = setTimeout(() => {
+            this.ui.showNodeResult({ icon: '💀', title: 'LIFE DEPLETED', message: 'ライフが尽きたためRUNが終了した', onContinue: () => this._endRun() });
+          }, ADVANCE_DELAY_MS);
         }
       }
 
@@ -1785,10 +1990,13 @@
         this.life = Math.min(this.maxLife, this.life + gain);
       }
 
-      this.ui.showToast(times > 1 ? `ACQUIRED: ${def.name} ×${times} (ANOMALY BOOST)` : `ACQUIRED: ${def.name}`);
-      this.ui.showScreen('game');
       this._renderHud();
-      this._showMapChoices();
+      this.ui.showNodeResult({
+        icon: '🧪',
+        title: 'UPGRADE ACQUIRED',
+        message: times > 1 ? `${def.name} ×${times}（ANOMALY BOOST）` : def.name,
+        onContinue: () => { this.ui.showScreen('game'); this._showMapChoices(); }
+      });
     }
 
     /** ---------------- RUN終了 ---------------- */
@@ -1840,10 +2048,13 @@
         protocolEvolutionTotal: this.save.getTotalProtocolEvolutions(),
         longRunDepth: this.depth
       };
+      // UI改修: RESULT画面へ切り替わる直前のトーストは読み逃しやすいため、複数達成分を
+      // まとめて1つの「続ける」ボタン付きオーバーレイで示してからRESULT画面へ進む
+      const newlyCompletedAchievementNames = [];
       Achievements.findNewlyCompleted(achievementSnapshot, this.save.getCompletedAchievements()).forEach(id => {
         if (!this.save.completeAchievement(id)) return;
         const def = Achievements.getById(id);
-        if (def) this.ui.showToast(`🏆 ACHIEVEMENT: ${def.name}`);
+        if (def) newlyCompletedAchievementNames.push(def.name);
       });
 
       // STEP29: AI Feedback System。今RUNの行動パターンを分析し、RESULT画面へ渡す
@@ -1857,26 +2068,73 @@
         activeProtocolIds: activeProtocolIdsAtEnd
       });
 
-      this.result.render(
-        {
-          depth: this.depth,
-          score: this.score,
-          perfectCount: this.perfectCount,
-          researchData: this.researchData,
-          deepestLayer: G.PuzzleTier ? G.PuzzleTier.getTierNumber(this.depth) : 1,
-          protocolsFound: this.save.getUnlockedProtocols().length,
-          riskChainMultiplier: finalRiskChainMultiplier,
-          unknownAnalysisCount: this.unknownAnalysisCount
-        },
-        {
-          bestDepth: this.save.getBestDepth(),
-          isNewBestDepth: saveResult.isNewBestDepth,
-          isNewBestScore: saveResult.isNewBestScore
-        },
-        aiFeedback
-      );
+      // STEP31: AI Director System「Run Report」（要求仕様セクション12）。PlayerProfileへ
+      // このRUNのExtract有無・訪問Environment/所持Protocolのタリーを反映し、Reportを生成する
+      this._showDirectorDialogue('runEnd'); // Dialogue System
+      const directorReport = this.aiDirector.finalizeRun({ extracted: this._extractedThisRun });
 
-      this.ui.showScreen('endlessResult');
+      const showResultScreen = () => {
+        this.result.render(
+          {
+            depth: this.depth,
+            score: this.score,
+            perfectCount: this.perfectCount,
+            researchData: this.researchData,
+            deepestLayer: G.PuzzleTier ? G.PuzzleTier.getTierNumber(this.depth) : 1,
+            protocolsFound: this.save.getUnlockedProtocols().length,
+            riskChainMultiplier: finalRiskChainMultiplier,
+            unknownAnalysisCount: this.unknownAnalysisCount
+          },
+          {
+            bestDepth: this.save.getBestDepth(),
+            isNewBestDepth: saveResult.isNewBestDepth,
+            isNewBestScore: saveResult.isNewBestScore
+          },
+          aiFeedback,
+          directorReport
+        );
+        this.ui.showScreen('endlessResult');
+      };
+
+      // STEP32: Ending System。RUN終了時点のスナップショットで判定する。endingManager自身は
+      // researchDatabaseを直接操作しない設計（要求仕様セクション13）のため、新規達成分の
+      // Story Archive/Timelineへの反映はここでresearchDatabase.addEntry()を呼んで橋渡しする
+      const logRate = this.researchDatabase.getCompletionByType('LOG');
+      const memoryRate = this.researchDatabase.getCompletionByType('MEMORY');
+      const newlyAchievedEndings = this.endingManager.checkEndings({
+        logCompletionRate: logRate.total > 0 ? logRate.unlocked / logRate.total : 0,
+        memoryCompletionRate: memoryRate.total > 0 ? memoryRate.unlocked / memoryRate.total : 0,
+        worldStatus: this.worldStabilityManager.getStatus(),
+        simulationZeroCleared: this.save.hasSimulationZeroCleared(),
+        hiddenCompletionRate: this.hiddenEnvironmentManager.getDiscoveryRate().rate,
+        storyCompletionRate: this.researchDatabase.getCompletionRate().rate,
+        bestLayer: Math.max(this.depth, this.save.getBestDepth())
+      });
+      newlyAchievedEndings.forEach(def => this.researchDatabase.addEntry(def.id));
+
+      const showEndingThenResult = () => {
+        if (newlyAchievedEndings.length > 0) {
+          this.ui.showNodeResult({
+            icon: '🎬',
+            title: 'ENDING UNLOCKED',
+            message: newlyAchievedEndings.map(def => def.name).join(' / '),
+            onContinue: showResultScreen
+          });
+        } else {
+          showResultScreen();
+        }
+      };
+
+      if (newlyCompletedAchievementNames.length > 0) {
+        this.ui.showNodeResult({
+          icon: '🏆',
+          title: 'ACHIEVEMENT UNLOCKED',
+          message: newlyCompletedAchievementNames.join(' / '),
+          onContinue: showEndingThenResult
+        });
+      } else {
+        showEndingThenResult();
+      }
     }
 
     /** ---------------- STEP29: Research Identity System ヘルパー ---------------- */

@@ -39,8 +39,10 @@
      *   （FRACTAL SHIFTのPuzzle Difficulty=制限時間短縮、GRID OPTIMIZATIONのHINT開示数増加）に使う
      * @param {Object} [deps.hiddenEnvironmentManager] STEP30-7: 入場中のHidden Environment
      *   （SIMULATION ZEROのPuzzle Difficulty=制限時間短縮）に使う
+     * @param {Object} [deps.aiDirector] STEP31: AI DirectorのAdaptive Difficulty
+     *   （既存のPuzzle Difficultyと同じ「制限時間短縮/延長」レバー）に使う
      */
-    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager, environmentModifierManager, worldMutationManager, environmentEventManager, hiddenEnvironmentManager }) {
+    constructor({ ui, puzzleManager, upgradeManager, protocolManager, environmentManager, environmentModifierManager, worldMutationManager, environmentEventManager, hiddenEnvironmentManager, aiDirector }) {
       this.ui = ui;
       this.puzzleManager = puzzleManager;
       this.upgradeManager = upgradeManager;
@@ -50,6 +52,7 @@
       this.worldMutationManager = worldMutationManager || null;
       this.environmentEventManager = environmentEventManager || null;
       this.hiddenEnvironmentManager = hiddenEnvironmentManager || null;
+      this.aiDirector = aiDirector || null;
 
       this.game = null;
       this.puzzle = null;
@@ -160,6 +163,10 @@
       // STEP30-7: SIMULATION ZEROの「Puzzle Difficulty +50%」も同じレバーで適用する
       if (this.hiddenEnvironmentManager) {
         timeLimitMultiplier *= this.hiddenEnvironmentManager.getHiddenPuzzleTimeLimitMultiplier();
+      }
+      // STEP31: AI DirectorのAdaptive Difficultyも同じレバーで適用する
+      if (this.aiDirector) {
+        timeLimitMultiplier *= this.aiDirector.getDirectorPuzzleTimeLimitMultiplier();
       }
       this.timeLimit = Math.max(10, Math.round(this.puzzle.parSeconds * timeLimitMultiplier));
       this.remaining = this.timeLimit;

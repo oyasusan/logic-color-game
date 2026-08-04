@@ -52,8 +52,21 @@
         // STEP30-2: ENVIRONMENT ANALYSISパネル（AI Analysis UI Integration）
         envAnalysisPanel: document.getElementById('mapEnvironmentAnalysis'),
         envAnalysisName: document.getElementById('mapEnvAnalysisName'),
-        envAnalysisEffects: document.getElementById('mapEnvAnalysisEffects')
+        envAnalysisEffects: document.getElementById('mapEnvAnalysisEffects'),
+        // UI改修: Environment/Layer詳細の折りたたみトグル
+        envDetailToggle: document.getElementById('mapEnvDetailToggle'),
+        envDetailBody: document.getElementById('mapEnvDetailBody')
       };
+
+      // UI改修: 「詳細」ボタンでActive Effects/World Stabilityバー/Mutation行の
+      // 開閉を切り替える（ルート選択カードの視認性を優先し、既定では閉じておく）
+      if (this.el.envDetailToggle && this.el.envDetailBody) {
+        this.el.envDetailToggle.addEventListener('click', () => {
+          const collapsed = this.el.envDetailBody.classList.toggle('hidden');
+          this.el.envDetailToggle.textContent = collapsed ? '詳細 ▾' : '閉じる ▴';
+          this.el.envDetailToggle.setAttribute('aria-expanded', String(!collapsed));
+        });
+      }
     }
 
     /**
@@ -117,23 +130,56 @@
       return `<span class="map-node-env-tag">${env.icon || ''} ${env.name}</span>`;
     }
 
-    /** 通常Node（Unknown以外）: AI Analysis Panel付きの選択可能なカードを1枚組み立てる */
+    /**
+     * 通常Node（Unknown以外）: 選択可能なカードを1枚組み立てる。
+     * UI改修: 既定では「アイコン+名前+脅威度バッジ」のみの要約表示にとどめ、
+     * SIGNAL DETECTEDラベル/Environmentタグ/AI Analysis詳細/推奨コメント/説明文は
+     * 「詳細」ボタンで開閉する本文へ格納した（複数カードが並ぶルート選択画面の
+     * 視認性を優先するための整理）。カード全体のクリックはNode選択、詳細ボタンは
+     * `stopPropagation()`で選択をトリガーしない（button-in-buttonを避けるため
+     * 外枠はdivにする。_renderUnknownCardと同じ設計）。
+     */
     _renderNodeCard(node, display) {
       const analysis = AIAnalysis ? AIAnalysis.analyze(node) : null;
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'lab-card map-node-card map-node-' + node.type + ' ai-panel';
+      const card = document.createElement('div');
+      // UI改修: 旧レイアウト専用だった.ai-panel（絶対配置アイコン用のpadding-top）は
+      // 新しい要約行レイアウトでは不要なため付与しない（.ai-signal-label等の詳細用
+      // クラスは.ai-panelに依存せず単独で機能する）。map-node-card-compactは
+      // 要約行レイアウト専用の上書きCSSを当てるための目印（Unknown Cardの
+      // 既存レイアウトには一切影響しない）
+      card.className = 'lab-card map-node-card map-node-card-compact map-node-' + node.type;
+      card.setAttribute('role', 'button');
+      card.tabIndex = 0;
       card.innerHTML = `
-        <span class="ai-signal-label">SIGNAL DETECTED</span>
-        ${this._environmentTagHtml()}
-        <span class="map-node-icon">${display.icon}</span>
-        <span class="lab-card-name">${display.name}</span>
-        ${analysis ? this._analysisBlockHtml(analysis) : ''}
-        ${analysis ? `<div class="ai-recommendation">"${analysis.recommendation}"</div>` : ''}
-        <span class="lab-card-desc">${display.description}</span>
+        <div class="map-node-summary">
+          <span class="map-node-icon">${display.icon}</span>
+          <span class="lab-card-name">${display.name}</span>
+          ${analysis ? `<span class="map-node-threat-badge threat-${analysis.threatLevel}">${analysis.threatStars}</span>` : ''}
+        </div>
+        <button type="button" class="map-node-detail-toggle">詳細 ▾</button>
+        <div class="map-node-detail-body hidden">
+          <span class="ai-signal-label">SIGNAL DETECTED</span>
+          ${this._environmentTagHtml()}
+          ${analysis ? this._analysisBlockHtml(analysis) : ''}
+          ${analysis ? `<div class="ai-recommendation">"${analysis.recommendation}"</div>` : ''}
+          <span class="lab-card-desc">${display.description}</span>
+        </div>
       `;
+      const toggleBtn = card.querySelector('.map-node-detail-toggle');
+      const detailBody = card.querySelector('.map-node-detail-body');
+      toggleBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const collapsed = detailBody.classList.toggle('hidden');
+        toggleBtn.textContent = collapsed ? '詳細 ▾' : '閉じる ▴';
+      });
       card.addEventListener('click', () => {
         if (this.onSelect) this.onSelect(node);
+      });
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (this.onSelect) this.onSelect(node);
+        }
       });
       return card;
     }

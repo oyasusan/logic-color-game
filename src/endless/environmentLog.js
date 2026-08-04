@@ -16,24 +16,24 @@
   const G = global.LogicColor = global.LogicColor || {};
 
   const MESSAGES = {
-    env_grid: 'Stable data structure detected.',
-    env_network: 'Probability distortion detected.',
-    env_forest: 'Neural pattern growth detected.',
-    env_ocean: 'Large information flow detected.',
-    env_fractal: 'Recursive logic detected.',
-    env_unknown: 'Analysis failed. Continue observation.'
+    env_grid: '安定したデータ構造を検知。',
+    env_network: '確率分布の歪みを検知。',
+    env_forest: 'ニューラルパターンの成長を検知。',
+    env_ocean: '大規模な情報流を検知。',
+    env_fractal: '再帰的論理構造を検知。',
+    env_unknown: '解析失敗。観測を継続する。'
   };
 
   function getLogMessage(environmentId) {
     return MESSAGES[environmentId] || '';
   }
 
-  // STEP30-4: World Status別のAI Research Log（要求仕様どおりの文言）
+  // STEP30-4: World Status別のAI Research Log
   const STATUS_MESSAGES = {
-    STABLE: 'World structure is stable.\nDeep research recommended.',
-    UNSTABLE: 'Structural instability detected.\nRare opportunity available.',
-    CRITICAL: 'High instability detected.\nProceed with caution.',
-    COLLAPSE: 'Reality layer collapsing.\nExtreme research condition.'
+    STABLE: '世界構造は安定している。\n深部研究を推奨する。',
+    UNSTABLE: '構造的不安定を検知。\n希少な機会が発生している。',
+    CRITICAL: '高い不安定性を検知。\n慎重に行動すること。',
+    COLLAPSE: '現実層が崩壊中。\n極限研究状態。'
   };
 
   function getStatusLogMessage(status) {

@@ -90,6 +90,14 @@
         else if ((context.riskChainLevel || 0) >= HIGH_RISK_CHAIN_THRESHOLD) level = 1;
         else if (context.specialEventTriggered) level = 1;
       }
+
+      // STEP31: AI Director System「Mutation Recommendation」（要求仕様セクション8）。
+      // 既存のStability/追加Trigger判定とは独立した、Directorからの推奨のみを追加する
+      // 形の拡張（context未指定時は従来と完全に同じ挙動）。プレイヤーが簡単すぎる状況で
+      // level===0のままなら1へ引き上げ、逆に苦戦中ならlevel>0でも0へ抑制する
+      if (level === 0 && context.directorBoost) level = 1;
+      if (level > 0 && context.directorSuppress) level = 0;
+
       return level;
     }
 

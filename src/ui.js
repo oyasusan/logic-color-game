@@ -62,7 +62,11 @@
           // STEP30-6: Environment Event Archive
           envEventArchive: document.getElementById('screen-enveventarchive'),
           // STEP30-7: Hidden Environment Archive
-          hiddenArchive: document.getElementById('screen-hiddenarchive')
+          hiddenArchive: document.getElementById('screen-hiddenarchive'),
+          // UI改修: 5種のArchive画面への入口をまとめたハブ画面
+          archiveHub: document.getElementById('screen-archivehub'),
+          // STEP32: Narrative & Story System「RESEARCH DATABASE」画面
+          storyArchive: document.getElementById('screen-storyarchive')
         },
 
         // TITLE
@@ -586,7 +590,7 @@
       toast.textContent = message;
       toast.classList.add('show');
       clearTimeout(this._toastTimer);
-      this._toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+      this._toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
     /**

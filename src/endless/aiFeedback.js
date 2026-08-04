@@ -25,29 +25,29 @@
   const RULES = [
     {
       match: s => s.riskChainMax >= 2.0,
-      observation: 'Your research pattern shows high risk tolerance.',
-      recommendation: 'Continue Unknown Analysis'
+      observation: 'あなたの研究傾向は高いリスク許容度を示している。',
+      recommendation: 'Unknown解析を継続する'
     },
     {
       match: s => (s.nodeTypeCounts.recovery || 0) > (s.nodeTypeCounts.elite || 0) && s.extracted,
-      observation: 'Your research pattern favors cautious, methodical progress.',
-      recommendation: 'Try engaging more Elite Signals for faster growth'
+      observation: 'あなたの研究傾向は慎重かつ堅実な進行を好む。',
+      recommendation: 'Elite Signalへより積極的に挑むと成長が早まる'
     },
     {
       match: s => s.perfectRatio >= 0.7,
-      observation: 'Your puzzle-solving precision is exceptionally high.',
-      recommendation: 'Consider Overclock Protocol for higher rewards'
+      observation: 'あなたのPuzzle解答精度は極めて高い。',
+      recommendation: 'より高い報酬を狙うならOverclock Protocolを検討'
     },
     {
       match: s => (s.nodeTypeCounts.unknown || 0) >= 3,
-      observation: 'You show strong curiosity toward unidentified signals.',
-      recommendation: 'Explorer identity may suit your research style'
+      observation: '未確認信号への強い探究心が見られる。',
+      recommendation: 'Explorer Identityがあなたの研究スタイルに合うかもしれない'
     }
   ];
 
   const DEFAULT_RESULT = {
-    observation: 'Your research approach is balanced across all systems.',
-    recommendation: 'Experiment with different Protocol combinations'
+    observation: 'あなたの研究アプローチは全システムにわたってバランスが取れている。',
+    recommendation: '異なるProtocolの組み合わせを試してみる'
   };
 
   /** @param {RunSummary} summary @returns {{observation:string, recommendation:string}} */

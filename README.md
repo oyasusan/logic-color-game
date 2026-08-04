@@ -1697,3 +1697,78 @@ Environment内で発生する一時的なResearch Event（異常/チャンス）
 **テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（HiddenEnvironmentData/HiddenEnvironmentManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、6種の定義完全性・Exclusive Event/Reward各6種の網羅性（5カテゴリ全て存在）・`checkUnlock`の条件充足判定と永続化・複数条件同時達成・`rollHiddenEnvironment`の確率境界値（`window.Math.random`固定）・`enterHiddenEnvironment`→`getCurrentHiddenEnvironment`→`tickDuration`（duration=1自動退場）→Archive記録のライフサイクル・`getDiscoveryRate`の計算・各効果getterの数値・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計61項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、要求仕様セクション13のTest Flow（①Run開始→②条件達成→③Hidden抽選→④演出→⑤Environment遷移→⑥限定Event→⑦限定Reward→⑧Archive更新→⑨Save→⑩Load確認）を実際のコード経路で通し、Identity/Protocol/Environment Select→RUN初期化→強制解放させたVOID MEMORYのDiscovery Sequence表示（スキップボタンでの即時完了）→入場後のHidden HUD表示→Exclusive Event(Lost Signal)/Exclusive Reward(Hidden Protocol Echo)の実際の効果反映（Research Data/Protocol Fragment増加）→Archive記録（Visit Count/Completion/Reward ID）→次Map選択へのNode重み反映（Unknown強制出現）→1Layer後の自動退場(tickDuration)とHUD非表示・トースト表示→SIMULATION ZEROの`_handleRoundClear()`実行による実際のスコア増加→本番`checkUnlock()`（スタブ無し）でのGENESIS LAB実解放→Archive画面（Discovery Rate 3/6表示・6件全カード・発見済み3件）→MODE SELECTからの導線→別インスタンスでのSave/Reload後の状態復元→既存のSTEP30-3/30-6等既存画面への無影響を含め計43項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
 
 **未実装/既知の制約**: Hidden Reward（Hidden Protocol/Mythic Upgrade/Legend Identity/Hidden Cosmetic）は、既存のProtocol Slot/Upgrade Lv/Research Identityの各システムへ本格的に組み込む（新規Protocol種別の追加やIdentity5種目の新設等）と影響範囲が既存システム全体に及ぶため、Archiveに記録される「収集要素」+実際のゲームプレイ資源（Protocol Fragment/Research Data等）への即時変換という軽量な実装に留めている。PARADOX COREの「Modifier反転」も上記のとおりreward/riskChainBonusの積み増しへ単純化しており、文字どおりの符号反転ではない。
+
+## STEP31: AI Director System
+
+研究施設を統括するAI「AI Director」を追加する要求仕様（STEP31）に基づき実装した。要求仕様のアーキテクチャルール（セクション14）どおり、ゲームシステム全体を直接制御せず、各Manager（endlessGame.js/environmentEventManager.js/worldMutationManager.js/endless.js reward計算）へ「推奨値」を提供するだけのCoordinatorとして設計している。
+
+**新規ファイル**:
+- `src/endless/playerProfile.js`（PlayerProfile） — 要求仕様セクション2の保存項目（averageSolveTime/solveAccuracy/mistakeRate/riskPreference/extractRate/favoriteEnvironment/favoriteProtocol/retryCount）の初期値・EMA（指数移動平均、α=0.25）による更新計算のみを持つ純粋なヘルパー。"runs"は既存`save.getTotalRuns()`と同一概念のため重複データを持たず永続化していない
+- `src/endless/directorPersonality.js`（DirectorPersonality） — 要求仕様セクション4の5人格（ANALYST/MENTOR/CHAOS/OBSERVER/RESEARCHER）を完全にData化した定義。初期人格はANALYST固定（要求仕様が「将来追加可能」と明記しているため、今回は選択UIを実装せず、5人格分のデータ・Dialogue・tuningのみ先行して用意した）
+- `src/endless/directorDialogue.js`（DirectorDialogue） — 要求仕様セクション10のDialogue System。7トリガー（layerStart/mutation/extract/hiddenFound/bossBefore/bossAfter/runEnd）×5人格=35件の一言をJSオブジェクトとして直接埋め込んだデータ（environmentLog.jsと同じ「JSON管理」の実装形式）
+- `src/endless/directorHud.js`（DirectorHud） — 要求仕様セクション11のDirector HUD。「必要最小限の表示とし、UIを圧迫しない」ため、新規の独立オーバーレイパネルは追加せず、既存ENDLESS HUDバー内の`endlessRiskChainBadge`等と同じ並びに1行バッジとして差し込んだ
+- `src/endless/aiDirector.js`（AIDirector） — 要求仕様セクション1の全責務（プレイヤー解析/各Managerへのリクエスト/AIログ生成/Adaptive Difficulty/Dialogue/Run Report）を統括するCoordinator本体
+
+**禁止事項の守り方（要求仕様セクション14）**:
+- Puzzle直接変更: しない。Adaptive Difficultyは既存の全Difficulty系システム（Fractal Core Modifier/Fractal Overflow Mutation/Fractal Shift Event/Simulation Zero Hidden）と全く同じ「制限時間短縮/延長」レバー（`getDirectorPuzzleTimeLimitMultiplier()`）のみで表現し、Puzzle Generator/DifficultyManagerのTier・density計算には一切触れていない
+- Reward直接変更: しない。`getDirectorRewardModifier()`等は既存のReward計算チェーン（`_handleRoundClear`）へ、Environment/Mutation/Event/Hiddenと全く同じ「独立した乗数を1つ追加する」形でのみ関与する
+- Environment直接変更: しない。`recommendEnvironment()`はPlayerProfileから導いた「推薦」を返すだけの読み取り専用APIで、WorldEnvironment/Research Environmentの実際の選択・重み計算ロジックには一切書き込まない（推薦内容はAIログ・Run Reportを通じてプレイヤーへ提示されるのみ、という設計判断）
+
+**Recommendation API（要求仕様セクション6〜9）の実装**:
+- `recommendEnvironment()`: 要求仕様セクション6の3例（慎重プレイ→DATA OCEAN/Risk好き→FRACTAL CORE/Protocol重視→NEURAL FOREST）をそのままPlayerProfileの閾値判定で実装
+- `getEventTriggerRateBonus()`: 「長時間Eventなし」（5Layer以上、要求仕様に数値指定が無かったため設計）でEnvironment Event発生率に加算。`environmentEventManager.checkEventTrigger(context)`へ`directorRateBonus`という新しいcontextキーを追加する形の後方互換拡張で実現
+- `getMutationTriggerBias()`: 「簡単すぎる→boost」「苦戦中→suppress」を`worldMutationManager.checkMutationTrigger(context)`へ`directorBoost`/`directorSuppress`という新しいcontextキーで伝える、同じく後方互換拡張
+- `getDirectorRewardModifier()`/`getDirectorResearchDataMultiplier()`/`getDirectorRareEventWeightBoost()`: 要求仕様セクション9の例（5連敗→Research Data+20%・Rare Reward+）どおり、RUN内の連続ミス数（`_consecutiveMisses`）が5に達した時のみ通常値より大きくなる
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `directorPersonalityId`/`playerProfile`/`directorProfile`/`directorLogs`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった。`playerProfile`は未初期化(null)の間、初回`getPlayerProfile()`呼び出し時に遅延デフォルト補完する設計にした
+- `worldMutationManager.js`: `checkMutationTrigger(context)`に`context.directorBoost`/`context.directorSuppress`の判定を追加（未指定時は完全に従来と同じ挙動）
+- `environmentEventManager.js`: `checkEventTrigger(context)`に`context.directorRateBonus`の加算を追加（同上、後方互換）
+- `endlessGame.js`（EndlessRoundController）: `aiDirector`を受け取り、Adaptive Difficultyを既存の「制限時間短縮/延長」レバーで適用
+- `endlessResult.js`/`index.html`: 要求仕様セクション12のRun Report（AI DIRECTOR REPORT: Average Solve Time/Accuracy/Risk/Favorite Environment/Recommendation）をRESULT画面へ追加
+- `endless.js`: aiDirector/directorHudの生成・配線。Layer移動のたびに`updateLayer()`でAdaptive Difficulty再計算（要求仕様セクション5「AIは毎Layer更新」）、7箇所のDialogueトリガー呼び出し、Reward計算チェーンへの独立した乗数追加、RESULT画面「RETRY」クリック時の`recordRetry()`呼び出しを配線した
+
+**実装中に発見・修正した設計上の問題（jsdom統合テストで検出）**:
+- 新規プロフィール（`averageSolveTime===0`、まだ1問もクリアしていない）の状態で、`solveAccuracy`/`mistakeRate`の楽観的な初期値（それぞれ1/0）をAdaptive Difficultyのスコア計算にそのまま使うと、実績が全く無いプレイヤーがLayer1からいきなり`hard`判定になってしまうバグを発見した。`averageSolveTime>0`（＝実際に1問以上クリアした実績がある）の場合のみsolveAccuracy/mistakeRate/averageSolveTimeをスコアへ反映するよう修正した
+- `ui.showToast()`は単一スロットの「後勝ち（textContent上書き）」実装のため、同一tick内で2回呼ぶと1回目は画面に一切表示されないまま消えることを発見した。具体的には「Boss後Dialogue→即座にBoss撃破報酬トースト」「Extract Dialogue→即座にRun終了(runEnd Dialogue)トースト」「Hidden発見Dialogue→即座にSECRET AREAトースト」の3箇所で発生した。Boss後は両者を1つのトーストへ統合し、Extract/Hidden発見は「直後に別のトーストで必ず上書きされる」既知の構造のため、AIログへの記録のみ行いトースト表示を省略する設計にした（`_showDirectorDialogue(trigger, showToast=false)`という第2引数を新設）
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（PlayerProfile/DirectorPersonality/DirectorDialogue/AIDirectorをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、5人格の定義完全性・35件のDialogue完全性・PlayerProfileの各更新関数（EMA計算・argMax・favoriteEnvironment/favoriteProtocol算出）・Adaptive Difficultyのスコア境界値（スキル/苦戦両パターン）・Mutation/Event/Reward各Recommendation APIの発動条件・Personality別tuning（OBSERVERの不介入含む）・Dialogue取得とログ記録・Run Report生成・worldMutationManager/environmentEventManagerのcontext拡張の後方互換性・実`EndlessSaveStore`での永続化と旧形式セーブからのマイグレーションを含め計74項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、要求仕様セクション15のTest Flow（①Run開始→②Profile更新→③Difficulty調整→④Environment推薦→⑤Dialogue表示→⑥Run終了→⑦Report生成→⑧Save→⑨Load）を実際のコード経路で通し、Identity/Protocol/Environment Select→RUN初期化→Layer1移動でのDirector HUD初回表示とlayerStart Dialogue→Environment Recommendation（riskPreference操作での推薦切替）→Mutation Trigger Biasのcontext伝達確認→強制発生させたMutationでのDialogue+Visual Sequence連携→Event Trigger Rate Bonusのcontext伝達確認→5連敗シミュレーションでのReward Recommendation実反映→Boss前後のDialogue（統合トースト含む）→Extract Dialogue（ログ記録のみ）→Run終了→AI DIRECTOR REPORT表示（RESULT画面の5項目）→RETRYボタンでのretryCount記録→別インスタンスでのSave/Reload後の状態復元→既存のSTEP30-6/30-7等既存画面への無影響を含め計38項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: Personality選択UI（MENTOR/CHAOS/OBSERVER/RESEARCHERへの切り替え導線）は要求仕様が「将来追加可能」と明記しているため今回は実装していない（データ・Dialogue・tuningは5種全て用意済みで、選択APIを追加すればすぐ使える状態）。Director Archive画面（Protocol/Environment/Hidden Archiveと同種の一覧UI）は、要求仕様セクション13が保存データ構造のみを求めており専用UI画面を明示的に要求していないため、今回は追加していない（保存データ自体は`directorProfile.reportHistory`/`directorLogs`として完備している）。
+
+## STEP32: Narrative & Story System
+
+研究施設・AI・世界そのものの物語を断片的に開示するStory/Narrative Systemを追加する要求仕様（STEP32）に基づき実装した。要求仕様のアーキテクチャルール（セクション13）どおり、既存のPuzzle Logic/Reward System/Environment Systemには一切手を加えず、既存の各Managerから「進行状況スナップショット」を読み取って判定するだけの、読み取り専用のCoordinator群として設計している。
+
+**新規ファイル**:
+- `src/endless/storyData.js`（StoryData） — 要求仕様セクション2の6種別（LOG/MEMORY/FILE/AUDIO/EVENT/ENDING）を持つStoryEntry全31件（LOG12/MEMORY6/FILE6/EVENT1/AUDIO1/ENDING5）を完全にData化した定義。`id`/`type`/`category`（Facility/AI/Environment/Protocol/World/Player、内部定数として英語のまま）は演出用に英語のまま、プレイヤーが読む`title`/`content`は日本語にした（フィードバック「プレイヤーが読んで理解すべきものは日本語に」に従う）。`STAGE_DIALOGUE`（early/middle/late/finalの4段階の世界観一言）も同居させた
+- `src/endless/storyUnlockManager.js`（StoryUnlockManager） — 要求仕様セクション5のStory Unlock Manager。`protocolUnlock.js`/`achievements.js`と全く同じ「状態を持たない`{type,value}>=`比較の静的オブジェクト」設計。Hidden Environment固有のFILEのみ、しきい値比較ではなく解放済みid配列への包含判定（`hiddenEnvironmentUnlocked`）にした
+- `src/endless/researchDatabase.js`（ResearchDatabase） — 要求仕様セクション1の必須API（`addEntry`/`getEntry`/`isUnlocked`/`getAllEntries`/`getCompletionRate`）を持つCoordinator本体。実際の永続化は完全に`endlessSave.js`へ委譲し（`metaProgression.js`/`identityManager.js`と同じ設計）、自身は状態を持たない。要求仕様セクション8のStory Stage判定（`getStoryStage()`）と、AI Dialogue側の重複通知防止のための`checkStageTransition()`もここに実装した（境界値early&lt;25%/middle&lt;60%/late&lt;90%/final≥90%は要求仕様に数値指定が無かったため設計した）
+- `src/endless/researchTimeline.js`（ResearchTimeline） — 要求仕様セクション7のTimeline表示。`#researchTimelineList`へ解放順（古い順）の記録を矢印区切りで描画するだけの、状態を持たない描画専任クラス
+- `src/endless/endingManager.js`（EndingManager） — 要求仕様セクション9のEnding System。5種のEnding条件は`storyUnlockManager.js`の単純な`{type,value}>=`比較では表現できない複合条件（World Status/Hidden全種発見/他Systemの完成率の組合せ等）のため、`aiFeedback.js`のRULESテーブルと同じ`match: snapshot => boolean`関数集合として実装した。達成済みEndingは`endingFlags`へ永続化し、一度達成したら二度と失われない
+- `src/endless/storyArchiveUI.js`（StoryArchiveUI） — 要求仕様セクション11の新画面「RESEARCH DATABASE」のDOM描画・タブ切替専任クラス。要求仕様セクション10「Research Codex統合」は、このクラス自身が他System（Protocol/Environment/Mutation/Event/Hidden）へ直接アクセスせず、`getCodexSummary`という読み取り専用関数を`endless.js`側から注入する形にした
+
+**要求仕様に無く、こちらで設計した各Endingの具体的な判定基準**:
+- END A「Complete Research」: 全12件のLOG Entry解放（要求仕様の「主要Story Log完成」）
+- END B「World Collapse」: RUN終了時点でWorld Status=COLLAPSEだったこと
+- END C「AI Liberation」: 全6件のMEMORY Entry解放（要求仕様の「AI Memory Complete」）
+- END D「Simulation Zero」: SIMULATION ZERO（Hidden Environment）内でPuzzle/Elite/Bossを1回以上クリアしたこと（要求仕様の「SIMULATION ZERO攻略」）
+- END TRUE「GENESIS」: 全6種のHidden Environment発見＋Story全体100%＋Layer50到達（要求仕様の「Hidden Environment+Story Complete+Special Conditions」。Special ConditionsはEND A/D等が要求する到達点よりさらに深いLayerを踏んだ経験として設計した）
+
+**禁止事項の守り方（要求仕様セクション13）**:
+- Puzzle Logic変更: しない。Story解放判定・Ending判定はいずれも既存の各Manager/Saveから値を読み取るだけの読み取り専用スナップショットで、Puzzle Generator/DifficultyManager等へは一切書き込まない
+- Reward System改修: しない。Story/Endingはスコア・Research Data計算チェーンに一切関与しない（純粋な「発見・開示」システムとして設計）
+- Environment System改修: しない。FILE解放条件の判定に`hiddenEnvironmentManager`/`worldStabilityManager`の値を「読む」だけで、両System自体には一切書き込まない
+- 「既存ゲームロジックへ直接埋め込まない」: `endless.js`（既に全Systemを束ねるCoordinator）が、Layer移動時（`_handleMapNodeSelected`）とRUN終了時（`_endRun`）の2箇所だけで、各Coordinator（`storyUnlockManager`/`researchDatabase`/`endingManager`）へスナップショットを渡して結果を受け取る「イベント通知」形にした
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `researchDatabase`（`unlockedIds`）/`storyProgress`（`lastNotifiedStage`）/`timelineData`/`endingFlags`/`simulationZeroCleared`を追加。既存のマイグレーション機構がそのまま働くため追加コード不要だった。Timelineは`TIMELINE_LIMIT`(200件)で上限を切る既存の「履歴系フィールド」と同じ設計にした
+- `endless.js`: `researchDatabase`/`researchTimeline`/`endingManager`/`storyArchiveUI`の生成・配線。Layer移動のたびに`_checkStoryUnlocks()`でStory解放判定＋Stage遷移判定を行い（トースト通知のみ、Mutation/Event/Hidden Environment発見の一連の演出チェーンへさらに「続ける」ボタンを積み増さないための設計判断）、Puzzleクリア時にSIMULATION ZERO内クリアを`simulationZeroCleared`として記録し、RUN終了時（`_endRun`）にEnding判定→`researchDatabase`への反映→「続ける」ボタン付きオーバーレイでの通知→RESULT画面遷移、という順で統合した。Research Codex統合用の`_buildResearchCodexSummary()`もここに実装した
+- `index.html`/`ui.js`: 新画面`#screen-storyarchive`（RESEARCH DATABASE）を追加し、ARCHIVE HUB画面（前回UI改修で新設済み）から遷移できるようにした
+
+**実装中に発見・修正した設計上の問題（jsdom統合テストで検出）**:
+- `_checkStoryUnlocks()`内で「新規Story解放通知」と「Stage遷移通知」を続けて`ui.showToast()`していたところ、単一スロットの「後勝ち」実装のため片方が画面に一切表示されないまま消えるバグを発見した（STEP31のDialogue System実装時に発見したのと同種のバグ）。1RUN中で最初にLayer1へ到達した瞬間に両方が同時発火しうるため、実運用でも十分起こりうる不具合だった。両者を1つのトーストへ統合するよう修正した
+
+**テスト**: 2段階で実施した。①jsdom不要のNode.js単体テスト（StoryData/StoryUnlockManager/ResearchDatabase/EndingManagerをwindowレルム内で読み込み、mockのsaveを注入して直接検証）で、StoryData全31件の内訳・`checkUnlockCondition`の各条件タイプ（数値しきい値/Hidden Environment包含判定/null）・ResearchDatabaseの`addEntry`/`isUnlocked`/`getCompletionRate`/`getCompletionByType`・Story Stage判定とStage遷移の重複通知防止・EndingManagerの5種条件判定と永続化・再判定時の非重複を含め計39項目、全PASS。②jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）で、要求仕様のTest Flow（Run開始→Layer進行→条件達成→Story Log取得→AI Dialogue変化→Archive更新→Hidden File取得→Ending条件確認→Save→Load）を実際のコード経路で通し、RUN開始→Layer1移動での`log_001`自動解放とトースト表示→protocolCount条件でのLog解放（RUN開始時デフォルト所持数での自動解放・スナップショットoverrideでの追加解放の両方）→Story Stage遷移（early→middle）でのAI Dialogueトースト→Hidden Environment解放連動のFILE解放→SIMULATION ZERO内クリアでの`simulationZeroCleared`記録→RUN終了でのEND A達成・永続化・ResearchDatabaseへの反映・「続ける」ボタン付きオーバーレイ表示→RESEARCH DATABASE画面（統計表示/Codex一覧/Timeline描画/タブ切替/未解放エントリの「???」表示/戻るボタン）→別インスタンスでのSave/Reload後の状態復元→STEP32フィールドを持たない旧形式セーブからのマイグレーション→既存のSTEP30-7/前回UI改修等既存画面への無影響を含め計49項目、全PASS（テスト用サーバー・jsdomはテスト後に削除、プロジェクトには残していない）。
+
+**未実装/既知の制約**: AI Director Dialogue Integration（要求仕様セクション8）は、5人格×4Stageの組み合わせ全てを個別に用意する完全なクロス積ではなく、AI Directorの人格とは独立した4段階（early/middle/late/final）の「世界観Dialogue」として簡略化して実装した（STEP31で5人格の性格別Dialogueは既に別トリガーとして用意済みのため、Story Stageは人格に依存しない「世界そのものの語り」として役割分担した設計判断）。Research Codexの内訳表示は、要求仕様が挙げた項目のうち実際にゲーム内に存在する集計軸（PROTOCOL/ENVIRONMENT/MUTATION/EVENT/HIDDEN/ACHIEVEMENT/STORY）のみを対象にしている。

@@ -104,7 +104,25 @@
       // discoveryRate（要求仕様セクション11）は、hiddenUnlockFlags.length/HiddenEnvironmentData.ALL.lengthから
       // 都度計算できるため、重複データを持たず永続化しない（既存の"highestDepth"=endlessBestDepth重複回避と同じ設計判断）
       totalResearchLabVisits: 0,   // GENESIS LABの解放条件判定用、生涯Research Lab到達回数
-      lastRunVisitedNodes: []      // ECHO NETWORKの「Ghost Route表示」用、直前RUNのvisitedNodesスナップショット
+      lastRunVisitedNodes: [],     // ECHO NETWORKの「Ghost Route表示」用、直前RUNのvisitedNodesスナップショット
+
+      // ---- STEP31: AI Director System ----
+      directorPersonalityId: 'analyst',  // 要求仕様の"personality"。今回は選択UI未実装のため常にanalyst固定
+      playerProfile: null,        // PlayerProfile.defaultProfile()の内容（nullの間はload()時に補完する）
+      directorProfile: {          // Run Report Archive + Directorの直近状態サマリー
+        totalRunsAnalyzed: 0,
+        lastDifficulty: 'normal',
+        lastRecommendationId: null,
+        reportHistory: []         // { averageSolveTime, accuracy, risk, favoriteEnvironment, recommendationId, timestamp } 直近DIRECTOR_REPORT_LIMIT件
+      },
+      directorLogs: [],           // { trigger, personality, line, timestamp } 直近DIRECTOR_LOG_LIMIT件
+
+      // ---- STEP32: Narrative & Story System ----
+      researchDatabase: { unlockedIds: [] },     // 解放済みStoryEntry id一覧（ENDING typeも含む、endingManager.js経由で追加）
+      storyProgress: { lastNotifiedStage: null }, // AI Dialogue Integration用、直近通知済みのStory Stage
+      timelineData: [],           // { id, timestamp } 解放順（古い順）のResearch Timelineデータ
+      endingFlags: [],            // 達成済みEnding id一覧（一度達成したら二度と失われない）
+      simulationZeroCleared: false // END D「Simulation Zero」の解放条件用、生涯フラグ
     };
   }
 
@@ -115,6 +133,9 @@
   const MUTATION_HISTORY_LIMIT = 100; // STEP30-5: World Mutation履歴の保持件数上限
   const ENVIRONMENT_EVENT_HISTORY_LIMIT = 100; // STEP30-6: Environment Event履歴の保持件数上限
   const HIDDEN_VISIT_HISTORY_LIMIT = 100; // STEP30-7: Hidden Environment入場履歴の保持件数上限
+  const DIRECTOR_LOG_LIMIT = 100;    // STEP31: AI Directorログの保持件数上限
+  const DIRECTOR_REPORT_LIMIT = 50;  // STEP31: Run Report Archiveの保持件数上限
+  const TIMELINE_LIMIT = 200;        // STEP32: Research Timelineの保持件数上限
 
   class EndlessSaveStore {
     constructor() {
@@ -764,6 +785,132 @@
 
     getLastRunVisitedNodes() {
       return this.data.lastRunVisitedNodes.slice();
+    }
+
+    /** ---------------- STEP31: AI Director System ---------------- */
+
+    getDirectorPersonalityId() {
+      return this.data.directorPersonalityId;
+    }
+
+    setDirectorPersonalityId(id) {
+      this.data.directorPersonalityId = id;
+      this.save();
+    }
+
+    /** @returns {Object} PlayerProfile.defaultProfile()と同じ形。未初期化ならその場でdefaultを補完し保存する */
+    getPlayerProfile() {
+      if (!this.data.playerProfile) {
+        this.data.playerProfile = G.PlayerProfile ? G.PlayerProfile.defaultProfile() : {};
+        this.save();
+      }
+      return this.data.playerProfile;
+    }
+
+    setPlayerProfile(profile) {
+      this.data.playerProfile = profile;
+      this.save();
+    }
+
+    getDirectorProfile() {
+      return this.data.directorProfile;
+    }
+
+    /** @param {{trigger:string, personality:string, line:string}} entry */
+    recordDirectorLog(entry) {
+      this.data.directorLogs.push(Object.assign({ timestamp: Date.now() }, entry));
+      if (this.data.directorLogs.length > DIRECTOR_LOG_LIMIT) {
+        this.data.directorLogs.splice(0, this.data.directorLogs.length - DIRECTOR_LOG_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近のログから新しい順 */
+    getDirectorLogs() {
+      return this.data.directorLogs.slice().reverse();
+    }
+
+    /** @param {{averageSolveTime:number, accuracy:number, risk:number, favoriteEnvironment:string|null, recommendation:Object|null}} report */
+    recordDirectorReport(report) {
+      this.data.directorProfile.totalRunsAnalyzed++;
+      if (report.difficulty) this.data.directorProfile.lastDifficulty = report.difficulty;
+      this.data.directorProfile.lastRecommendationId = report.recommendation ? report.recommendation.id : null;
+      this.data.directorProfile.reportHistory.push(Object.assign(
+        { recommendationId: report.recommendation ? report.recommendation.id : null, timestamp: Date.now() },
+        { averageSolveTime: report.averageSolveTime, accuracy: report.accuracy, risk: report.risk, favoriteEnvironment: report.favoriteEnvironment }
+      ));
+      if (this.data.directorProfile.reportHistory.length > DIRECTOR_REPORT_LIMIT) {
+        this.data.directorProfile.reportHistory.splice(0, this.data.directorProfile.reportHistory.length - DIRECTOR_REPORT_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近のRun Reportから新しい順 */
+    getDirectorReportHistory() {
+      return this.data.directorProfile.reportHistory.slice().reverse();
+    }
+
+    /** ---------------- STEP32: Narrative & Story System ---------------- */
+
+    getResearchDatabaseUnlockedIds() {
+      return this.data.researchDatabase.unlockedIds.slice();
+    }
+
+    isResearchDatabaseEntryUnlocked(id) {
+      return this.data.researchDatabase.unlockedIds.indexOf(id) !== -1;
+    }
+
+    /** @returns {boolean} 新規解放ならtrue（既に解放済みならfalse） */
+    unlockResearchDatabaseEntry(id) {
+      if (this.isResearchDatabaseEntryUnlocked(id)) return false;
+      this.data.researchDatabase.unlockedIds.push(id);
+      this.save();
+      return true;
+    }
+
+    /** @param {{id:string, timestamp:number}} entry */
+    recordTimelineEntry(entry) {
+      this.data.timelineData.push(entry);
+      if (this.data.timelineData.length > TIMELINE_LIMIT) {
+        this.data.timelineData.splice(0, this.data.timelineData.length - TIMELINE_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 解放順（古い順）のTimelineデータ */
+    getTimelineData() {
+      return this.data.timelineData.slice();
+    }
+
+    getStoryProgress() {
+      return this.data.storyProgress;
+    }
+
+    setStoryProgressStage(stage) {
+      this.data.storyProgress.lastNotifiedStage = stage;
+      this.save();
+    }
+
+    getEndingFlags() {
+      return this.data.endingFlags.slice();
+    }
+
+    /** @returns {boolean} 新規達成ならtrue（既に達成済みならfalse） */
+    recordEndingAchieved(id) {
+      if (this.data.endingFlags.indexOf(id) !== -1) return false;
+      this.data.endingFlags.push(id);
+      this.save();
+      return true;
+    }
+
+    hasSimulationZeroCleared() {
+      return this.data.simulationZeroCleared;
+    }
+
+    setSimulationZeroCleared() {
+      if (this.data.simulationZeroCleared) return;
+      this.data.simulationZeroCleared = true;
+      this.save();
     }
   }
 

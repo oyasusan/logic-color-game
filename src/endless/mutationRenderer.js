@@ -86,7 +86,7 @@
       if (this.el.processingPhase) this.el.processingPhase.classList.add('hidden');
       if (this.el.completePhase) this.el.completePhase.classList.remove('hidden');
       const def = this._pendingDef;
-      if (this.el.completeName) this.el.completeName.textContent = def ? `${def.name} DETECTED` : '';
+      if (this.el.completeName) this.el.completeName.textContent = def ? `${def.name} を検知` : '';
       if (this.el.completeDesc) this.el.completeDesc.textContent = def ? def.description : '';
     }
 
