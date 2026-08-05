@@ -79,6 +79,7 @@
       this.ui.showDialogue({
         speakerName: character ? character.name : line.speaker,
         text: line.text,
+        speakerId: line.speaker, // STEP43.5: Dialogue Text Sound（キャラクター別tick音）
         onTap: () => this.nextLine()
       });
     }

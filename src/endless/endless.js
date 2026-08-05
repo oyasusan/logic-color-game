@@ -66,7 +66,11 @@
     ChapterArchiveUI, ResearchArchiveUI,
     PrologueManager,
     CognitiveTheme,
-    ThemeManager, EvolutionTransition
+    ThemeManager, EvolutionTransition,
+    ResearchConsoleHud,
+    ResearchEventManager, ResearchEventBanner,
+    FacilityRestorationManager, ResearchGrade, DatabaseCompletion, ResearchReportUI,
+    AudioManager, AdaptiveMusicEngine, FeedbackManager
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -95,6 +99,15 @@
     ending_b: 'epilogue_bad'
   };
   const ENDING_ICON = { ending_a: '🎬', ending_true: '🌟', ending_d: '🕵️', ending_b: '💥' };
+  // STEP43: Research Progression System「ARIA帰還演出」。RUN終了直後、Research Report画面の
+  // 冒頭に表示する短い一言（ランダムに1件選ぶ）。ARIAは「感情ではなく理解能力を獲得する存在」
+  // （Story Bible 2章）という既存方針のため、STEP42のARIA Eventと同じ冷静なトーンに揃えた
+  const ARIA_REPORT_LINES = [
+    '解析結果を保存しています。',
+    'お疲れ様でした、Researcher-01。',
+    '今回の記録をアーカイブへ転送します。',
+    'データは正常に保存されました。'
+  ];
   const RECOVERY_BASE_INTERVAL = 3;     // Recovery Protocol未所持時は回復しない。所持時の基準クリア間隔
   const ELITE_SCORE_MULTIPLIER = 1.5;   // Elite Node撃破時の総獲得スコア倍率
   const ELITE_FRAGMENT_BONUS = 2;       // Elite Node撃破時に追加で獲得するProtocol Fragment数
@@ -202,6 +215,20 @@
       this._previousEvolutionThemeId = null; // RUN内で直前に表示していたTheme（RUNごとにリセット）
       this._currentEvolutionTheme = null;    // クリア演出のテキスト等が参照する「現在のTheme」
 
+      // ---- STEP41-4: Research Console System（Header/System Status Panel/Analysis Log/Mini Map） ----
+      this.researchConsoleHud = new ResearchConsoleHud();
+      this._analysisLog = []; // RUNスコープのリングバッファ（最大5件、永続化しない）
+
+      // ---- STEP42: Dynamic Research Event System（演出専用、ゲームルール・判定に一切影響しない） ----
+      this.researchEventManager = new ResearchEventManager({ save: this.save });
+      this.researchEventBanner = new ResearchEventBanner();
+
+      // ---- STEP43.6: Adaptive Music System & Audio Data Architecture。BGM/System SE/
+      // Ambient/Environment Audioの生成・スケジューリングは全てこのインスタンスに委譲する
+      // （endless.js自身はLayer番号とゲームイベントを伝えるだけで、Web Audioには触れない） ----
+      this.adaptiveMusicEngine = new AdaptiveMusicEngine();
+      if (G.AudioDebugPanel) G.AudioDebugPanel.bind(this.adaptiveMusicEngine);
+
       // ---- STEP30-3: Environment Visual / HUD Evolution ----
       this.environmentScan = new EnvironmentScan({ ui });
       this.transitionManager = new TransitionManager({ ui });
@@ -215,6 +242,23 @@
       // environmentManager/mapUIより先に作る（Rank解放Environmentのフィルタ・
       // Advanced Analysisの解析確率に参照させるため）
       this.metaProgression = new MetaProgression({ save: this.save, identityManager: this.identityManager });
+
+      // ---- STEP43.6追加要件「Audio Timeline System」。画面側(endless.js)がTimelineへ
+      // 触れるのはfeedbackManager.trigger()のみとし、AudioTimelineManager自体は直接操作しない ----
+      if (G.AudioTimelineManager) G.AudioTimelineManager.setMusicEngine(this.adaptiveMusicEngine);
+      this.feedbackManager = new FeedbackManager({ metaProgression: this.metaProgression });
+
+      // ---- STEP43: Research Progression System（researchDatabase/memoryManager/
+      // relationshipManager/endingManager/metaProgressionはすべて上で生成済みのため、
+      // それらに依存するFacilityRestorationManager/ResearchReportUIをここで生成する） ----
+      this.facilityRestoration = new FacilityRestorationManager({
+        save: this.save, researchDatabase: this.researchDatabase, memoryManager: this.memoryManager
+      });
+      this.researchReportUI = new ResearchReportUI();
+      this._memoriesThisRun = [];       // RUNスコープ、永続化しない
+      this._protocolsUnlockedThisRun = []; // RUNスコープ、永続化しない
+      this._runTimeline = [];           // RUNスコープ、永続化しない
+      this._relationshipAtRunStart = {}; // RUNスコープ、永続化しない
 
       this.environmentManager = new EnvironmentManager({ ui, metaProgression: this.metaProgression });
       this.round = new EndlessRoundController({
@@ -232,7 +276,12 @@
         onRetry: () => { this.aiDirector.recordRetry(); this._showNeuralLab(true); },
         onTitle: () => this._exitToTitle()
       });
-      this.neuralLab = new NeuralLab({ ui, save: this.save, metaProgression: this.metaProgression, identityManager: this.identityManager });
+      this.neuralLab = new NeuralLab({
+        ui, save: this.save, metaProgression: this.metaProgression, identityManager: this.identityManager,
+        // STEP43: Database Completion（RESEARCH ARCHIVE要約の拡張）
+        researchDatabase: this.researchDatabase, memoryManager: this.memoryManager,
+        relationshipManager: this.relationshipManager, endingManager: this.endingManager
+      });
       this.neuralLab.onStartRun = () => this.startRun();
       this.neuralLab.onExit = () => this.showModeSelect();
 
@@ -505,6 +554,7 @@
     _handleExtractReturn(bonus) {
       this.researchData += bonus;
       this._extractedThisRun = true; // STEP29: AI Feedback Systemの分析材料
+      this._runTimeline.push({ icon: '🚀', label: 'Extract成功' }); // STEP43: Research Report
       // STEP30-4: 「Extract成功」+5
       this.worldStabilityManager.increaseStability(STABILITY_DELTA_EXTRACT_SUCCESS, { layer: this.depth, event: 'Extract成功' });
       // STEP31: Dialogue System。直後の_endRun()が'runEnd'トーストで即座に上書きするため、
@@ -785,6 +835,7 @@
       this.environmentManager.restoreSelection(snapshot.environmentSelectedId, snapshot.environmentResolvedId);
       this._continueTargetLayer = snapshot.nextLayer;
       this._continueVisitedNodes = (snapshot.mapVisitedNodes || []).slice();
+      if (this.feedbackManager) this.feedbackManager.trigger('continueEvent'); // STEP43.6追加要件: Audio Timeline System
       this._initializeRun();
     }
 
@@ -902,6 +953,29 @@
 
       this.app.mode = 'endless';
       if (this.el.endlessHud) this.el.endlessHud.classList.remove('hidden');
+      // STEP41-4: Research Console System。RUN開始のタイミングでHeader/System Status
+      // Panel・Signal Injection Panel装飾・Scanline演出を有効化する（endlessHudと同じ寿命）
+      this._analysisLog = [];
+      this.researchConsoleHud.show();
+      this.researchConsoleHud.renderAnalysisLog(this._analysisLog);
+      this.researchConsoleHud.setAriaActive(false);
+      // STEP43.6: Adaptive Music System。RUNごとに新しいMusic Seedを生成する
+      // （要求仕様「Music Seed」セクション、Unknown ModeのPattern/Texture/Pulse/
+      // コード変化の決定的なランダム生成に使う。Save側には保存しない設計）
+      if (this.adaptiveMusicEngine) this.adaptiveMusicEngine.startRun(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+      const screenEl = document.getElementById('screen-game');
+      if (screenEl) screenEl.classList.add('research-console-active');
+      this._renderResearchConsole();
+      this.researchEventManager.reset(); // STEP42: Dynamic Research Event System。直近表示idの重複抑制をRUNごとにリセット
+      this.researchEventBanner.hide();
+      // STEP43: Research Progression System。Research Report用のRUNスコープ状態をリセットする
+      this._memoriesThisRun = [];
+      this._protocolsUnlockedThisRun = [];
+      this._runTimeline = [{ icon: '🚪', label: 'RESEARCH開始' }];
+      this._relationshipAtRunStart = {};
+      CharacterData.ALL.filter(c => c.id !== 'system').forEach(c => {
+        this._relationshipAtRunStart[c.id] = this.relationshipManager.getRelationship(c.id);
+      });
       this._renderProtocolBadge();
       this._renderEnvironmentBadge();
       this.ui.renderGameHeader({ label: 'ENDLESS RESEARCH', starsText: '' });
@@ -984,7 +1058,12 @@
       newlyUnlockable.forEach(id => {
         if (!this.save.unlockProtocol(id)) return; // 既に解放済み（念のための二重判定ガード）
         const def = ProtocolUnlock.getById(id);
-        if (def) this.ui.showProtocolDiscovery(def);
+        if (def) {
+          this.ui.showProtocolDiscovery(def);
+          if (this.feedbackManager) this.feedbackManager.trigger('protocolObtain'); // STEP43.6
+          this._protocolsUnlockedThisRun.push(def); // STEP43: Research Report
+          this._runTimeline.push({ icon: '📡', label: `Protocol取得: ${def.name}` });
+        }
       });
     }
 
@@ -1135,6 +1214,7 @@
       // STEP30-1: Layer移動のたびにEnvironmentを確定させる（Layerは今RUNのDepthそのもの）
       const worldEnvResult = this.worldEnvironmentManager.setCurrentEnvironment(this.depth);
       this._renderWorldEnvironmentBadge(worldEnvResult.def);
+      if (this.adaptiveMusicEngine) this.adaptiveMusicEngine.setWorldEnvironment(worldEnvResult.def.id); // STEP43.6追加要件: Facility Audio Theme
       // STEP30-2: 現在Environmentが持つModifierを発見済みとして記録する（Random Modifierは
       // 都度別の実体に解決されるため、その時点で借用された側のidがそのまま記録される）
       this.environmentModifierManager.getActiveModifiers().forEach(m => this.save.recordEnvironmentModifierDiscovery(m.id));
@@ -1153,6 +1233,9 @@
       const previousDef = this._previousWorldEnvDef;
       const changedThisRun = !previousDef || previousDef.id !== worldEnvResult.def.id;
       this._previousWorldEnvDef = worldEnvResult.def;
+      // STEP43.6追加要件: Audio Timeline System。previousDefがnull(RUN内最初のLayer)は
+      // 「変化」ではなく「初期化」のため、本イベントの対象外とする
+      if (changedThisRun && previousDef && this.feedbackManager) this.feedbackManager.trigger('environmentChange');
 
       // STEP30-4: 「Unknown Dimension進入」-15。UNKNOWN DIMENSIONへ実際に切り替わった瞬間のみ
       if (changedThisRun && worldEnvResult.def.id === 'env_unknown') {
@@ -1182,12 +1265,46 @@
       const themeChangedThisRun = !this._previousEvolutionThemeId || this._previousEvolutionThemeId !== themeDef.id;
       this._previousEvolutionThemeId = themeDef.id;
       this._applyEvolutionTheme(themeDef); // 背景/Node Theme/UIカラーは変化の有無に関わらず常に最新へ揃える
+      this._renderResearchConsole(); // STEP41-4: Header/Mini MapのTheme名・Depthを常に最新へ揃える
+      this._rollResearchEvent(themeChangedThisRun); // STEP42: Dynamic Research Event System
+      if (this.adaptiveMusicEngine) {
+        // STEP43.6: Adaptive Music System。Layer Theme BGM/密度/コード進行の切替は
+        // すべてsetLayer()側（themeManager.jsと同じPhase境界を内部で参照する）に委ねる。
+        // その後のonGameEvent('layerStart')がSFX再生＋コード進行の即時進行を担う
+        this.adaptiveMusicEngine.setLayer(this.depth);
+        this.feedbackManager.trigger('layerStart');
+      }
 
       if (themeChangedThisRun) {
+        // STEP41-4: Phase変化時は既存のTheme Transitionオーバーレイ（Theme名を含む）が
+        // 「Research Area」の告知役を兼ねるため、ここでの追加トーストは出さない
+        // （情報の重複・オーバーレイ直後のトースト表示による見づらさを避けるため）
+        this._pushAnalysisLog(`Research area updated: ${themeDef.name}`, '🗺️');
         this.evolutionTransition.show(themeDef, () => this._afterLayerEnvironmentReady(node));
       } else {
+        // STEP41-4: Research Console System「Research Area display」（要求仕様セクション3）。
+        // Phase変化を伴わない通常のLayer開始時は、短い自動消滅トーストで
+        // Research Area/Theme名/Depthを毎Layer案内する（読む必要のある情報ではないため
+        // 「情報系オーバーレイは自動消滅させない」方針の対象外＝既存ui.showToastを使う）
+        this.ui.showToast(`📡 RESEARCH AREA: ${themeDef.name} / DEPTH ${this.depth}`);
         this._afterLayerEnvironmentReady(node);
       }
+    }
+
+    /**
+     * STEP42: Dynamic Research Event System。Layer開始のたびに1回だけ抽選する
+     * （要求仕様セクション2「Layer開始時に抽選」）。Story固定イベント以外は、Theme
+     * Transitionオーバーレイが表示されるLayer（既に演出が集中している）では
+     * 抽選しない（`allowRandom:false`）。バナー表示は非モーダルのため、この判定自体が
+     * 後続の`_afterLayerEnvironmentReady`/Puzzle開始を一切ブロックしない
+     * （「ゲームテンポを阻害しない」要件を満たす）。
+     * @param {boolean} themeChangedThisRun
+     */
+    _rollResearchEvent(themeChangedThisRun) {
+      const eventDef = this.researchEventManager.rollEvent(this.depth, { allowRandom: !themeChangedThisRun });
+      if (!eventDef) return;
+      this.researchEventBanner.show(eventDef);
+      this.researchEventManager.recordShown(eventDef, { run: this.save.getTotalRuns() + 1, layer: this.depth });
     }
 
     /**
@@ -1231,7 +1348,14 @@
         });
         screenEl.style.removeProperty('--evolution-accent');
         screenEl.style.removeProperty('--evolution-accent-soft');
+        // STEP41-4: Research Console System。Signal Injection Panel装飾・Scanline演出も
+        // 同じタイミングでStage/Tutorial/Daily Puzzleへ残さない
+        screenEl.classList.remove('research-console-active');
       }
+      this.researchConsoleHud.hide();
+      this.researchEventBanner.hide(); // STEP42: Dynamic Research Event System
+      if (this.adaptiveMusicEngine) this.adaptiveMusicEngine.stopRun(); // STEP43.6
+      if (this.feedbackManager) this.feedbackManager.notify('runEnd'); // STEP43.6追加要件: Audio Timeline System
     }
 
     /**
@@ -1257,6 +1381,7 @@
           if (wasInHidden && !this.hiddenEnvironmentManager.getCurrentHiddenEnvironment()) {
             this.hiddenEnvironmentRenderer.hideHud();
             this.ui.showToast('秘匿領域から離脱した');
+            if (this.adaptiveMusicEngine) this.adaptiveMusicEngine.setHiddenEnvironment(null); // STEP43.6追加要件: Facility Audio Theme
           }
           this._checkHiddenEnvironmentTrigger(() => this._enterNode(node));
         });
@@ -1432,6 +1557,12 @@
         this.hiddenEnvironmentManager.enterHiddenEnvironment(def.id, { run: this.save.getTotalRuns() + 1, layer: this.depth });
         this.hiddenEnvironmentRenderer.showHud(def);
         this.ui.showToast(`秘匿領域: ${def.name}`);
+        this._pushAnalysisLog(`Anomaly detected: ${def.name}`, '⚠️'); // STEP41-4: Analysis Log
+        this._runTimeline.push({ icon: '⚠️', label: `秘匿領域発見: ${def.name}` }); // STEP43: Research Report
+        if (this.adaptiveMusicEngine) {
+          this.feedbackManager.trigger('hiddenEnvironment'); // STEP43.6
+          this.adaptiveMusicEngine.setHiddenEnvironment(def.id); // STEP43.6追加要件: Facility Audio Theme
+        }
         // STEP31: Dialogue System。直上の「SECRET AREA」トーストを上書きしてしまうため、
         // ここではAIログへの記録のみ行いトースト表示は省略する
         this._showDirectorDialogue('hiddenFound', false);
@@ -1702,6 +1833,7 @@
           this._maybeShowAriaAnalysisIntro(); // STEP41-1: Cognitive Neural Mapping System
           this.ui.showScreen('game');
           this.round.start(this.depth, node);
+          if (this.feedbackManager) this.feedbackManager.trigger('puzzleStart'); // STEP43.6
           this._renderNodeIndicator();
           break;
         case 'elite':
@@ -1709,6 +1841,7 @@
           this._maybeShowAriaAnalysisIntro(); // STEP41-1: Cognitive Neural Mapping System
           this.ui.showScreen('game'); // Map画面から遷移するため、Puzzle開始前に明示的に切り替える
           this.round.start(this.depth, node);
+          if (this.feedbackManager) this.feedbackManager.trigger('puzzleStart'); // STEP43.6
           this._renderNodeIndicator();
           break;
         case 'event':
@@ -1737,6 +1870,7 @@
           // 未知のNode種類が万一渡ってきた場合の安全弁。通常のPuzzleとして扱う
           this.ui.showScreen('game');
           this.round.start(this.depth, node);
+          if (this.feedbackManager) this.feedbackManager.trigger('puzzleStart'); // STEP43.6
           this._renderNodeIndicator();
       }
     }
@@ -2111,6 +2245,66 @@
       if (this.el.endlessResearchDataValue) this.el.endlessResearchDataValue.textContent = String(this.researchData);
       this._renderLife();
       this._renderUpgrades();
+      this._renderResearchConsole();
+      // STEP43.6追加要件「Dynamic Layer Mixing」。新しいポーリングタイマーは追加せず、
+      // 既存の高頻度更新タイミング(_renderHud())に相乗りする
+      if (this.adaptiveMusicEngine) {
+        this.adaptiveMusicEngine.syncGameState({
+          riskChainLevel: this.riskChain.getChainLevel(),
+          worldStabilityStatus: this.worldStabilityManager.getStatus(),
+          isBossActive: !!(this.round && this.round.game && this.round.game.isBoss && !this.round.game.cleared)
+        });
+      }
+    }
+
+    /**
+     * STEP41-4: Research Console System。System Status Panel/Header/Mini Research Map
+     * の表示更新。5項目すべて既存データ（World Stability/Life/Protocol/AI Director/
+     * Neural Evolution Theme）から導出した装飾的表示のみで、新しいゲーム状態は
+     * 一切追加しない（要求仕様セクション2「演出的/参考データとして管理」）。
+     */
+    _renderResearchConsole() {
+      const themeDef = this._currentEvolutionTheme || this.themeManager.getTheme(Math.max(this.depth, 1));
+      const phases = G.EvolutionThemeData ? G.EvolutionThemeData.PHASES : [];
+      const phaseIndex = Math.max(0, phases.findIndex(p => p.id === themeDef.id));
+      const phase = phases[phaseIndex] || { startLayer: 1, endLayer: 4 };
+      const span = phase.endLayer === Infinity ? null : (phase.endLayer - phase.startLayer + 1);
+      const posInPhase = Math.max(0, this.depth - phase.startLayer + 1);
+      const phaseProgressPercent = span ? Math.min(100, Math.round((posInPhase / span) * 100)) : 100;
+      const phaseLabel = span
+        ? `PHASE ${phaseIndex + 1} · DEPTH ${this.depth}/${phase.endLayer}`
+        : `PHASE ${phaseIndex + 1} · DEPTH ${this.depth}`;
+
+      const stabilityStatus = this.worldStabilityManager.getStatus();
+      const facilityStatus = { STABLE: 'NOMINAL', UNSTABLE: 'DEGRADED', CRITICAL: 'CRITICAL', COLLAPSE: 'OFFLINE' }[stabilityStatus] || 'NOMINAL';
+      const memoryIntegrity = this.maxLife > 0 ? Math.round((this.life / this.maxLife) * 100) : 100;
+      const activeProtocolDefs = this.protocolManager.getActiveDefs();
+      const protocolLabel = activeProtocolDefs.length ? activeProtocolDefs.map(d => d.name).join(' + ') : '-';
+      const aiStatus = `${this.aiDirector.getPersonality().name} · ${this.aiDirector.getState().currentGoal}`;
+
+      this.researchConsoleHud.render({
+        depth: this.depth,
+        themeName: themeDef.name,
+        facilityStatus,
+        memoryIntegrity,
+        nodeStability: Math.round(this.worldStabilityManager.getStability()),
+        nodeStabilityStatus: stabilityStatus,
+        protocolLabel,
+        aiStatus,
+        phaseLabel,
+        phaseProgressPercent
+      });
+    }
+
+    /**
+     * STEP41-4: Analysis Log。直近5件のイベントを新しい順に保持するRUNスコープの
+     * リングバッファ（永続化しない、researchLab訪問等と同じ「メモリ上だけの状態」）。
+     * @param {string} text @param {string} [icon]
+     */
+    _pushAnalysisLog(text, icon) {
+      this._analysisLog.unshift({ text, icon: icon || '▹' });
+      if (this._analysisLog.length > 5) this._analysisLog.length = 5;
+      this.researchConsoleHud.renderAnalysisLog(this._analysisLog);
     }
 
     _renderLife() {
@@ -2197,6 +2391,7 @@
             * this.identityManager.getPerfectBonusMultiplier()
         );
         this.perfectCount++;
+        if (this.feedbackManager) this.feedbackManager.trigger('perfect'); // STEP43.6
       }
       reward += speedBonus;
       // Overclockアップグレードで総獲得スコアが倍率アップし、Protocol（Explorer/Overclock）・
@@ -2306,6 +2501,9 @@
       let newlyCollectedMemory = null;
       if (layerEvent && layerEvent.memoryId && this.memoryManager.collectMemory(layerEvent.memoryId)) {
         newlyCollectedMemory = MemoryData.getById(layerEvent.memoryId);
+        this._pushAnalysisLog(`Memory detected: ${newlyCollectedMemory.title}`, '🧠'); // STEP41-4: Analysis Log
+        this._memoriesThisRun.push(newlyCollectedMemory); // STEP43: Research Report
+        this._runTimeline.push({ icon: '🧠', label: `Memory取得: ${newlyCollectedMemory.title}` });
       }
       // STEP34セクション1「Relationship Update」。layerEvent.relationshipChangeが正本
       // （ARIAの状態遷移＝checkAriaEvolution自体は、下のStory演出が完了した直後まで遅らせる。
@@ -2314,6 +2512,7 @@
       // 実テストで検出したため＝STEP32-4実装時からの既知の設計判断）
       if (layerEvent && layerEvent.relationshipChange) {
         this.relationshipManager.addRelationship(layerEvent.relationshipChange.character, layerEvent.relationshipChange.value);
+        if (this.feedbackManager) this.feedbackManager.trigger('relationshipChange'); // STEP43.6
       }
       // STEP36セクション2: Story Event管理システムへ`protocolId`を追加。layerEvent.protocolIdが
       // 取得条件の正本。`save.unlockProtocol()`は既に解放済みなら何もせずfalseを返す
@@ -2322,6 +2521,10 @@
       let newlyUnlockedProtocol = null;
       if (layerEvent && layerEvent.protocolId && this.save.unlockProtocol(layerEvent.protocolId)) {
         newlyUnlockedProtocol = ProtocolUnlock.getById(layerEvent.protocolId);
+        this._pushAnalysisLog(`Protocol activated: ${newlyUnlockedProtocol.name}`, '📡'); // STEP41-4: Analysis Log
+        if (this.feedbackManager) this.feedbackManager.trigger('protocolObtain'); // STEP43.6
+        this._protocolsUnlockedThisRun.push(newlyUnlockedProtocol); // STEP43: Research Report
+        this._runTimeline.push({ icon: '📡', label: `Protocol取得: ${newlyUnlockedProtocol.name}` });
       }
       // STEP37セクション3: Story Event管理システムへ`characterDiscovery`を追加。
       // layerEvent.characterDiscoveryが対象キャラクターidの正本。既にDISCOVERED済みなら
@@ -2344,6 +2547,7 @@
       let directorLine = null;
       if (stats.isBoss) {
         this._grantIdentityExp('bossClear'); // STEP29: SurvivalistのEXP源
+        this._runTimeline.push({ icon: '👑', label: `Boss撃破: ${stats.bossName || 'Boss'}` }); // STEP43: Research Report
         directorLine = this._showDirectorDialogue('bossAfter', false);
       }
       // STEP31: AI Director System「プレイヤー解析」。Adaptive Difficultyの入力(Solve Time/Accuracy)を更新する
@@ -2368,6 +2572,8 @@
       let message = details.join(' / ');
       if (directorLine) message += ` / 🤖 "${directorLine}"`;
 
+      this._pushAnalysisLog('Node synchronized', '🔗'); // STEP41-4: Analysis Log
+      if (this.feedbackManager) this.feedbackManager.trigger('puzzleClear'); // STEP43.6
       this._renderHud();
       this._recordPuzzleHistory(stats, true);
       // STEP41-1: Cognitive Neural Mapping System。要求仕様の3段階クリア演出
@@ -2381,7 +2587,10 @@
         const syncToast = this._currentEvolutionTheme ? this._currentEvolutionTheme.syncToast
           : (CognitiveTheme ? CognitiveTheme.TERMS.syncPhaseToast : null);
         if (analysisToast) this.ui.showToast(analysisToast);
-        if (syncToast) setTimeout(() => this.ui.showToast(syncToast), 450);
+        if (syncToast) setTimeout(() => {
+          this.ui.showToast(syncToast);
+          if (AudioManager) AudioManager.playUiSfx('nodeSync'); // STEP43.6: System SE（14ゲームイベントの外、System Sound単体）
+        }, 450);
       }
       // UI改修: クリア演出（盤面のライン消灯・効果音）を見る間を置いてから、
       // 一連の演出（Story→Reward）を開始する（以前は同じ待ち時間の後トースト表示のみで
@@ -2392,6 +2601,7 @@
       const nextStep = this.life <= 0 ? () => this._endRun() : () => this._afterRoundEnd();
 
       const showRewardOverlay = () => {
+        if (this.feedbackManager) this.feedbackManager.trigger('layerComplete'); // STEP43.6
         this.ui.showNodeResult({
           icon: stats.isBoss ? '👑' : stats.isElite ? '⚔️' : '✅',
           title,
@@ -2441,13 +2651,19 @@
         storySteps.push({ type: 'characterDiscovered', character: newlyDiscoveredCharacter });
       }
 
+      // STEP43.6: 「Story終了」イベントは実際にStory演出が1つでもあったLayerでのみ発火させる
+      // （storySteps=空のまま何も無い通常のLayerクリアでは鳴らさない）
+      const hadAnyStorySteps = storySteps.length > 0;
+
       const playNextStoryStep = () => {
         if (storySteps.length === 0) {
+          if (hadAnyStorySteps && this.feedbackManager) this.feedbackManager.trigger('storyEnd');
           // STEP32-4: ARIA状態遷移はStory演出が完全に終わった後に判定する
           // （このLayerクリアで表示されるDialogueのcondition評価に影響させないため）
           this.relationshipManager.checkAriaEvolution();
           // STEP32-5-1: Chapter Complete表示。Story演出が完全に終わった後にのみ表示する
           if (chapterJustCompleted) {
+            this._runTimeline.push({ icon: '📖', label: `Chapter完了: ${chapterBeforeClear.title}` }); // STEP43: Research Report
             // STEP39-2セクション6: 「Layer30終了後、EndingManagerへ遷移する処理を追加」。
             // Final Chapter（chapter06）完了時のみ、CHAPTER 06 COMPLETE表示の直後に
             // EndingManagerを確認する（Chapter1〜5のChapter Complete表示は変更しない）
@@ -2462,6 +2678,7 @@
         }
         const step = storySteps.shift();
         if (step.type === 'memoryFound') {
+          if (this.feedbackManager) this.feedbackManager.trigger('memoryObtain'); // STEP43.6
           this.ui.showNodeResult({
             icon: '🧠',
             title: 'MEMORY FOUND',
@@ -2471,6 +2688,10 @@
           return;
         }
         if (step.type === 'protocolUnlocked') {
+          // STEP43.6: この演出（storySteps表示）と、実際の解放検知(layerEvent.protocolId
+          // 判定時)は同じ論理イベントの「検知」と「表示」の2段階のため、'protocolObtain'を
+          // 二重発火させず、汎用の'discovery'イベントに留める（過剰な演出重複を避ける）
+          if (this.feedbackManager) this.feedbackManager.trigger('discovery');
           this.ui.showNodeResult({
             icon: '🔓',
             title: 'PROTOCOL UNLOCKED',
@@ -2480,6 +2701,7 @@
           return;
         }
         if (step.type === 'characterDiscovered') {
+          if (this.feedbackManager) this.feedbackManager.trigger('discovery'); // STEP43.6
           this.ui.showNodeResult({
             icon: '👤',
             title: 'CHARACTER DISCOVERED',
@@ -2488,11 +2710,22 @@
           });
           return;
         }
-        this.dialogueManager.onComplete = () => playNextStoryStep();
-        if (!this.dialogueManager.startDialogue(step.id)) playNextStoryStep();
+        // STEP41-4: Research Console System「ARIA Terminal」（要求仕様セクション5）。
+        // 常時は小さいバッジ表示のまま、実際のStory Dialogue再生中だけ「ACTIVE」表示へ
+        // 切り替える（拡張表現そのものは既存のdialogueManagerオーバーレイが担う）
+        this.researchConsoleHud.setAriaActive(true);
+        this.dialogueManager.onComplete = () => { this.researchConsoleHud.setAriaActive(false); playNextStoryStep(); };
+        if (!this.dialogueManager.startDialogue(step.id)) { this.researchConsoleHud.setAriaActive(false); playNextStoryStep(); }
       };
 
+      // STEP41-4: Research Console System「Story integration」（要求仕様セクション9）。
+      // 実際のChapter Dialogueが再生される場合のみ、開始直前に短い自動消滅トースト
+      // 「NEW FILE AVAILABLE」を挟む（MEMORY FOUND/PROTOCOL UNLOCKED等は既にそれ自体が
+      // 「続けるボタン必須」の告知オーバーレイのため、二重演出を避けここでは対象にしない）
+      const hasDialogueStep = storySteps.some(s => s.type === 'dialogue');
       this._advanceTimer = setTimeout(() => {
+        if (hasDialogueStep) this.ui.showToast('📁 NEW FILE AVAILABLE');
+        if (hadAnyStorySteps && this.feedbackManager) this.feedbackManager.trigger('storyStart'); // STEP43.6
         playNextStoryStep();
       }, ADVANCE_DELAY_MS);
     }
@@ -2525,6 +2758,63 @@
         hiddenCompletionRate: this.hiddenEnvironmentManager.getDiscoveryRate().rate,
         storyCompletionRate: this.researchDatabase.getCompletionRate().rate,
         bestLayer: Math.max(this.depth, this.save.getBestDepth())
+      };
+    }
+
+    /**
+     * STEP43: Research Progression System「Relationship変化」。RUN開始時のスナップショット
+     * （_initializeRun()の_relationshipAtRunStart）と現在値を比較し、変化があった
+     * キャラクターのみ返す（変化0は表示しない）。
+     * @returns {Array<{name:string, delta:number}>}
+     */
+    _computeRelationshipChanges() {
+      return CharacterData.ALL.filter(c => c.id !== 'system').map(c => {
+        const before = this._relationshipAtRunStart[c.id] || 0;
+        const after = this.relationshipManager.getRelationship(c.id);
+        return { name: c.name, delta: after - before };
+      }).filter(r => r.delta !== 0);
+    }
+
+    /**
+     * STEP43: Research Progression System。Research Report画面へ渡すデータ一式を組み立てる。
+     * `_endRun()`の末尾（RESULT画面表示の直前）からのみ呼ばれる。既存の統計値（depth/score/
+     * researchData/perfectCount/clearsThisRun/bossClearCount/unknownAnalysisCount/
+     * _extractedThisRun）はいずれも`_endRun()`内で既に確定済みの値をそのまま読むだけで、
+     * 新しい計算・新しいゲーム状態は一切追加していない。
+     */
+    _buildResearchReport() {
+      const grade = ResearchGrade.computeGrade({
+        depth: this.depth,
+        perfectCount: this.perfectCount,
+        clearsThisRun: this.clearsThisRun,
+        bossClearCount: this.bossClearCount,
+        memoriesFoundCount: this._memoriesThisRun.length,
+        protocolsUnlockedCount: this._protocolsUnlockedThisRun.length,
+        extracted: this._extractedThisRun
+      });
+      const facilityResult = this.facilityRestoration.refresh();
+      const database = DatabaseCompletion.getCompletionSummary({
+        save: this.save,
+        researchDatabase: this.researchDatabase,
+        memoryManager: this.memoryManager,
+        relationshipManager: this.relationshipManager,
+        endingManager: this.endingManager
+      });
+
+      return {
+        ariaLine: ARIA_REPORT_LINES[Math.floor(Math.random() * ARIA_REPORT_LINES.length)],
+        grade,
+        depth: this.depth,
+        rankLabel: this.metaProgression.getRankLabel(),
+        unknownSignalCount: this.unknownAnalysisCount,
+        score: this.score,
+        researchData: this.researchData,
+        memories: this._memoriesThisRun.slice(),
+        protocols: this._protocolsUnlockedThisRun.slice(),
+        relationshipChanges: this._computeRelationshipChanges(),
+        facility: { percent: facilityResult.percent, statusLabel: this.facilityRestoration.getStatusLabel() },
+        database,
+        timeline: this._runTimeline.slice()
       };
     }
 
@@ -2616,6 +2906,7 @@
         lifeLoss = Math.max(0, lifeLoss - this.metaProgression.getFirstMissLifeReduction());
       }
       this.life -= lifeLoss;
+      if (this.feedbackManager) this.feedbackManager.trigger('miss'); // STEP43.6
       // Backup Memoryアップグレード: ミスしてもコンボを維持する
       if (!this.upgradeManager.hasEffectType('keepComboOnMiss')) {
         this.combo = 0;
@@ -2710,9 +3001,16 @@
     /** ---------------- RUN終了 ---------------- */
 
     _endRun() {
+      // STEP43: Research Report用のRun Timeline。Extract経路は_handleExtractReturn()側で
+      // 既に「Extract成功」を積んでいるため、それ以外（死亡・タイムアップ）の場合のみここで積む
+      if (!this._extractedThisRun) this._runTimeline.push({ icon: '💀', label: 'RUN終了' });
       this.round.stop();
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
+      this.researchConsoleHud.hide(); // STEP41-4: endlessHudと同じタイミングで隠す
+      this.researchEventBanner.hide(); // STEP42: Dynamic Research Event System
+      if (this.adaptiveMusicEngine) this.adaptiveMusicEngine.stopRun(); // STEP43.6
+      if (this.feedbackManager) this.feedbackManager.notify('runEnd'); // STEP43.6追加要件: Audio Timeline System
 
       // STEP40-2: 死亡/Extractのいずれでも、このRUN自体は正式に終了する
       // （＝次回はRESULT→NEURAL LAB→新しいRUNという既存フローに戻る）が、Continue
@@ -2813,6 +3111,14 @@
         this.ui.showScreen('endlessResult');
       };
 
+      // STEP43: Research Progression System。既存RESULT画面の手前に1画面だけ挟む
+      // （要求仕様の確認項目「既存Meta Progressionとの競合なし」を満たすため、
+      // RESULT画面自体・その先のRETRY/TITLE分岐ロジックには一切触れない）
+      const showReportThenResult = () => {
+        this.researchReportUI.show(this._buildResearchReport(), showResultScreen);
+        this.ui.showScreen('researchReport');
+      };
+
       // STEP32: Ending System。RUN終了時点のスナップショットで判定する。endingManager自身は
       // researchDatabaseを直接操作しない設計（要求仕様セクション13）のため、新規達成分の
       // Story Archive/Timelineへの反映はここでresearchDatabase.addEntry()を呼んで橋渡しする
@@ -2820,6 +3126,7 @@
       // Chapter完了時の`_checkFinalChapterEnding()`と共有する）
       const newlyAchievedEndings = this.endingManager.checkEndings(this._buildEndingSnapshot());
       newlyAchievedEndings.forEach(def => this.researchDatabase.addEntry(def.id));
+      if (newlyAchievedEndings.length > 0 && this.feedbackManager) this.feedbackManager.trigger('ending'); // STEP43.6
 
       const showEndingThenResult = () => {
         if (newlyAchievedEndings.length > 0) {
@@ -2827,14 +3134,15 @@
             icon: '🎬',
             title: 'ENDING UNLOCKED',
             message: newlyAchievedEndings.map(def => def.name).join(' / '),
-            onContinue: showResultScreen
+            onContinue: showReportThenResult
           });
         } else {
-          showResultScreen();
+          showReportThenResult();
         }
       };
 
       if (newlyCompletedAchievementNames.length > 0) {
+        if (this.feedbackManager) this.feedbackManager.trigger('achievement'); // STEP43.6追加要件: Audio Timeline System
         this.ui.showNodeResult({
           icon: '🏆',
           title: 'ACHIEVEMENT UNLOCKED',

@@ -114,6 +114,13 @@
     right: 14px;
   }
 
+  /* STEP43.5: Research Facility Audio System */
+  #titleAudioSettingsBtn {
+    position: absolute;
+    top: calc(var(--safe-top) + 12px);
+    right: 60px;
+  }
+
   /* ---------- 画面切り替え ---------- */
   .screen {
     display: none;
@@ -640,6 +647,30 @@
     color: var(--gold);
   }
 
+  /* ---------- STEP43.6: Audio Debugパネル（?debug=true時のみAudioDebugPanel.jsがDOMへ追加、
+       既存#debugPanelと同じ右下の反対側=右上に置いて重ならないようにする） ---------- */
+  #audioDebugPanel {
+    position: fixed;
+    right: 8px;
+    top: calc(var(--safe-top) + 8px);
+    z-index: 30;
+    background: rgba(4, 6, 12, 0.88);
+    border: 1px solid var(--blue);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    max-width: 200px;
+  }
+  #audioDebugPanel .debug-row { display: flex; justify-content: space-between; gap: 10px; }
+  #audioDebugPanel .debug-key { color: var(--blue); }
+  #audioDebugPanel .debug-divider {
+    margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line);
+    font-size: 9px; letter-spacing: 1px; color: var(--text-dim);
+  }
+
   /* ---------- GAME: 下部 ---------- */
   #screen-game footer {
     display: flex;
@@ -715,6 +746,31 @@
 
   .action-buttons button:active {
     transform: scale(0.96);
+  }
+
+  /* STEP41-4: Research Console System「Signal Injection Panel」。ENDLESS RESEARCH中
+     （#screen-gameへresearch-console-activeが付く間）のみ、既存のcolor-legend/
+     action-buttons領域を解析UI風に装飾する。DOM構造・既存クラスは無変更で、
+     Stage/Tutorial/Daily Puzzleでは付与されないためこのCSSは一切影響しない
+     （evolution-bg-*と同じスコープ限定パターン） */
+  #screen-game.research-console-active footer {
+    position: relative;
+    border: 1px solid rgba(41, 224, 255, 0.35);
+    border-radius: 12px;
+    padding: 10px 8px 8px;
+    background: rgba(41, 224, 255, 0.04);
+  }
+  #screen-game.research-console-active footer::before {
+    content: 'SIGNAL INJECTION';
+    position: absolute;
+    top: -8px;
+    left: 12px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--blue);
+    background: var(--bg, #050810);
+    padding: 0 4px;
   }
 
   /* ---------- クリア演出 ---------- */
@@ -933,6 +989,66 @@
   #toast.show {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+  }
+
+  /* STEP42: Dynamic Research Event System。#toastと同じ「上部固定・非モーダル」の
+     視覚言語を踏襲しつつ、#toastの単一スロットと競合しないよう独立した要素・
+     独立した縦位置（#toastの下）にした。pointer-eventsはバナー自身のみ有効のため、
+     hidden解除中も背後の盤面タップを妨げない */
+  .research-event-banner {
+    position: fixed;
+    left: 50%;
+    top: calc(var(--safe-top) + 108px);
+    transform: translateX(-50%) translateY(-10px);
+    max-width: min(90vw, 380px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    z-index: 15;
+  }
+  .research-event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .research-event-banner.hidden { display: none; }
+  .research-event-icon { font-size: 13px; }
+  .research-event-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (prefers-reduced-motion: reduce) {
+    .research-event-banner { transition: none; }
+  }
+
+  /* STEP43.6追加要件「Audio Timeline System」。#toast/#researchEventBannerの下、
+     画面下部に控えめに表示する（Timeline駆動Popup専用、既存オーバーレイと重ならない） */
+  .timeline-popup {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--safe-bottom) + 90px);
+    transform: translateX(-50%) translateY(10px);
+    max-width: min(80vw, 300px);
+    background: rgba(4, 6, 12, 0.85);
+    border: 1px solid var(--gold);
+    padding: 6px 16px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--gold);
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 14;
+  }
+  .timeline-popup.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .timeline-popup.hidden { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .timeline-popup { transition: none; }
   }
 
   /* ---------- ENDLESS RESEARCH ---------- */
@@ -1204,6 +1320,62 @@
 
   .endless-heart { color: var(--text-dim); }
 
+  /* STEP41-4: Research Console System。既存endless-hud群と同じトーン
+     （--blue基調にして既存の--gold基調のendless-hudと視覚的に区別する） */
+  .research-console-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--blue);
+    background: var(--panel);
+    box-shadow: 0 0 12px rgba(41, 224, 255, 0.15);
+    margin-bottom: 6px;
+  }
+  .rc-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .rc-title { font-weight: 800; letter-spacing: 1px; color: var(--blue); font-size: 12px; }
+  .rc-aria-badge { color: var(--text-dim); font-size: 11px; }
+  .rc-aria-status { color: var(--green); font-weight: 700; }
+  .rc-aria-badge.rc-aria-active .rc-aria-status { color: var(--gold); }
+  .rc-theme-value { color: var(--gold); font-size: 11px; }
+  .rc-depth-value { color: var(--text); font-size: 11px; font-weight: 700; }
+  .rc-detail-toggle { border-color: var(--blue); color: var(--blue); }
+
+  #rcDetailBody.map-env-detail-body { display: flex; flex-direction: column; gap: 6px; }
+  .rc-researcher-row { text-align: center; font-size: 10px; letter-spacing: 1px; color: var(--text-dim); }
+  .rc-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 6px;
+  }
+  .rc-status-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .rc-status-label { font-size: 9px; letter-spacing: 0.5px; color: var(--text-dim); }
+  .rc-status-value { font-size: 12px; font-weight: 700; color: var(--text); }
+  .rc-section-label {
+    font-size: 10px; letter-spacing: 1px; color: var(--text-dim);
+    text-align: center; margin-top: 4px;
+  }
+  .rc-analysis-log {
+    display: flex; flex-direction: column; gap: 2px;
+    font-size: 10px; color: var(--text-dim);
+    max-height: 90px; overflow-y: auto;
+  }
+  .rc-analysis-log-entry { color: var(--text); opacity: 0.85; }
+  .rc-mini-map { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+  .rc-mini-map-label { font-size: 10px; color: var(--text-dim); }
+  .rc-mini-map-track {
+    width: 100%; height: 4px; border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08); overflow: hidden;
+  }
+  .rc-mini-map-fill { height: 100%; background: var(--blue); width: 0%; transition: width 0.3s ease; }
+
   .endless-heart.filled {
     color: var(--red);
     text-shadow: 0 0 6px var(--red);
@@ -1263,6 +1435,130 @@
     border-radius: 10px;
     background: var(--panel-2);
   }
+
+  /* STEP43: Research Progression System「Research Report」画面。RESULT画面(中央固定カード)
+     とは異なり、項目数が多く縦に長くなるため画面全体を縦スクロールさせる構成にした
+     （`.screen.active`の既存overflow-y:autoをそのまま利用、align-itemsのみcenterにする） */
+  .research-report-screen { align-items: center; }
+  .report-card {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel);
+    border: 1px solid var(--blue);
+    border-radius: 16px;
+    padding: 22px 18px 26px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(41, 224, 255, 0.15);
+  }
+  .report-title {
+    margin: 0 0 6px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--blue), var(--gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .report-aria-line {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    min-height: 14px;
+  }
+  .report-grade-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .report-grade-value {
+    font-size: 40px;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 16px rgba(255, 213, 74, 0.5);
+    line-height: 1;
+  }
+  .report-grade-score { font-size: 12px; color: var(--text-dim); }
+  .report-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 0 0 16px;
+  }
+  .report-grid-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 4px;
+    border-radius: 10px;
+    background: var(--panel-2);
+  }
+  .report-grid-label { font-size: 10px; letter-spacing: 1px; color: var(--text-dim); }
+  .report-grid-value { font-size: 14px; font-weight: 800; color: var(--text); }
+  .report-section-title {
+    margin: 14px 0 6px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--blue);
+    text-align: left;
+  }
+  .report-list, .report-db-list, .report-timeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    text-align: left;
+    font-size: 12px;
+  }
+  .report-list-row, .report-timeline-row { color: var(--text); }
+  .report-list-empty { color: var(--text-dim); font-size: 12px; }
+  .report-db-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text);
+    padding: 2px 0;
+  }
+  .report-facility-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .report-facility-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .report-facility-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+  .report-continue-btn { width: 100%; margin-top: 20px; }
+
+  /* STEP43.5: Research Facility Audio System「Audio Settings」画面 */
+  .audio-settings-screen { align-items: stretch; }
+  .audio-settings-row, .audio-settings-slider-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .audio-settings-label { font-size: 13px; letter-spacing: 1px; color: var(--text); }
+  .audio-settings-slider {
+    flex: 1;
+    height: 30px;
+    accent-color: var(--blue);
+  }
+  .audio-settings-value { font-size: 12px; color: var(--text-dim); min-width: 36px; text-align: right; }
 
   .endless-result-label {
     font-size: 12px;
@@ -2374,6 +2670,11 @@
 
   .neurallab-archive-row { display: flex; justify-content: space-between; font-size: 14px; }
   .neurallab-archive-row span:last-child { color: var(--gold); font-weight: 700; }
+  /* STEP43: Research Progression System「Database Completion」区切りラベル */
+  .neurallab-archive-divider {
+    margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line);
+    font-size: 10px; letter-spacing: 1px; color: var(--text-dim);
+  }
 
   .neurallab-empty { font-size: 14px; color: var(--text-dim); text-align: center; padding: 10px 0; }
 
@@ -2578,6 +2879,31 @@
   }
   .environment-theme-layer.perf-low { opacity: 0 !important; animation: none !important; }
   .environment-theme-layer.perf-low::before, .environment-theme-layer.perf-low::after { display: none !important; }
+
+  /* STEP41-4: Research Console System「Console Animation」。走査線(scanline)演出。
+     pointer-events:noneのため常にタップを透過し、既存の当たり判定へは一切影響しない。
+     Node Pulse/Connection Line演出はSTEP41-2/41-3で既に実装済みのため追加しない
+     （feedback_check_existing_animations_first.md方針どおり重複実装を避ける） */
+  .research-console-scanline {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(41, 224, 255, 0.035) 0px,
+      rgba(41, 224, 255, 0.035) 1px,
+      transparent 2px,
+      transparent 4px
+    );
+    opacity: 0.5;
+    animation: rcScanlineSweep 6s linear infinite;
+  }
+  .research-console-scanline.hidden { display: none; }
+  @keyframes rcScanlineSweep {
+    0% { background-position-y: 0; }
+    100% { background-position-y: 40px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .research-console-scanline { animation: none; }
+  }
 
   .theme-grid {
     background-image: repeating-linear-gradient(0deg, rgba(41,224,255,0.12) 0 1px, transparent 1px 32px),
@@ -2857,6 +3183,8 @@
   <!-- ============ TITLE ============ -->
   <section id="screen-title" class="screen active">
     <button type="button" id="titleSoundToggle" class="icon-btn" aria-label="サウンド切替">🔊</button>
+    <!-- STEP43.5: Research Facility Audio System -->
+    <button type="button" id="titleAudioSettingsBtn" class="icon-btn audio-settings-btn" aria-label="音量設定">🎚️</button>
     <h1 class="neon-title">LOGIC COLOR</h1>
     <div id="titleLevelLabel">LOGIC LEVEL Lv.1</div>
     <button type="button" id="titleStartBtn" class="primary-btn">STAGE SELECT</button>
@@ -2864,6 +3192,46 @@
     <!-- STEP40-1: Continue System。中断中のRUNがある場合のみ表示するヒント（操作自体はMODE SELECTで行う） -->
     <div id="titleEndlessContinueHint" class="title-continue-hint hidden"></div>
     <button type="button" id="titleStoryBtn" class="primary-btn endless-btn">📖 STORY RESEARCH</button>
+  </section>
+
+  <!-- ============ STEP43.5/STEP43.6: AUDIO SETTINGS（音量バスはMaster/BGM/UI/Dialogue/Environment） ============ -->
+  <section id="screen-audiosettings" class="screen audio-settings-screen">
+    <div class="select-header">
+      <button type="button" id="audioSettingsBackBtn" class="ghost-btn">‹ BACK</button>
+      <h2>AUDIO SETTINGS</h2>
+      <span style="width:56px"></span>
+    </div>
+
+    <div class="audio-settings-row">
+      <span class="audio-settings-label">MASTER</span>
+      <button type="button" id="audioSettingsMasterToggle" class="icon-btn">🔊</button>
+    </div>
+
+    <div class="audio-settings-slider-row">
+      <span class="audio-settings-label">BGM</span>
+      <input type="range" id="audioSettingsBgmSlider" class="audio-settings-slider" min="0" max="100" value="35">
+      <span id="audioSettingsBgmValue" class="audio-settings-value">35%</span>
+    </div>
+    <div class="audio-settings-slider-row">
+      <span class="audio-settings-label">UI</span>
+      <input type="range" id="audioSettingsUiSlider" class="audio-settings-slider" min="0" max="100" value="60">
+      <span id="audioSettingsUiValue" class="audio-settings-value">60%</span>
+    </div>
+    <div class="audio-settings-slider-row">
+      <span class="audio-settings-label">DIALOGUE</span>
+      <input type="range" id="audioSettingsDialogueSlider" class="audio-settings-slider" min="0" max="100" value="50">
+      <span id="audioSettingsDialogueValue" class="audio-settings-value">50%</span>
+    </div>
+    <div class="audio-settings-slider-row">
+      <span class="audio-settings-label">ENVIRONMENT</span>
+      <input type="range" id="audioSettingsEnvironmentSlider" class="audio-settings-slider" min="0" max="100" value="40">
+      <span id="audioSettingsEnvironmentValue" class="audio-settings-value">40%</span>
+    </div>
+
+    <div class="audio-settings-row">
+      <span class="audio-settings-label">RESEARCH CONSOLE AMBIENT</span>
+      <button type="button" id="audioSettingsAmbientToggle" class="icon-btn">🔊</button>
+    </div>
   </section>
 
   <!-- ============ STEP40-3: PROLOGUE「Awakening」(Chapter0、NEW RESEARCH開始時のみ再生) ============ -->
@@ -3436,6 +3804,9 @@
   <!-- ============ GAME ============ -->
   <section id="screen-game" class="screen">
     <div id="environmentThemeLayer" class="environment-theme-layer"></div>
+    <!-- STEP41-4: Research Console System。走査線(scanline)演出のみを持つ純粋な装飾レイヤー。
+         pointer-events:noneのためタップ操作には一切影響しない -->
+    <div id="researchConsoleScanline" class="research-console-scanline hidden"></div>
     <header class="game-header">
       <button type="button" id="gameBackBtn" class="ghost-btn">‹ BACK</button>
       <span id="stageLabel">STAGE</span>
@@ -3445,6 +3816,37 @@
 
     <main>
       <div id="tutorialBanner" class="hidden"></div>
+      <!-- STEP41-4: Research Console System。「ゲーム画面」ではなく「研究コンソールを
+           操作している」体感を出すためのヘッダー+System Status Panel。既存HUD群
+           （endlessHud/directorHudBadge等）は無変更のまま維持し、その直上に
+           1行の常時表示サマリー+「詳細」トグルで開く追加パネルとして重ねる
+           （既存の折りたたみパターンを踏襲、常時表示分の高さ増加は1行のみに抑える） -->
+      <div id="researchConsolePanel" class="research-console-panel hidden">
+        <div class="rc-summary-row">
+          <span class="rc-title">RESEARCH CONSOLE</span>
+          <span class="rc-aria-badge">🤖 ARIA <span id="rcAriaStatus" class="rc-aria-status">CONNECTED</span></span>
+          <span id="rcThemeValue" class="rc-theme-value">-</span>
+          <span id="rcDepthValue" class="rc-depth-value">DEPTH 0</span>
+          <button type="button" id="rcDetailToggle" class="map-env-detail-toggle rc-detail-toggle" aria-expanded="false">詳細 ▾</button>
+        </div>
+        <div id="rcDetailBody" class="map-env-detail-body hidden">
+          <div class="rc-researcher-row">RESEARCHER-01</div>
+          <div class="rc-status-grid">
+            <div class="rc-status-item"><span class="rc-status-label">FACILITY STATUS</span><span id="rcFacilityStatus" class="rc-status-value">-</span></div>
+            <div class="rc-status-item"><span class="rc-status-label">MEMORY INTEGRITY</span><span id="rcMemoryIntegrity" class="rc-status-value">-</span></div>
+            <div class="rc-status-item"><span class="rc-status-label">NODE STABILITY</span><span id="rcNodeStability" class="rc-status-value">-</span></div>
+            <div class="rc-status-item"><span class="rc-status-label">PROTOCOL</span><span id="rcProtocolStatus" class="rc-status-value">-</span></div>
+            <div class="rc-status-item"><span class="rc-status-label">AI STATUS</span><span id="rcAiStatus" class="rc-status-value">-</span></div>
+          </div>
+          <div class="rc-section-label">ANALYSIS LOG</div>
+          <div id="rcAnalysisLog" class="rc-analysis-log"></div>
+          <div class="rc-section-label">RESEARCH MAP</div>
+          <div class="rc-mini-map">
+            <div id="rcMiniMapLabel" class="rc-mini-map-label">PHASE 1 · DEPTH 0/4</div>
+            <div class="rc-mini-map-track"><div id="rcMiniMapFill" class="rc-mini-map-fill"></div></div>
+          </div>
+        </div>
+      </div>
       <!-- ENDLESS RESEARCH中のみ表示するHUD（endless.jsがhidden切り替えを管理）。
            UI改修: 盤面の視認性を優先し、常時表示は最重要4項目（DEPTH/LIFE/SCORE/TIME）
            +警告系バッジ（Risk Chain/秘匿領域）のみとし、残りは「詳細」ボタンで開閉する -->
@@ -3543,6 +3945,51 @@
     </div>
     <p class="lab-instruction">3つの候補から1つのアップグレードを選択してください</p>
     <div id="researchLabCards" class="lab-cards"></div>
+  </section>
+
+  <!-- ============ STEP43: RESEARCH REPORT（RUN終了直後、ENDLESS RESULTより前に表示） ============ -->
+  <section id="screen-researchreport" class="screen research-report-screen">
+    <div class="report-card">
+      <h2 class="report-title">RESEARCH REPORT</h2>
+      <div id="reportAriaLine" class="report-aria-line"></div>
+
+      <div class="report-grade-row">
+        <span id="reportGradeValue" class="report-grade-value">D</span>
+        <span id="reportGradeScore" class="report-grade-score">SCORE 0</span>
+      </div>
+
+      <div class="report-grid">
+        <div class="report-grid-item"><span class="report-grid-label">DEPTH</span><span id="reportDepth" class="report-grid-value">DEPTH 0</span></div>
+        <div class="report-grid-item"><span class="report-grid-label">RESEARCH RANK</span><span id="reportRank" class="report-grid-value">-</span></div>
+        <div class="report-grid-item"><span class="report-grid-label">UNKNOWN SIGNAL</span><span id="reportUnknownSignal" class="report-grid-value">0</span></div>
+        <div class="report-grid-item"><span class="report-grid-label">SCORE</span><span id="reportScore" class="report-grid-value">0</span></div>
+        <div class="report-grid-item"><span class="report-grid-label">RESEARCH DATA</span><span id="reportResearchData" class="report-grid-value">0</span></div>
+      </div>
+
+      <h3 class="report-section-title">MEMORY OBTAINED</h3>
+      <div id="reportMemoryList" class="report-list"></div>
+
+      <h3 class="report-section-title">PROTOCOL OBTAINED</h3>
+      <div id="reportProtocolList" class="report-list"></div>
+
+      <h3 class="report-section-title">RELATIONSHIP CHANGE</h3>
+      <div id="reportRelationshipList" class="report-list"></div>
+
+      <h3 class="report-section-title">FACILITY RESTORATION</h3>
+      <div class="report-facility-row">
+        <span id="reportFacilityLabel" class="report-facility-label">OFFLINE</span>
+        <span id="reportFacilityPercent" class="report-facility-percent">0%</span>
+      </div>
+      <div class="report-facility-track"><div id="reportFacilityFill" class="report-facility-fill"></div></div>
+
+      <h3 class="report-section-title">DATABASE COMPLETION</h3>
+      <div id="reportDatabaseList" class="report-db-list"></div>
+
+      <h3 class="report-section-title">RESEARCH TIMELINE</h3>
+      <div id="reportTimelineList" class="report-timeline-list"></div>
+
+      <button type="button" id="reportContinueBtn" class="primary-btn report-continue-btn">続ける</button>
+    </div>
   </section>
 
   <!-- ============ ENDLESS RESULT ============ -->
@@ -3858,6 +4305,20 @@
 
   <div id="toast"></div>
 
+  <!-- STEP42: Dynamic Research Event System。#toastとは独立した非モーダルバナー
+       （タップでスキップ、既定では3〜6秒で自動フェードアウト）。盤面操作はブロックしない -->
+  <div id="researchEventBanner" class="research-event-banner hidden">
+    <span id="researchEventIcon" class="research-event-icon"></span>
+    <span id="researchEventText" class="research-event-text"></span>
+  </div>
+
+  <!-- STEP43.6追加要件「Audio Timeline System」。Timeline駆動のPopupステップ専用の
+       非モーダル・独立インジケータ（#toast/#researchEventBannerとは別スロット、
+       既存のReward/Storyオーバーレイとは競合しない） -->
+  <div id="timelinePopup" class="timeline-popup hidden">
+    <span id="timelinePopupText" class="timeline-popup-text"></span>
+  </div>
+
   <script src="src/board.js"></script>
   <script src="src/solver.js"></script>
   <script src="src/difficulty.js"></script>
@@ -3872,6 +4333,32 @@
   <script src="src/theme.js"></script>
   <script src="src/animation.js"></script>
   <script src="src/sound.js"></script>
+  <!-- STEP43.6: Adaptive Music System & Audio Data Architecture。STEP43.5の
+       src/audioData.js・src/audioManager.jsを置き換えるもの。sound.jsの直後（ui.js等より前）に
+       読み込み、ui.js側のトップレベルdestructureでG.AudioManagerを参照できるようにする。
+       config→synth→本体の順で読み込む -->
+  <script src="src/audio/config/audioScales.js"></script>
+  <script src="src/audio/config/audioChords.js"></script>
+  <script src="src/audio/config/audioPatterns.js"></script>
+  <script src="src/audio/config/audioLayerTable.js"></script>
+  <script src="src/audio/config/audioThemes.js"></script>
+  <script src="src/audio/config/audioEnvironmentThemes.js"></script>
+  <script src="src/audio/config/audioPresets.js"></script>
+  <script src="src/audio/config/audioEvents.js"></script>
+  <script src="src/audio/config/audioTimelines.js"></script>
+  <script src="src/audio/synth/DroneSynth.js"></script>
+  <script src="src/audio/synth/PadSynth.js"></script>
+  <script src="src/audio/synth/PulseSynth.js"></script>
+  <script src="src/audio/synth/ArpeggioSynth.js"></script>
+  <script src="src/audio/synth/TextureSynth.js"></script>
+  <script src="src/audio/synth/AmbientSynth.js"></script>
+  <script src="src/audio/synth/UISynth.js"></script>
+  <script src="src/audio/AudioManager.js"></script>
+  <script src="src/audio/AudioThemeManager.js"></script>
+  <script src="src/audio/AudioStateManager.js"></script>
+  <script src="src/audio/AdaptiveMusicEngine.js"></script>
+  <script src="src/audio/AudioTimelineManager.js"></script>
+  <script src="src/audio/AudioDebugPanel.js"></script>
   <script src="src/debug.js"></script>
   <script src="src/endless/map.js"></script>
   <script src="src/endless/endlessSave.js"></script>
@@ -3999,6 +4486,19 @@
   <!-- STEP41-3: Neural Evolution System（endless.jsの直前に読み込む） -->
   <script src="src/endless/themeManager.js"></script>
   <script src="src/endless/evolutionTransition.js"></script>
+  <!-- STEP41-4: Research Console System（endless.jsの直前に読み込む） -->
+  <script src="src/endless/researchConsole.js"></script>
+  <!-- STEP43.6追加要件「Audio Timeline System」Feedback連携 -->
+  <script src="src/endless/feedbackManager.js"></script>
+  <!-- STEP42: Dynamic Research Event System（endless.jsの直前に読み込む） -->
+  <script src="src/endless/researchEventData.js"></script>
+  <script src="src/endless/researchEventManager.js"></script>
+  <script src="src/endless/researchEventBanner.js"></script>
+  <!-- STEP43: Research Progression System（endless.jsの直前に読み込む） -->
+  <script src="src/endless/facilityRestoration.js"></script>
+  <script src="src/endless/researchGrade.js"></script>
+  <script src="src/endless/databaseCompletion.js"></script>
+  <script src="src/endless/researchReportUI.js"></script>
   <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>

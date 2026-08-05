@@ -363,3 +363,139 @@ Phaseが切り替わるLayerでは、「NEW ANALYSIS AREA」＋新Theme名＋ARI
 **既存設定と矛盾する実装を行わないこと。**
 
 **新規コンテンツ追加時はStory Bibleを更新してから実装すること。**
+
+---
+
+## 11. Research Console System（STEP41-4で追加）
+
+ENDLESS RESEARCH画面全体を「ゲームのプレイ画面」ではなく「研究施設のコンソールを操作している」という体感で統一するための、表示・演出のみの仕組み。ゲームルール・問題生成・判定ロジック・セーブデータには一切関与しない（`researchConsole.js`が描画、状態は`endless.js`側が保持）。
+
+### Research Console Header
+ゲーム画面上部に常時1行で表示するサマリー行。「RESEARCH CONSOLE」（コンソール名）・「ARIA CONNECTED」（ARIA接続状態）・現在のNeural Evolution Theme名（9章参照）・Research Depth（現在のLayer）を表示する。「詳細」ボタンでSystem Status Panel以下を開閉できる（既存HUD群と同じ折りたたみパターン）。
+
+### System Status Panel
+「FACILITY STATUS」「MEMORY INTEGRITY」「NODE STABILITY」「PROTOCOL」「AI STATUS」の5項目。いずれも新しいゲームメカニクスではなく、既存データ（World Stability・現在ライフ・所持Protocol・AI Director人格/目標）から導出した演出的な表示値である。「施設が生きている」という手触りを、既存の裏側の数値をコンソール風に翻訳するだけで表現している。
+
+### Analysis Log
+直近5件のイベント（Node同期＝Puzzle Clear、Protocol activated、Memory detected、Research area updated、Anomaly detected）をRUNスコープのリングバッファとして新しい順に表示する。永続化はせず、RUN終了時に消える一時的な表示。
+
+### Mini Research Map
+現在のPhase（9章のResearch Depth区切り）内での自分のDepth位置を、簡易な進捗バーとラベル（例: 「PHASE 2 · DEPTH 7/12」）で表示する。フルスクリーンのリサーチマップ画面（RUN中に「MAP」ボタンから開く既存のReadOnlyな俯瞰ビュー）とは別の、常時見える簡易版という位置づけ。
+
+### ARIA Terminal
+Header内の小さなバッジとして常時表示（「ARIA: CONNECTED」）し、実際にStory Dialogueが再生されている間だけ「ARIA: ACTIVE」へ切り替わる。会話そのものの表示（拡張表現）は既存のDialogue Systemオーバーレイがそのまま担う。
+
+### Signal Injection Panel
+既存のSignal Button（Cognitive Neural Mapping System、1章参照）まわりを、ENDLESS RESEARCH中のみ「SIGNAL INJECTION」ラベル付きの解析UI風の枠で装飾する。DOM構造・既存の操作方法は無変更。
+
+### Console Animation
+走査線（scanline）演出を画面全体に低い不透明度で常時重ねる。Node Pulse・Node Link接続線の演出は既にMemory Node表示（1章参照）で実装済みのため重複追加はしていない。
+
+### Story Integration「NEW FILE AVAILABLE」
+Layerクリアで実際のChapter Dialogueが再生される場合のみ、再生開始の直前に短い自動消滅トースト「NEW FILE AVAILABLE」を挟む。MEMORY FOUND/PROTOCOL UNLOCKEDなど、それ自体が「続けるボタン必須」の告知オーバーレイを持つ演出には重ねて表示しない。
+
+---
+
+## 12. Dynamic Research Events（STEP42で追加）
+
+Layer開始のたびに低確率で発生する、短いフレーバーイベント。「探索中の世界が常に動いている」という手触りを演出するための仕組みで、**ゲームルール・問題生成・難易度・判定には一切影響しない**（`researchEventManager.js`が抽選、`researchEventBanner.js`が描画。状態はRUNスコープの重複抑制のみで、Save側には生涯履歴のみを持つ）。
+
+### 5つのカテゴリ
+- **System**: 施設側のシステムログ風の一言（例: 「SUBSYSTEM ONLINE」「ARCHIVE CONNECTED」）
+- **ARIA**: ARIAの短いコメント。「感情ではなく理解能力を獲得する存在」（2章参照）という設計方針どおり、Relationship Levelに関わらずどのLevelでも違和感の無い、冷静・観測的な口調に統一している。AI Director（5人格システム、STEP31）とは別存在
+- **Environment**: 背景ノイズ・照明の点滅・警告灯・モニター表示の変化など、施設の環境描写
+- **Story**: 指定Layer（2/6/10/14/18/24）でのみ必ず発生する伏線的な一言。他のカテゴリと異なりランダム抽選の対象外で、既存のChapter境界Layer・Story Dialogue発生Layerとは重ならないよう選定している
+- **Unknown**: Layer31以降のみ発生。要求仕様どおり説明を一切与えず、断片的な一言だけを残す（例: 「……何かがこちらを見ている」）
+
+### 抽選ルール
+Story固定イベントが無いLayerでは、まず約55%の確率で「今Layerは何も起きない」を判定してからカテゴリ抽選する（毎Layer必ず発生させると探索のテンポを損なうため）。UnknownカテゴリはLayer31以降のみ候補に入る。Neural Evolution Theme（9章）のPhaseが切り替わるLayer（Theme Transitionオーバーレイが表示される、既に演出が集中しているLayer）ではランダム抽選自体を行わない。
+
+### 表示方法
+既存の`#toast`（単一スロット、他の通知と共有）とは独立した専用バナーとして実装し、フェードイン/フェードアウトで3〜6秒表示される（タップでスキップ可能）。非モーダルで盤面操作をブロックしないため、表示中も探索を継続できる。
+
+### 履歴管理
+表示済みイベントは生涯履歴としてSaveへ記録される。直近3件のidは重複除外の対象とし、同じフレーバーが連続して出ないよう制御している。
+
+---
+
+## 13. Research Progression System（STEP43で追加）
+
+RUN終了後、プレイヤーが「今回はどんな研究成果があったか」を実感できるようにするための一連の仕組み。**ゲームルール・問題生成・難易度・判定には一切影響しない**（`researchGrade.js`/`databaseCompletion.js`/`facilityRestoration.js`はいずれも既存データから算出するだけの純粋関数、または増加のみの単純な永続値）。
+
+### Research Report
+RUN終了直後、既存のRESULT画面より前に表示される新規画面。到達Research Depth・取得Memory・取得Protocol・Relationship変化・Research Rank・Unknown Signal・獲得報酬（Score/Research Data）を一覧表示し、続けるボタンで既存のRESULT画面へ進む。既存のRESULT画面自体・その先のRETRY/TITLE分岐ロジックは無変更。
+
+### Facility Restoration
+「長期間停止状態にあった研究施設」（1章「Research Facility」参照）が、プレイヤーの研究進行に応じて少しずつ復旧していく、という0〜100%の進行度。表示専用ではなく実際にSaveへ保存される（増加のみ、減少しない）。既存のStory Database完成率・Memory収集率・最深到達Layerから算出する設計のため、新しいゲームメカニクスの追加は無い。将来のStory演出（例: 復旧率がある閾値に達した時にARIAが新しい台詞を話す等）から直接参照できる単純な数値として設計してある。
+
+### Database Completion
+Characters/Memory/Research Logs/Protocols/Environment/Endingsの6カテゴリの収集率をまとめて表示する。数え方は既存の各Archive画面（Character Archive/Memory Archive/Research Database/Protocol Archive/Environment Archive/Ending判定）が持つ数え方をそのまま再利用しているため、この一覧の数字と個別のArchive画面の数字は常に一致する。NEURAL RESEARCH LAB画面の既存「RESEARCH ARCHIVE」要約（Protocols/Events/Layers/Secrets、STEP28）に追記する形で表示され、Research Report画面にも同じデータの縮小版が表示される。
+
+### Research Timeline（Research Report内、今回のRunのみ）
+既存の「Research Timeline」（Story Database解放順を生涯を通じて表示する仕組み、STEP32）とは別に、Research Report画面には「今回のRunで起きた主要イベント」だけを時系列表示する専用の一覧がある（RUN開始・Memory取得・Protocol取得・Boss撃破・Chapter完了・秘匿領域発見・Extract成功/RUN終了、をRUNスコープの一時的なリストとして保持、永続化しない）。
+
+### Research Grade
+RUNをS〜Dで評価する。評価基準は到達Depth・PERFECT率・生還方法（Extract成功か死亡か）・主要イベント（Boss撃破/Memory取得/Protocol取得）の件数を重み付き合成したスコアで、各要素の重みと閾値はデータ化されており（`researchGrade.js`のGRADE_DEFS/WEIGHTS）、将来の評価基準追加・調整が容易な構造にしてある。Gradeそのものは保存せず、RUNごとに算出する使い切りの評価。
+
+### ARIA帰還演出
+RUN終了後、Research Report画面の冒頭にARIAの短い一言（「解析結果を保存しています。」等）を表示する。ARIAは「感情ではなく理解能力を獲得する存在」（2章参照）という既存方針のため、Relationship Levelに関わらず違和感の無い冷静なトーンに統一している（Dynamic Research Event、12章のARIAカテゴリと同じ設計判断）。
+
+---
+
+## 14. Research Facility Audio System（STEP43.5で追加）
+
+LOGIC COLOR全体に音響を追加し、「研究施設を探索している」体験を音の面から補強する仕組み。既存の`sound.js`（Stage/Tutorial/Daily Puzzle用の効果音、tap/place/complete/clear）とは独立した別システムとして実装し、`sound.js`自体は無変更のまま動作し続ける。**ゲームルール・問題生成・判定には一切影響しない**（`audioManager.js`は音を鳴らすだけで、ゲーム状態を一切変更・参照しない）。
+
+### 音源についての方針
+本プロジェクトは`sound.js`の時点から「音声ファイル不使用・Web Audio APIのシンセ音のみ」（`assets/sounds/`は未使用のまま）という一貫した方針を取っている。BGMもこの方針を踏襲し、実音源ファイルではなく複数オシレータによる持続音（Drone/Pad）として実装している。
+
+### Layer Theme BGM
+Layer進行に応じて5段階のBGMへ切り替わる。区切りは既存のNeural Evolution System（9章、`themeManager.js`）のPhase境界とまったく同じ（Layer1-4=Basic Research Lab/5-12=Neural Network/13-20=Memory Distortion/21-30=Genesis Core/31+=Unknown Layer）で、境界値の二重管理を避けるため`audioManager.js`は`themeManager.js`のPhase判定関数をそのまま呼び出すだけで、独自のLayer範囲定義を持たない。Phase切り替え時は約1.6秒かけて新旧のBGMをクロスフェードする。
+
+### Dialogue Text Sound
+Story Dialogueの文字送り中、2文字に1回の短いtick音を鳴らす。ARIA/Dr. Leon/Lost Researcherでそれぞれ異なる音色（ARIAは高音でデジタルな質感、Dr. Leonは低めで人間らしい質感、Lost Researcherはやや歪んだ記録音源らしい質感）を設定している。
+
+### System SE
+Node Select（Memory Nodeタップ）・Signal Inject（Signal配置）・Node Sync（同期完了）・Puzzle Clear（Cognitive Analysis成功）・Layer Start（Layer開始）・Layer Complete（Layer完了報酬）・Protocol Activate（Protocol解放）の7種。いずれもENDLESS RESEARCH中（Research Console有効時）のみ鳴り、Stage/Tutorial/Daily Puzzleの既存の音（`sound.js`）には影響しない。
+
+### Research Console Ambient
+Research Console（STEP41-4）が表示されている間、控えめな低音のdrone（呼吸のように緩やかに音量が揺らぐ）を再生する。ON/OFF切り替え可能で、OFFにするとResearch Console表示中でも鳴らない。
+
+### Audio Settings
+BGM/UI（UI・System・Discovery Soundをまとめたバス、STEP43.6で「Effect」から改名）/Dialogue/Environmentの4項目を個別に音量調整できる。TITLE画面から開き、設定は既存のprogress.js/endlessSave.jsとは独立したLocalStorageキー（`logicColor.audio.v1`）へ保存される（既存Save構造には一切触れない）。
+
+---
+
+## 15. Adaptive Music System & Audio Data Architecture（STEP43.6で追加）
+
+STEP43.5のResearch Facility Audio Systemを、「BGMを再生するゲーム」ではなく「研究施設AIがリアルタイムに音を生成している」という世界観に沿った、完全生成・完全データ駆動のアーキテクチャへ再構築したもの。**ゲームルール・問題生成・判定には一切影響しない**。外部音源ファイルは一切使用せず、全ての音（BGM・SE・環境音）をWeb Audio APIによりその場で合成する。
+
+### Research Facility Soundscape
+BGMという固定コンテンツではなく、Drone/Pad/Pulse/Arpeggio/Texture/Ambient/Eventという独立した「音のレイヤー」が、現在のTheme（研究対象のPhase）・Layer進行・ゲーム内で起きた出来事に応じてリアルタイムに重なり合うことで、施設そのものが生きて音を発しているような体験を作る。Layer1はDroneのみの静かな状態から始まり、探索が進むにつれてPad（Layer5〜）・Pulse（Layer10〜）・Arpeggio（Layer15〜）・Texture（Layer21〜）と、AIが解析を深めるように音のレイヤーが積み重なっていく。
+
+### Audio Data Driven Architecture
+Theme・音階・コード進行・アルペジオパターン・音色（Synth Preset）・ゲームイベントへの反応は、すべて`src/audio/config/`配下のデータファイルとして分離されている。AudioManager（音を鳴らすだけ）とAdaptiveMusicEngine（現在の状態から演奏を生成するだけ）は互いの責務を厳密に分離しており、新しいThemeを追加する場合もaudioThemes.js等へエントリを1つ追加するだけでよく、AudioManager/AdaptiveMusicEngine側のコード修正は不要な構造にしてある。
+
+### Music Seed System
+研究RUNを開始するたびに固有のMusic Seedが生成される。通常のTheme（Basic〜Genesis Core）はデータで定義された固定のコード進行・音階を使うが、Layer31以降のUnknown Layerだけは、このMusic SeedからPattern・Texture・Pulse・コード進行を部分的にランダム生成する。同じRUN中は同じSeedから生成され続けるため、「今回の研究で聞こえてくる未知の音」として一貫性を保つ（RUNが変われば別の生成結果になる）。
+
+### Research Facility Audio Design（STEP43.6追加要件で追加）
+研究施設の音響は「BGMという1本のコンテンツを再生する」のではなく、Music Layer（Drone/Pad/Pulse/Arpeggio/Texture/Ambient/Event）とFacility Audio Theme（今いるゾーンの環境音）を独立した2つの軸として重ね合わせる設計になっている。BGM本体（テンポ・スケール・コード進行）はLayer進行（研究の深度＝5段階のPhase）に、環境音・アクセント音はWorldEnvironment（5Layerごとに巡回する「今いるゾーン」）に、それぞれ別々に反応する。両者は互いに独立しているため、同じPhaseの中でもゾーンが変わるたびに施設の"聞こえ方"が変化し続ける。
+
+### Facility Audio Theme（STEP43.6追加要件で追加）
+既存のWorldEnvironment（1章参照）6種、Digital Grid/Quantum Network/Neural Forest/Data Ocean/Fractal Core/Unknown Dimensionそれぞれに専用のAudio Theme（環境音の組み合わせ・Droneへのフィルター色付け・入場時のアクセント音）を割り当てている。既存のHidden Environment（秘匿領域）6種（Void Memory/Lost Archive/Genesis Lab/Simulation Zero/Echo Network/Paradox Core）にも同様に専用Themeを用意しており、秘匿領域滞在中はそちらが一時的に優先され、離脱すると元のWorldEnvironment用Themeへ自動的に戻る。
+
+### Adaptive Scan Progress（STEP43.6追加要件で追加）
+既存のEnvironment Scan演出（Layer移動でゾーンが変化した瞬間に表示する「SCANNING AREA...」演出、1章参照）の進捗バーは、単純な一定速度ではなく、区間ごとにランダムな速度で進むようになっている。ただし実際にScanが完了するまでの時間そのものは変えていない（見た目の刻み方だけを変化させている）。バーが進むたびに短いProgress SEが鳴り、100%に近づくほど音が僅かに高くなることで、AIが解析を追い込んでいく緊張感を表現している。
+
+### System Event SE（STEP43.6追加要件で追加）
+Analyze/Upgrade/Complete/Discovery/Protocol/Warning/Error/Layer Start/Layer Complete/Continue/Menu/Back/Confirmの各イベントに対応する短いSEを、全てSynthのリアルタイム生成で用意している（音源ファイルは使用しない）。既存のUI Sound（Node選択/Node確定/Signal同期等）と同じ枠組みで管理され、ENDLESS RESEARCH中のみ鳴る。
+
+### Audio Timeline System（STEP43.6追加要件で追加）
+研究施設で起きる一つの出来事（Layerクリア・Memory取得・Ending等）は、SE単発ではなく「SE→Popup→Rank表示→次のSE→Music反応→次の演出」という時間軸に沿った一連の流れとして構築されている。この流れをTimelineと呼び、開始時刻（秒）・優先度・キャンセル条件を持つ複数のステップ（SE/Music反応/Popup/Dialogue/Camera/演出）として`src/audio/config/audioTimelines.js`にデータとして定義する。画面側のコード（endless.js）はTimelineへ直接触れることはなく、次項のFeedbackManagerを介してのみ発火させる。これにより「研究施設AIが一連の演出を自律的に組み立てて提示している」という体験を保ちながら、既存のReward/Story/Dialogueといったゲーム進行そのものには一切影響を与えない。
+
+### Timeline Driven Presentation（STEP43.6追加要件で追加）
+例えばLayerクリア時のTimeline（layerComplete）は、0.0秒でLayer Clear SE→0.2秒でクリアPopup→0.5秒で研究ランク表示→0.8秒でDiscovery SE→1.2秒でMusic反応（コード進行）→1.6秒で次のLayerへの演出、という順序で進行する。Memory取得（memoryObtain）のTimelineは、取得の瞬間にBGMを40%まで一時的に下げてMemoryにまつわる一言を示し、鐘の音が鳴った後にBGMを元の音量へ戻す、という「AIが一瞬こちらに注意を向けてまた解析へ戻っていく」ような呼吸を表現する。Ending時のTimeline（ending）は最優先（critical）として、進行中の他の全てのTimelineを停止させたうえでEndingだけの演出を独占的に進行する。
+
+### Research Facility Event Timeline（STEP43.6追加要件で追加）
+Layer開始/クリア・Discovery・Protocol取得・Memory取得・Relationship変化・実績解除・図鑑コンプリート・Story/Dialogue・Ending・Continue・Popup通知・環境変化・研究ランクアップなど、研究施設内で起きるほぼ全てのイベントがTimelineとして扱われる（うちlayerComplete/memoryObtain/endingの3つは上記のとおり複数ステップの演出として手作りされており、残りは既存のSE・Music反応をそのままTimeline化した単純な1ステップとして自動的に構成される）。優先度の高いTimeline（Memory取得やEndingなど）が進行中に発生すると、優先度の低いTimelineは自身の設定に応じてキャンセル・一時停止・音量Duckのいずれかで道を譲り、高優先度のTimelineが完了または中断されると元の演出へ自動的に復帰する。

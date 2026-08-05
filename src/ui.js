@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { CellState, COLORS, Score, Animation, Sound, CognitiveTheme } = G;
+  const { CellState, COLORS, Score, Animation, Sound, CognitiveTheme, AudioManager } = G;
 
   const DIALOGUE_TYPE_SPEED_MS = 30; // STEP32-2: Dialogue System。1文字あたりの表示間隔
 
@@ -79,7 +79,11 @@
           characterArchive: document.getElementById('screen-characterarchive'),
           // STEP33: Research Archive System
           researchArchive: document.getElementById('screen-researcharchive'),
-          chapterArchive: document.getElementById('screen-chapterarchive')
+          chapterArchive: document.getElementById('screen-chapterarchive'),
+          // STEP43: Research Progression System「Research Report」画面
+          researchReport: document.getElementById('screen-researchreport'),
+          // STEP43.5: Research Facility Audio System「Audio Settings」画面
+          audioSettings: document.getElementById('screen-audiosettings')
         },
 
         // TITLE
@@ -170,6 +174,7 @@
 
       this._bindStaticEvents();
       this._bindSoundToggle();
+      this._bindAudioSettings(); // STEP43.5: Research Facility Audio System
     }
 
     _bindStaticEvents() {
@@ -220,6 +225,58 @@
         });
       });
       syncIcon();
+    }
+
+    /**
+     * STEP43.6: Adaptive Music System & Audio Data Architecture「Audio Settings」画面の
+     * 配線。TITLE画面の🎚️ボタンから開き、BACKでTITLEへ戻る（現状の唯一の入口のため固定）。
+     * AudioManager自体の値の保持・永続化はsrc/audio/AudioManager.js側の責務で、ここでは
+     * DOM⇔AudioManagerの双方向同期のみを行う（既存の`_bindSoundToggle()`と同じ役割分担）。
+     * 音量バスはMaster/BGM/UI/Dialogue/Environmentの4+1項目（要求仕様どおり）。
+     */
+    _bindAudioSettings() {
+      const openBtn = document.getElementById('titleAudioSettingsBtn');
+      const backBtn = document.getElementById('audioSettingsBackBtn');
+      const masterToggle = document.getElementById('audioSettingsMasterToggle');
+      const ambientToggle = document.getElementById('audioSettingsAmbientToggle');
+      const sliders = {
+        bgm: document.getElementById('audioSettingsBgmSlider'),
+        ui: document.getElementById('audioSettingsUiSlider'),
+        dialogue: document.getElementById('audioSettingsDialogueSlider'),
+        environment: document.getElementById('audioSettingsEnvironmentSlider')
+      };
+      const values = {
+        bgm: document.getElementById('audioSettingsBgmValue'),
+        ui: document.getElementById('audioSettingsUiValue'),
+        dialogue: document.getElementById('audioSettingsDialogueValue'),
+        environment: document.getElementById('audioSettingsEnvironmentValue')
+      };
+      if (!openBtn || !AudioManager) return;
+
+      const syncFromAudio = () => {
+        masterToggle.textContent = AudioManager.isEnabled() ? '🔊' : '🔇';
+        ambientToggle.textContent = AudioManager.isAmbientEnabled() ? '🔊' : '🔇';
+        Object.keys(sliders).forEach(cat => {
+          const percent = Math.round(AudioManager.getVolume(cat) * 100);
+          sliders[cat].value = String(percent);
+          values[cat].textContent = `${percent}%`;
+        });
+      };
+
+      openBtn.addEventListener('click', () => { syncFromAudio(); this.showScreen('audioSettings'); });
+      if (backBtn) backBtn.addEventListener('click', () => this.showScreen('title'));
+      if (masterToggle) masterToggle.addEventListener('click', () => { AudioManager.setEnabled(!AudioManager.isEnabled()); syncFromAudio(); });
+      if (ambientToggle) ambientToggle.addEventListener('click', () => { AudioManager.setAmbientEnabled(!AudioManager.isAmbientEnabled()); syncFromAudio(); });
+      Object.keys(sliders).forEach(cat => {
+        const slider = sliders[cat];
+        if (!slider) return;
+        slider.addEventListener('input', () => {
+          const percent = Number(slider.value);
+          AudioManager.setVolume(cat, percent / 100);
+          values[cat].textContent = `${percent}%`;
+        });
+      });
+      syncFromAudio();
     }
 
     /** ---------------- 画面切り替え ---------------- */
@@ -406,6 +463,7 @@
           cell.setAttribute('aria-label', `row${r + 1} col${c + 1}`);
           cell.addEventListener('click', () => {
             if (Sound) Sound.tap();
+            if (AudioManager && this._isEndlessConsoleActive()) AudioManager.playUiSfx('nodeSelect'); // STEP43.6
             if (Animation) Animation.selectPulse(cell);
             this.cb.onCellTap && this.cb.onCellTap(r, c);
           });
@@ -488,7 +546,15 @@
         el.classList.add('flash', 'signal-inject', 'node-syncing');
         if (Animation) Animation.placeLight(el);
         if (Sound) Sound.place(color);
+        if (AudioManager && this._isEndlessConsoleActive()) AudioManager.playUiSfx('signalInject'); // STEP43.6
       }
+    }
+
+    /** STEP43.5: Endless RESEARCH中（Research Console有効時）のみtrue。STEP41-4で確立した
+     *  `research-console-active`クラスをそのまま流用し、モード判定の二重管理を避ける */
+    _isEndlessConsoleActive() {
+      const screenEl = document.getElementById('screen-game');
+      return !!(screenEl && screenEl.classList.contains('research-console-active'));
     }
 
     renderHintStatus(game) {
@@ -741,9 +807,10 @@
      * 「タップで全文表示、次タップで次セリフ」の状態遷移はこのメソッドが持つ
      * `_dialogueTapHandler`（_bindStaticEvents側の1つのクリックリスナーから呼ばれる）
      * で切り替える。
-     * @param {{speakerName:string, text:string, onTap:Function}} opts
+     * @param {{speakerName:string, text:string, onTap:Function, speakerId?:string}} opts
+     *   speakerId: STEP43.5 Dialogue Text Sound用のキャラクターid（省略時は既定音）
      */
-    showDialogue({ speakerName, text, onTap }) {
+    showDialogue({ speakerName, text, onTap, speakerId }) {
       if (!this.el.dialogueOverlay) { if (onTap) onTap(); return; }
       clearInterval(this._dialogueTypeTimer);
 
@@ -765,6 +832,11 @@
       this._dialogueTypeTimer = setInterval(() => {
         charIndex++;
         this.el.dialogueText.textContent = fullText.slice(0, charIndex);
+        // STEP43.6: Dialogue Text Sound。1文字ごとに鳴らすと煩雑なため、2文字に1回だけ
+        // 短いtick音を鳴らす（空白文字はスキップし、無音の間延びを避ける）
+        if (AudioManager && charIndex % 2 === 0 && fullText[charIndex - 1] && fullText[charIndex - 1] !== ' ') {
+          AudioManager.playDialogueTick(speakerId);
+        }
         if (charIndex >= fullText.length) revealFull();
       }, DIALOGUE_TYPE_SPEED_MS);
 

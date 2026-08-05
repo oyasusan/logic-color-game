@@ -27,6 +27,21 @@
 
   const SCAN_DURATION_MS = 1200;
   const PROGRESS_TICK_MS = 100;
+  const TOTAL_TICKS = Math.round(SCAN_DURATION_MS / PROGRESS_TICK_MS);
+
+  /**
+   * 「進捗バー速度を一定ではなくランダム変化」させつつ「処理時間は維持」するための
+   * ステップ配分を生成する。TOTAL_TICKS個のランダムな重みを正規化し、合計がちょうど
+   * 100になる非負の配列を返す（要素数・合計・呼び出し側のタイマー刻み幅はいずれも
+   * 既存どおり固定のため、実際にScanが完了するまでの時間そのものは一切変えていない）。
+   * @returns {number[]}
+   */
+  function generateRandomProgressSteps() {
+    const weights = [];
+    for (let i = 0; i < TOTAL_TICKS; i++) weights.push(0.4 + Math.random()); // 0.4〜1.4の範囲で緩急を付ける
+    const total = weights.reduce((a, b) => a + b, 0);
+    return weights.map(w => (w / total) * 100);
+  }
 
   class EnvironmentScan {
     /** @param {Object} deps @param {Object} deps.ui 既存UIインスタンス（今回はDOM取得のみで直接は使わない） */
@@ -74,11 +89,20 @@
       this.el.overlay.classList.remove('hidden');
 
       this._clearTimers();
-      const startTime = Date.now();
+      // STEP43.6追加要件「Adaptive Scan Progress」: 見た目の刻み幅だけをランダム化する。
+      // タイマー自体（PROGRESS_TICK_MS間隔・TOTAL_TICKS回・SCAN_DURATION_MS後に完了）は
+      // 既存のまま変更していないため、実際にScanが完了するまでの処理時間は維持される
+      const steps = generateRandomProgressSteps();
+      let cumulativePct = 0;
+      let tickIndex = 0;
       this._progressInterval = setInterval(() => {
-        const pct = Math.min(100, Math.round(((Date.now() - startTime) / SCAN_DURATION_MS) * 100));
-        this._setProgress(pct);
-        if (pct >= 100) clearInterval(this._progressInterval);
+        tickIndex++;
+        cumulativePct = tickIndex >= TOTAL_TICKS ? 100 : Math.min(100, cumulativePct + steps[tickIndex - 1]);
+        const displayPct = Math.round(cumulativePct);
+        this._setProgress(displayPct);
+        // Progress SE: バー進行に同期した短い音、100%へ近づくほど高音化する
+        if (G.AudioManager) G.AudioManager.playScanTick(displayPct / 100);
+        if (tickIndex >= TOTAL_TICKS) clearInterval(this._progressInterval);
       }, PROGRESS_TICK_MS);
 
       this._timer1 = setTimeout(() => {

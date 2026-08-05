@@ -23,12 +23,22 @@
      * @param {Object} deps.save EndlessSaveStoreインスタンス（Archive集計・Protocol発見一覧に使う）
      * @param {Object} deps.metaProgression MetaProgressionインスタンス
      * @param {Object} [deps.identityManager] STEP29: Protocol Evolution実行時のEXP加算に使う（省略可）
+     * @param {Object} [deps.researchDatabase] STEP43: Database Completion（RESEARCH ARCHIVE要約）に使う
+     * @param {Object} [deps.memoryManager] STEP43: 同上
+     * @param {Object} [deps.relationshipManager] STEP43: 同上
+     * @param {Object} [deps.endingManager] STEP43: 同上
      */
-    constructor({ ui, save, metaProgression, identityManager }) {
+    constructor({ ui, save, metaProgression, identityManager, researchDatabase, memoryManager, relationshipManager, endingManager }) {
       this.ui = ui;
       this.save = save;
       this.metaProgression = metaProgression;
       this.identityManager = identityManager || null;
+      // STEP43: Research Progression System「Database Completion」。いずれも省略可能
+      // （未指定の場合は要約セクションのその項目のみ非表示のまま、既存の4行表示にフォールバックする）
+      this.researchDatabase = researchDatabase || null;
+      this.memoryManager = memoryManager || null;
+      this.relationshipManager = relationshipManager || null;
+      this.endingManager = endingManager || null;
       this.onStartRun = null; // () => {} START NEW RESEARCH
       this.onExit = null;     // () => {} BACK TO TITLE
 
@@ -242,12 +252,27 @@
       if (!container) return;
       const protocolTotal = G.ProtocolUnlock ? G.ProtocolUnlock.getAllDefs().length : 0;
       const eventTotal = G.UnknownEvents ? G.UnknownEvents.ALL.length : 0;
-      container.innerHTML = `
+      let html = `
         <div class="neurallab-archive-row"><span>Protocols</span><span>${this.save.getUnlockedProtocols().length} / ${protocolTotal}</span></div>
         <div class="neurallab-archive-row"><span>Events</span><span>${this.save.getDiscoveredUnknownEvents().length} / ${eventTotal}</span></div>
         <div class="neurallab-archive-row"><span>Layers</span><span>${this.metaProgression.getDeepestLayerReached()} / ?</span></div>
         <div class="neurallab-archive-row"><span>Secrets</span><span>${this.save.getSecretsDiscoveredCount()} / ?</span></div>
       `;
+      // STEP43: Research Progression System「Database Completion」。上記4行（既存、STEP28）
+      // とは別カテゴリの収集率一覧を追記する（依存が全て揃っている場合のみ、後方互換のため）
+      if (G.DatabaseCompletion && this.researchDatabase && this.memoryManager && this.relationshipManager && this.endingManager) {
+        const summary = G.DatabaseCompletion.getCompletionSummary({
+          save: this.save, researchDatabase: this.researchDatabase, memoryManager: this.memoryManager,
+          relationshipManager: this.relationshipManager, endingManager: this.endingManager
+        });
+        const rows = [
+          ['Characters', summary.characters], ['Memory', summary.memory], ['Research Logs', summary.logs],
+          ['Environment', summary.environment], ['Endings', summary.endings]
+        ];
+        html += `<div class="neurallab-archive-divider">DATABASE COMPLETION</div>`;
+        html += rows.map(([label, c]) => `<div class="neurallab-archive-row"><span>${label}</span><span>${c.unlocked} / ${c.total}</span></div>`).join('');
+      }
+      container.innerHTML = html;
     }
   }
 

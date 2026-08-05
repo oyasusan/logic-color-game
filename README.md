@@ -2417,3 +2417,274 @@ Layer進行に応じて解析対象（Cognitive Neural Mapping UI）が5段階�
 - Endless RESEARCH終了後、`#screen-game`のTheme由来クラスが解除されStage/Tutorial/Daily Puzzleへ影響しないこと
 
 **未実装/既知の制約**: Theme適用範囲は`#screen-game`（実際にパズルを解いている画面）に限定し、Map画面自体の背景・配色は変更していない。「発光」「同期エフェクト」はSTEP41-2の既存アニメーション資産＋色替えで表現し、Theme専用の新規アニメーションは追加していない（上記設計判断参照）。本セッションでは実ブラウザでの視覚確認ができておらず、CSS記述の妥当性確認とDOM/クラス付け外しの動作確認（jsdom）に留まる。
+
+## STEP41-4: Research Console System
+
+ENDLESS RESEARCH画面全体を「ゲーム画面」ではなく「研究コンソールを操作している」体感にするため、Header/System Status Panel/Analysis Log/Mini Research Map/ARIA Terminal/Signal Injection Panel/Console Animation/Story連携（NEW FILE AVAILABLE）を追加した。**既存のゲームルール・問題生成・判定ロジック・セーブデータ構造は一切変更していない**（`board.js`/`game.js`/`generator.js`/`solver.js`・`endlessSave.js`のスキーマ、いずれも無変更）。
+
+**要求仕様に無く、こちらで設計した主な判断（既存資産の再利用を優先し、新しいゲームメカニクスの追加を避けた）**:
+- **System Status Panelの5項目は、いずれも既存データから導出した装飾的な表示のみとした**: FACILITY STATUSは既存の`worldStabilityManager.getStatus()`（STABLE/UNSTABLE/CRITICAL/COLLAPSE）をNOMINAL/DEGRADED/CRITICAL/OFFLINEへ翻訳、MEMORY INTEGRITYは既存の`life/maxLife`比率、NODE STABILITYは既存のWorld Stability%、PROTOCOLは既存の所持Protocol名、AI STATUSは既存のAI Director人格/目標。要求仕様セクション2の「演出的/参考データとして管理して構わない」という指示どおり、新しい永続フィールドや新しい判定ロジックは一切追加していない
+- **ARIA Terminalは新しい常設パネルを作らず、Headerの1バッジ＋既存Dialogue Systemの組み合わせで表現した**: 常時は「ARIA: CONNECTED」の小バッジのみ表示し、Story Dialogue再生中（`playNextStoryStep()`内で`dialogueManager.startDialogue()`を呼ぶ区間）だけ「ARIA: ACTIVE」へ切り替える。「拡張表示」そのものは既存のDialogueオーバーレイがそのまま担い、新しい会話UIは追加していない
+- **Research Area display（Layer開始時の告知）は、Phase変化の有無で使い分けた**: Phase（Neural Evolution Theme）が変化するLayerでは既存の`evolutionTransition`オーバーレイ（Theme名を含む、STEP41-3で実装済み）がそのまま告知役を兼ねるため重複表示を避け、変化しない通常のLayerでは短い自動消滅トースト「RESEARCH AREA: {Theme名} / DEPTH {N}」を毎Layer表示するようにした
+- **Console Animationは走査線（scanline）のみを新規追加し、Node Pulse/Node Link接続線の演出は追加しなかった**: 両方ともSTEP41-2/41-3で既に実装済み（`feedback_check_existing_animations_first.md`の既存資産優先方針）のため、重複実装を避けた。Scanlineは`pointer-events:none`の装飾レイヤーのため、既存のタップ判定には一切影響しない
+- **Signal Injection PanelはDOM構造を変更せず、CSSのみで装飾した**: 既存の`#colorLegend`/`.action-buttons`（footer）を、`#screen-game.research-console-active`スコープ限定のCSS（枠線＋`::before`ラベル）で装飾するだけに留めた。Stage/Tutorial/Daily Puzzleは`research-console-active`クラスが付与されないため、このCSSは一切影響しない（STEP41-3の`evolution-bg-*`と同じスコープ限定パターン）
+- **NEW FILE AVAILABLE演出は、実際にChapter Dialogueが再生される場合のみに限定した**: MEMORY FOUND/PROTOCOL UNLOCKED/CHARACTER DISCOVEREDはそれ自体が「続けるボタン必須」の告知オーバーレイを既に持つため、そちらには重ねて表示しない（二重演出を避けるための意図的なスコープ限定）
+- **Analysis Logは新しいセーブフィールドを持たない、RUNスコープのメモリ上リングバッファとした**: `this._analysisLog`（最大5件）は`_initializeRun()`でリセットされ、`localStorage`には一切保存しない。Node同期（Puzzle Clear）・Protocol activated・Memory detected・Research area updated・Anomaly detectedの5種のイベントで記録される
+
+**新規ファイル**:
+- `src/endless/researchConsole.js`: `ResearchConsoleHud`クラス（Header/System Status Panel/Analysis Log/Mini Research Map/ARIA Terminalの描画専用、`directorHud.js`/`environmentHud.js`と同じ役割分担で状態は持たない）
+
+**既存ファイルの変更**:
+- `endless.js`: `researchConsoleHud`を生成、`_analysisLog`（RUNスコープのリングバッファ）を追加。`_renderResearchConsole()`（`_renderHud()`から呼ぶ）でSystem Status Panel/Header/Mini Mapを更新。`_pushAnalysisLog()`をPuzzle Clear/Memory検出/Protocol解放/Theme変化/Hidden Environment発見の各所から呼ぶ。`_afterWorldEnvironmentReady()`にResearch Areaトーストを追加。Story演出開始直前に「NEW FILE AVAILABLE」トーストを追加。`_clearEvolutionThemeVisuals()`・`_initializeRun()`・`_endRun()`にResearch Consoleの表示/非表示切り替えを統合
+- `index.html`: `#researchConsolePanel`（Header+System Status Panel+Analysis Log+Mini Map、既存の「詳細」トグルパターンを踏襲）・`#researchConsoleScanline`（走査線演出レイヤー）を追加。Signal Injection Panel用のfooter装飾CSS（`#screen-game.research-console-active`スコープ）を追加。`<script src>`に`researchConsole.js`を追加
+- `docs/STORY_BIBLE.md`: 「Research Console System」節（11章として末尾に追加。既存の章番号は変更していない）を追加
+
+**HUD構成**: Header（RESEARCH CONSOLE / ARIA CONNECTED / Theme名 / Depth、常時1行）→「詳細」トグルで開くSystem Status Panel（FACILITY STATUS / MEMORY INTEGRITY / NODE STABILITY / PROTOCOL / AI STATUS の5項目グリッド）→ANALYSIS LOG（直近5件）→RESEARCH MAP（現在Phase内のDepth位置を示す簡易プログレスバー）。既存の`endlessHud`（DEPTH/LIFE/SCORE/TIME等）・`directorHudBadge`はいずれも無変更のまま、その直上に重ねる形で追加した。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`/`ResearchConsoleHud`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。36項目を3回連続実行し全PASS、加えてSTEP41-3の既存28項目テストも回帰無しで全PASS確認済み:
+- RUN開始でResearch Console Panel/Scanlineが表示され、`screen-game`に`research-console-active`クラスが付与されること
+- Header（タイトル/ARIA CONNECTED/Depth/Theme名）が初期値どおり表示されること、詳細トグルの開閉が正常に動作すること
+- System Status Panelの5項目（NOMINAL/100%/100% STABLE/Protocol名/AI Status）が既存データから正しく導出されること
+- Signal Injection Panel装飾（footerの枠線）がENDLESS RESEARCH中のみ適用されること
+- 既存問題が解ける・正解判定正常（実際にLayer1をクリア）・Analysis Logに"Node synchronized"が記録されDOMへ反映されること・最大5件で頭打ちになること
+- 既存Story正常・既存Protocol正常・スマホ表示正常（Memory Nodeが引き続き`theme-circle`、`aria-label`維持）
+- Save互換維持（3層構造・`saveVersion`="1.2.0"・旧Save移行）
+- Continue互換維持（Continue Snapshotの構造にResearch Console関連の新フィールドが追加されていないこと）
+- Endless RESEARCH終了後、Research Console Panel/Scanline/`research-console-active`クラスがいずれも解除されStage/Tutorial/Daily Puzzleへ影響しないこと
+
+**未実装/既知の制約**: 本セッションでは実ブラウザでの視覚確認ができておらず、CSS記述の妥当性確認とDOM/クラス付け外しの動作確認（jsdom）に留まる。特にScanline演出・System Status Panelのグリッドレイアウトは、狭い画面幅での実機表示確認が別途必要。Console Animationは走査線のみで、要求仕様にあった「背景パーティクル」「ホログラム効果」は過度な演出追加によるモバイル負荷・視認性リスクを避けるため見送った（既存のTheme背景・Node Pulse等の既存演出で十分な「研究コンソール」感が既に得られていると判断）。
+
+## STEP42: Dynamic Research Event System
+
+Layer開始のたびに低確率で発生する、短いフレーバーイベント（System/ARIA/Environment/Story/Unknownの5カテゴリ）を追加した。「探索中の世界が常に動いている」体感を補強するための**演出専用システム**で、**ゲームルール・問題生成・難易度・判定は一切変更していない**（`board.js`/`game.js`/`generator.js`/`solver.js`は無変更、`endlessSave.js`への追加は生涯履歴用の1フィールドのみ）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **既存の「Environment Event System」（STEP30-6、`environmentEventManager.js`）とは名前・概念ともに明確に分離した**: STEP30-6のEnvironment Eventはゲームプレイに実際に効果（Modifier付与等）を及ぼす機構であり、今回のカテゴリ「Environment」（背景ノイズ・照明点滅等）は同じ「Environment」という語を使うが完全に別物の演出専用データ。クラス名を`ResearchEventManager`（要求仕様どおり）、ファイル名を`researchEvent*.js`とし、既存の`EnvironmentEventManager`/`environmentEvent*.js`と重ならない名前にした
+- **表示は既存の`ui.showToast`（単一スロット・後勝ち）を使わず、独立した専用バナー（`#researchEventBanner`）にした**: `ui.showToast`はクリア報酬・Protocol取得・Research Area告知（STEP41-4）等で既に高頻度に使われており、同じスロットを使うとRandom Research Eventが他の重要な通知を上書きしてしまう（またはされてしまう）リスクが高いと判断した。専用バナーは`#toast`と縦位置をずらし、フェードイン/フェードアウト・3〜6秒表示・タップスキップを独自に実装した
+- **バナーは完全に非モーダル（`pointer-events:none`はhidden時のみ、show中も背後の盤面タップを妨げない）にした**: 「ゲームテンポを阻害しない」という確認項目を、表示中にプレイヤーの操作を一切ブロックしない設計で満たした。抽選自体もLayer開始処理の同期フロー内で完結し、Puzzle開始を待たせない
+- **Storyカテゴリは「固定」の意味を、ランダム抽選の対象外＝指定Layerで確実に1回発生、と解釈して実装した**: 指定Layer（2/6/10/14/18/24）は、既存のChapter境界Layer（4/8/12/16/20/30）およびSTEP41-3のTheme Phase境界Layer（4/12/20/30）のいずれとも重ならないよう選定し、既存のChapter Complete演出・Theme Transition演出と同一Layerで二重に演出が重ならないようにした
+- **Theme Transitionオーバーレイが表示されるLayer（Phaseが変化するLayer）では、ランダム抽選自体を行わない**（Story固定イベントは対象外、常に発生する）: 既に大きな演出（Theme Transition）が入るLayerにさらに別の演出を重ねると煩雑になるため、STEP41-4の「Research Area告知トースト」と同じ考え方でスキップするようにした
+- **重複抑制は「直近3件のid」をRUNスコープのメモリ上リストとして持つだけの軽量な実装にした**: 要求仕様の「同じイベントばかり続かないよう制御」を満たすために生涯データを都度読み書きする必要は無いと判断し、Save側には表示確定後に生涯履歴として記録するだけ（読み取り・除外判定には使わない）にした。全候補が除外済みの場合は制限を解除して抽選する（カテゴリの候補数が少なくても必ず何かは選ばれる）フォールバックを持たせた
+- **ARIAカテゴリの口調は、Relationship Levelに関わらず違和感の無い「冷静・観測的」なトーンに統一した**: ARIAは「感情ではなく理解能力を獲得する存在」（Story Bible 2章）という既存の設計方針があり、Dynamic Research Eventはどのタイミング（どのRelationship Level）でも発生しうるため、特定のLevelでしか自然に聞こえない感情豊かなセリフは避けた
+
+**新規ファイル**:
+- `src/endless/researchEventData.js`: 5カテゴリの静的イベント定義データ（`CATEGORIES`/`EVENTS_BY_CATEGORY`）
+- `src/endless/researchEventManager.js`: `ResearchEventManager`クラス（`rollEvent(layer, options)`/`recordShown(eventDef, context)`/`getHistory()`、抽選ロジックと重複抑制のみを持つ状態管理）
+- `src/endless/researchEventBanner.js`: `ResearchEventBanner`クラス（`show(eventDef)`/`hide()`、DOM描画・フェード・タイマー制御のみ）
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `metaData.researchEventHistory`（生涯履歴、上限50件）と`recordResearchEventHistory()`/`getResearchEventHistory()`を追加。Save構造自体（3層構成・`saveVersion`）は無変更、旧Saveは既存のマイグレーション機構（`Object.assign(defaultData(), ...)`）がデフォルト値`[]`を自動補完するため追加のマイグレーションコードは不要だった
+- `endless.js`: `researchEventManager`/`researchEventBanner`を生成。`_initializeRun()`でRUNごとに重複抑制状態をリセット。`_afterWorldEnvironmentReady()`にLayer開始のたびの抽選呼び出し（`_rollResearchEvent()`）を追加。`_clearEvolutionThemeVisuals()`/`_endRun()`でバナーを隠す処理を追加
+- `index.html`: `#researchEventBanner`（新規バナー）のDOM・CSS（`#toast`と同系統の視覚言語、独自の縦位置）を追加。`<script src>`に`researchEventData.js`/`researchEventManager.js`/`researchEventBanner.js`を追加
+- `docs/STORY_BIBLE.md`: 「Dynamic Research Events」節（12章として末尾に追加。既存の章番号は変更していない）を追加
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`/`ResearchEventManager`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。37項目を3回連続実行し全PASS（1回だけ、python製の簡易HTTPサーバーへ別の統合テストと同時にリクエストを送った際に発生したテストインフラ側の競合による偽陽性失敗があったが、単独実行では毎回安定してPASSすることを確認済み）。加えてSTEP41-4の既存36項目テストも回帰無しで全PASS確認済み:
+- Story固定イベント（Layer2/6/10/14/18/24）がランダム性に依存せず必ず発生すること、Chapter境界Layerと重ならないこと
+- `allowRandom:false`（Theme Transition中）ではStory固定イベント以外は一切発生しないこと
+- UnknownカテゴリはLayer31未満で一切出現せず、Layer31以降では出現しうること（各300回試行の統計的確認）
+- 重複抑制ロジックの決定的検証（`window.Math.random`を固定値へ差し替え、直前に選ばれたidが次回除外され別のidが選ばれることを確認）
+- `recordShown()`でSave側の生涯履歴に正しく記録され、`getHistory()`が新しい順で返すこと
+- バナーの表示/フェードイン/タップスキップ/自動フェードアウト（3〜6秒経過後）が正常に動作すること、hidden中は`pointer-events:none`で盤面操作を妨げないこと
+- 実RUN経路（`_afterWorldEnvironmentReady()`経由）でもLayer2到達時にStory固定イベントのバナーが表示されること
+- 既存問題が解ける・正解判定正常・既存Story正常・既存Protocol正常・スマホ表示正常（Memory Nodeが引き続き`theme-circle`、`aria-label`維持）
+- Save互換維持（3層構造・`saveVersion`="1.2.0"・旧Save移行、`researchEventHistory`のデフォルト値自動補完を含む）
+- Continue互換維持（Continue Snapshotの構造にResearch Event関連の新フィールドが追加されていないこと）
+- Endless RESEARCH終了後、表示中だったバナーも即座に隠されること
+
+**未実装/既知の制約**: 本セッションでは実ブラウザでの視覚確認ができておらず、フェードのタイミング・バナーの縦位置が他のHUD要素（STEP41-4のResearch Console Header等）と実機で視覚的に衝突しないかは別途確認が必要。イベント発生率（55%が何も起きない）・カテゴリの重み付けは均等抽選のみで、要求仕様に数値指定が無かったため一律にした（将来的にカテゴリごとの出現率調整が必要になった場合は`researchEventManager.js`の抽選部分のみの変更で対応できる設計にしてある）。
+
+## STEP43: Research Progression System
+
+RUN終了後、プレイヤーが「今回はどんな研究成果があったか」を実感できるよう、新規「RESEARCH REPORT」画面を追加した。**ゲームルール・問題生成・難易度・判定は一切変更していない**（`board.js`/`game.js`/`generator.js`/`solver.js`は無変更）。
+
+**要求仕様に無く、こちらで設計した主な判断（既存資産の徹底調査を先に行い、重複実装を避けた）**:
+- **実装前に既存コードを調査したところ、要求仕様の複数項目が既存システムと概念的に重複していることが判明した**: `endlessResult.js`（RESULT画面）は既にコメントで「RESEARCH REPORT」と呼ばれるセクション（Deepest Layer/Research Data/Protocols Found/Unknown Analysis等）を持ち、`researchTimeline.js`（`G.ResearchTimeline`）は既に「Research Timeline」というクラス名でStory Database解放順の生涯タイムラインを実装済みだった。同じ名前を持つ新しいクラスを作ると衝突するため、要求仕様の「Research Timeline」（今回のRunのみ）は既存クラスと明確に別物として実装し（RUNスコープの`_runTimeline`配列、endless.js側の状態としてのみ保持）、既存の`ResearchTimeline`クラス・`researchDatabase.getTimeline()`には一切手を加えていない
+- **Research Report画面は、既存RESULT画面を置き換えず、その手前に1画面追加する設計にした**: 既存のRESULT画面・RETRY/TITLE分岐・Surface Arrival・Neural Research Labへの遷移ロジック（STEP27〜STEP40-2にわたる多数のフック）は複雑かつ広範囲に依存されているため、変更のリスクが高いと判断した。代わりに、既存のAchievement/Ending通知オーバーレイの連結パターン（`showEndingThenResult`等）をそのまま1段延長し、`showReportThenResult`という新しい連結先を割り込ませるだけに留めた。既存RESULT画面のコード自体は1行も変更していない
+- **Database Completionは新しい収集判定ロジックを一切追加せず、既存の各Archive（Character/Memory/Research Database/Protocol/Environment/Ending）が持つ「discovered/total」の数え方をそのまま再利用する集計関数にした**: 新しい画面を1つ作るのではなく、既存のNEURAL RESEARCH LAB画面の「RESEARCH ARCHIVE」要約（STEP28、Protocols/Events/Layers/Secretsの4行）に追記する形にし、Research Report画面にも同じデータの縮小版を表示する、という2箇所での再利用にした
+- **Facility Restorationは、新しい生涯統計の加算ロジックを増やさず、既存の生涯データ（Story Database完成率・Memory収集率・最深到達Layer）から都度算出する純粋関数にした**: 「進行度を保存する」という要求はSave側の`facilityRestorationPercent`（増加のみのガード付き）で満たしつつ、算出ロジック自体はいつでも同じ入力から同じ結果になる決定的な関数にすることで、加算漏れ・二重加算といった、このプロジェクトで過去に注意してきた類のバグの発生源を作らないようにした
+- **Research Gradeは保存しない**: 要求仕様で「保存する」と明示されていたのはFacility Restorationのみだったため、Gradeはその都度RUNの結果から算出する使い切りの評価とし、新しい永続フィールドを追加していない
+- **ARIA帰還演出は新しい会話UIを作らず、Research Report画面冒頭の1行として表示した**: STEP42のARIA Event（Dynamic Research Event System）と同じ「感情ではなく理解能力を獲得する存在」という設計方針を踏襲し、Relationship Levelに関わらず違和感の無い冷静なトーンのセリフ集にした
+
+**新規ファイル**:
+- `src/endless/facilityRestoration.js`: `FacilityRestorationManager`クラス（`compute()`/`refresh()`/`getPercent()`/`getStatusLabel()`）
+- `src/endless/researchGrade.js`: `computeGrade(stats)`関数+`GRADE_DEFS`/`WEIGHTS`（S〜Dの評価基準、データ化）
+- `src/endless/databaseCompletion.js`: `getCompletionSummary(deps)`関数（Characters/Memory/Logs/Protocols/Environment/Endingsの収集率をまとめて返す）
+- `src/endless/researchReportUI.js`: `ResearchReportUI`クラス（Research Report画面のDOM描画のみ）
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `metaData.facilityRestorationPercent`（0〜100、増加のみ）と`getFacilityRestorationPercent()`/`recordFacilityRestorationPercent()`を追加
+- `endless.js`: `facilityRestoration`/`researchReportUI`を生成。RUNスコープの`_memoriesThisRun`/`_protocolsUnlockedThisRun`/`_runTimeline`/`_relationshipAtRunStart`を追加し、既存のMemory取得/Protocol解放/Boss撃破/Chapter完了/秘匿領域発見/Extract成功の各検出箇所（STEP34/STEP36/STEP30-7/Boss処理等、既存コード）にpushを1行ずつ追加。`_computeRelationshipChanges()`/`_buildResearchReport()`を新設。`_endRun()`の既存Achievement/Ending通知チェーンへ`showReportThenResult`を1段追加
+- `neuralLab.js`: `_renderArchiveSummary()`にDatabase Completionの6カテゴリ（Protocolsは既存行と重複するため5カテゴリ）を追記。依存（researchDatabase等）は全て省略可能な引数にし、未指定時は既存の4行表示のみにフォールバックする後方互換設計
+- `ui.js`: `screens`マップに`researchReport`を追加
+- `index.html`: `#screen-researchreport`（新規画面）・CSS・`<script src>`を追加
+- `docs/STORY_BIBLE.md`: 「Research Progression System」節（13章として末尾に追加。既存の章番号は変更していない）を追加
+
+**評価基準（Research Grade）**: `depthScore(重み0.4) + perfectScore(0.3) + survivalScore(0.2) + eventBonus(0.1)`の加重合成。depthScoreは到達Depth/30を百分率化、perfectScoreはPERFECT率、survivalScoreはExtract成功=100/死亡=40、eventBonusはBoss撃破×30+Memory取得×20+Protocol取得×20（上限100）。閾値はS≧85/A≧70/B≧50/C≧30/D未満30。いずれも要求仕様に数値指定が無かったため設計した値で、`researchGrade.js`のGRADE_DEFS/WEIGHTSを変更するだけで将来調整・追加できる。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。32項目を3回連続実行し全PASS。加えてSTEP41-4の既存36項目・STEP42の既存37項目も回帰無しで全PASS確認済み（テスト実行中、jsdomの単発リソース読み込みエラー、およびMap Node種別のランダム抽選でPuzzle以外のNodeばかり引くテスト側の偶発的な現象が発生したが、いずれも既知のテストインフラ側の問題であり、再実行で解消することを複数回確認した。詳細は本プロジェクトの持続メモリ「jsdomテストの落とし穴」参照）:
+- ResearchGradeの純粋関数テスト（高成績RUN=S評価、低成績RUN=D評価、クリア0件でもゼロ除算しないこと）
+- 実RUNでLayer1クリア→Extract実行→RUN終了後、既存RESULT画面より先にResearch Report画面が表示されること
+- Research Report画面の全項目（ARIA一言/Grade/Depth/Rank/Unknown Signal/Facility Restoration%/Database Completion 6カテゴリ/Run Timeline）が表示されること
+- Facility Restorationが表示専用でなく実際にSaveへ保存されること
+- 続けるボタンで既存RESULT画面へ遷移し、既存RESULT画面のDEPTH表示・RETRY→Surface Arrival→Neural Research Labという既存フローが無変更のまま機能すること
+- Neural Research Lab画面のRESEARCH ARCHIVE要約にDATABASE COMPLETIONが追記され、既存のProtocols行等も引き続き表示されること（既存Meta Progressionとの競合なし）
+- Save互換維持（3層構造・`saveVersion`="1.2.0"・旧Save移行、`facilityRestorationPercent`のデフォルト値自動補完）
+- 既存Meta Progressionとの競合なし（Research Rank算出・Research Data総量が破壊されていないこと）
+
+**未実装/既知の制約**: 本セッションでは実ブラウザでの視覚確認ができておらず、Research Report画面（項目数が多く縦に長い）の実機スクロール操作感は別途確認が必要。Research Gradeは保存しないため、「生涯ベストGrade」のような実績は今回実装していない（将来追加する場合は`researchGrade.js`のcomputeGradeの結果をendlessSave.js側で新たに保存するだけで対応できる）。
+
+## STEP43.5: Research Facility Audio System
+
+LOGIC COLOR全体に音響システムを追加し、「研究施設を探索している」体験を音の面から強化した。**ゲームルール・問題生成・判定は一切変更していない**（`audioManager.js`は音を鳴らすだけでゲーム状態を一切変更・参照しない）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **実装前の調査で、既存の`sound.js`（Stage/Tutorial/Daily Puzzle用、tap/place/complete/clearの4種、Web Audio APIのシンセ音）が既に存在することを確認した**。新しい`AudioManager`は`sound.js`を置き換えず、完全に独立した別システムとして実装した（`sound.js`自体は1行も変更していない）。理由: `sound.js`は全モード共通の基礎的なタップ/配置音として既に広く依存されており、変更のリスクが高い。新システムはBGM/Layer Theme連動/Dialogue SE/Ambient等、`sound.js`が持たない要素だけを追加する形にした
+- **音源は実音声ファイルではなく、`sound.js`と同じ方針（Web Audio APIのシンセ音のみ、`assets/sounds/`未使用）を踏襲して実装した**。BGMも複数オシレータによる持続音（Drone/Pad、Phaseごとに異なる和音・波形）として実装している。要求仕様セクション7「音ファイルを直接コードに書かない」は、全ての合成パラメータ（周波数・波形・長さ等）を`audioData.js`に集約し、`audioManager.js`側はidを介してのみ参照する、という形で満たした
+- **要求仕様セクション1の6カテゴリ（BGM/UI/System/Dialogue/Discovery/Environment Sound）と、セクション6の4音量バス（BGM/Effect/Dialogue/Environment）の数が食い違っていたため、UI Sound・System Sound・Discovery SoundはすべてEffectバスへ束ねる設計にした**。3カテゴリ個別にスライダーを用意すると要求仕様セクション6の項目数と矛盾するため、内部の音源分類とユーザー向け音量調整単位を意図的に分離した
+- **Layer Theme BGMは、既存のNeural Evolution System（STEP41-3、`themeManager.js`）とまったく同じPhase境界（Layer1-4/5-12/13-20/21-30/31+）を流用した**。要求仕様のBGM区切りがこの既存Phase区切りと完全一致していたため、独自のLayer範囲定義を追加せず、`themeManager.js`のPhase判定関数を呼び出すだけにした（境界値の二重管理を避けるため）
+- **System SE（Node Select/Signal Inject等）はENDLESS RESEARCH中のみ鳴るようにスコープした**。既存の`research-console-active`クラス（STEP41-4で確立、ENDLESS RESEARCH中のみ`#screen-game`へ付与される）をそのまま判定に使い、Stage/Tutorial/Daily Puzzleの既存の音（`sound.js`）には一切影響しないようにした
+- **Dialogue Text Sound（文字送りSE）は、既存の`ui.js`の`showDialogue()`に`speakerId`パラメータを1つ追加するだけで実現した**。`dialogueManager.js`側は既に`line.speaker`（キャラクターid）を保持していたため、これをそのまま渡すだけで済んだ。文字送りのたびに毎回鳴らすと煩雑なため、2文字に1回・空白文字はスキップする間引きを行っている
+- **Audio Settings（音量設定）は既存のSave（`endlessSave.js`/`progress.js`）とは独立した新しいLocalStorageキー（`logicColor.audio.v1`）に保存した**。`sound.js`が既に専用キー（`logicColor.sound.enabled`）を持つ前例があり、同じ設計方針を踏襲した。既存Save構造への変更は一切無い
+
+**新規ファイル**:
+- `src/audioData.js`: 全ての音響パラメータ（SFX_DEFS/DIALOGUE_CHARACTER_SE/BGM_PHASE_DEFS/AMBIENT_DEF）を持つ静的データファイル
+- `src/audioManager.js`: `AudioManager`クラス+シングルトン`G.GameAudio`（`playSFX(id)`/`playDialogueTick(characterId)`/`playBGMForLayer(layer)`/`stopBGM()`/`startAmbient()`/`stopAmbient()`/音量設定API）
+
+**既存ファイルの変更**:
+- `ui.js`: `showDialogue()`に`speakerId`パラメータを追加し文字送り中に`GameAudio.playDialogueTick()`を呼ぶ。盤面セルのクリック/配置箇所に`GameAudio.playSFX('nodeSelect'/'signalInject')`をEndlessスコープで追加。`_bindAudioSettings()`を新設しAudio Settings画面のスライダー/トグルを配線。`screens`マップに`audioSettings`を追加
+- `endless.js`: `_afterWorldEnvironmentReady()`にLayer Start SE+BGM Phase切替呼び出しを追加。`_handleRoundClear()`にPuzzle Clear/Node Sync/Protocol Activate/Discovery SEを追加。`showRewardOverlay`にLayer Complete SEを追加。`_checkProtocolUnlocks()`にProtocol Activate SEを追加。`_initializeRun()`でAmbient開始、`_clearEvolutionThemeVisuals()`/`_endRun()`でAmbient・BGM停止を追加
+- `dialogueManager.js`: `ui.showDialogue()`呼び出しに`speakerId: line.speaker`を追加
+- `index.html`: `#screen-audiosettings`（新規画面、BGM/Effect/Dialogue/Environmentスライダー+Ambient/マスタートグル）・TITLE画面への🎚️導線・CSS・`<script src>`（`audioData.js`/`audioManager.js`、`sound.js`の直後）を追加
+- `docs/STORY_BIBLE.md`: 「Research Facility Audio System」節（14章として末尾に追加。既存の章番号は変更していない）を追加
+
+**Audio構造**: `AudioManager`が6内部カテゴリ（BGM/UI/SYSTEM/DIALOGUE/DISCOVERY/ENVIRONMENT）を4ユーザー音量バス（bgm/effect/dialogue/environment、UI・SYSTEM・DISCOVERYはeffectへ集約）へマッピングして再生する。全ての音は`audioData.js`のid経由でのみ生成し、周波数等のリテラル値を呼び出し側へ直書きしない。
+
+**SE一覧**（`audioData.js`のSFX_DEFS）: `nodeSelect`（Node Select）/`signalInject`（Signal Inject）/`nodeSync`（Node Sync）/`puzzleClear`（Puzzle Clear）/`layerStart`（Layer Start）/`layerComplete`（Layer Complete）/`protocolActivate`（Protocol Activate）/`discoveryGeneric`（Discovery Sound、Memory Found/Protocol Unlocked/Character Discoveredの3演出で共用）。
+
+**BGM切替条件**: `G.EvolutionThemeData.getThemeIdForLayer(layer)`（`themeManager.js`、STEP41-3）が返すPhase idが直前の再生Phaseと異なる場合のみ、新Phaseの和音へ約1.6秒かけてクロスフェードする（Phase不変時は何もしない）。Layer1-4=basic/5-12=network/13-20=distortion/21-30=genesis/31+=unknown。
+
+**設定項目**（Audio Settings画面）: MASTER（マスターミュート）/BGM音量/EFFECT音量/DIALOGUE音量/ENVIRONMENT音量/RESEARCH CONSOLE AMBIENT（ON/OFF）。TITLE画面の🎚️ボタンから開く。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`/`GameAudio`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。44項目を3回連続実行し全PASS。加えてSTEP43の既存32項目テストも回帰無しで全PASS確認済み:
+- デフォルト音量・音量クランプ（0〜1）・LocalStorage(`logicColor.audio.v1`)への保存確認
+- BGM切替条件（Layer1/4/5/13/21/31/100でのPhase境界確認、themeManager.jsと同じ境界値であること）
+- 全SFX/Dialogue Tick/Ambient呼び出しが例外を投げないこと（jsdomにAudioContextが無い環境でも安全に無音動作すること）
+- Audio Settings画面のスライダー操作・マスタートグル・Ambientトグルが実際にGameAudioへ反映されること
+- 実RUNでLayer1到達時にBGMがbasicへ切り替わること、既存問題が解ける/正解判定正常/既存Protocol正常/スマホ表示正常（既存ゲーム動作への無影響）
+- Dialogue SE正常（`speakerId`付き`showDialogue()`が例外無く動作すること）
+- RUN終了（`exitRun()`）でBGMが停止すること
+- Save互換維持（3層構造・`saveVersion`="1.2.0"・旧Save移行）、Audio設定が既存Save（`logicColor.endless.v1`）と完全に独立したキーに保存されること
+
+**未実装/既知の制約**: 本セッションでは実ブラウザでの視覚確認・実際の音の聴感（BGMのループ感、音量バランス等）の確認ができておらず、jsdomでの動作確認（例外を投げないこと・音量パラメータが正しく伝播すること）に留まる。次回ユーザーが実機確認した際、BGMの和音構成やAmbientの音量バランスに調整依頼が来る可能性が高い。UI Sound単体の具体的なSE（ボタンタップ音等）はSystem SEの7種に含めておらず、既存の`sound.js`の音がその役割を引き続き担っている。
+
+## STEP43.6: Adaptive Music System & Audio Data Architecture
+
+STEP43.5「Research Facility Audio System」を、「BGMを再生するゲーム」ではなく「研究施設AIがリアルタイムに音を生成している」という世界観に沿った、完全生成・完全データ駆動のアーキテクチャへ再構築した。**ゲームルール・問題生成・判定は一切変更していない**。要求仕様どおりWeb Audio API以外の外部ライブラリ・音源ファイル（mp3/wav/ogg等）は一切使用せず、全ての音をその場でリアルタイム合成する。STEP43.5の`src/audioData.js`/`src/audioManager.js`は削除し、`src/audio/`配下の新アーキテクチャへ完全移行した。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **AudioManagerとAdaptiveMusicEngineの責務分離を、実装上も厳密に守った**: `AudioManager.js`はAudioContext・音量バス・共有Reverb/Delay・各Synthインスタンスの生成/配線のみを持ち、`AdaptiveMusicEngine.js`はWeb Audio APIのノードに一切触れず、`AudioManager.getSynths()`経由でSynthのpublicメソッド（`start`/`retune`/`changeChord`/`trigger`/`stop`）を呼ぶだけに徹した。これにより「新しいThemeを追加する場合はaudioThemes.js等へのデータ追加のみで済み、コード修正が不要」という要求仕様の確認項目を実際に満たしている
+- **UI Sound/System Sound/Discovery SoundはEffectではなく「UI」バスへ統合した**: 要求仕様の「Audio Settings」セクションがMaster/BGM/UI/Dialogue/Environmentの5項目を明記していたため、STEP43.5で使っていた「Effect」という名称をこの仕様に合わせて「UI」へ改名した（DOM要素id・保存済み設定の後方互換読み替えも含む）
+- **Chord/Patternはスケール度数（degree）で表現し、周波数計算はAudioScales側に一元化した**: これにより「将来Scaleを追加・変更してもChord/Pattern定義自体は変更不要」という、要求仕様の精神（データ駆動・拡張容易性）をChord/Pattern/Scaleの関係にも一貫して適用した
+- **Unknown Layer（Layer31+）のみ、Music SeedからChord進行・Pattern選択を決定的に生成する**: `src/seed.js`の既存`mulberry32`乱数（このプロジェクトで既に確立済みのSeed機構）をそのまま再利用し、新しい乱数生成器を実装しなかった。1周分のコード進行を消化するたびに新しい進行を生成し直すことで、「Unknown Layerを探索し続けるほど音楽も変容し続ける」という体感を表現している
+- **CPU負荷対策として、ノイズ音源（Texture Layer・Environment Audioのnoise系4種）は共有の2秒バッファを1度だけ生成しループ再生する構造にした**: 呼び出しのたびに新規のFloat32Arrayを生成しない設計により、Texture/Environment音が頻繁に切り替わってもGCコストが増えないようにした。Reverbも同様に、共有ConvolverNode 1つ（アルゴリズム生成のインパルスレスポンス、外部IRファイル不使用）を全レイヤーが送り先として共用する構造にした
+- **スケジューリングは標準的なWeb Audio Lookaheadパターン（100ms間隔の低頻度setIntervalで、実際の発音予約はAudioContextのタイムラインへ委ねる）を採用した**: メインスレッド/描画フレームへの負荷がほぼ無いため、60FPS維持・CPU負荷低減の要求仕様に対する設計上の対応とした（実測はできていない、後述）
+- **「ゲーム状態同期」14イベントのうち、既にSTEP43.5で個別のSFX直呼び出しになっていた箇所は、`AdaptiveMusicEngine.onGameEvent(id)`経由に置き換えた**: これによりSFX再生と音楽的反応（コード進行の即時進行・一時的な密度ブースト・フィルタースイープ・アクセント音・レイヤーの一時解放）が1箇所のデータ（`audioEvents.js`）から一貫して駆動されるようになった。「Protocol Unlocked」演出と「Character Discovered」演出は、実際の解放検知イベント（`protocolObtain`）と表示イベントが同一Layerクリアで重複しうるため、表示側は汎用の`discovery`イベントに留め、過剰な演出の重複を避けた
+
+**新規ファイル**（`src/audio/`配下、要求仕様のディレクトリ構成どおり）:
+- `AudioManager.js`: AudioContext・音量バス（Master/BGM/UI/Dialogue/Environment）・共有Reverb/Delay・各Synthの生成/配線・音量設定の永続化
+- `AdaptiveMusicEngine.js`: Lookaheadスケジューラ・Layer進行に応じたレイヤー解放・Theme切替・Music Seedによる Unknown Mode生成・14ゲームイベントへの反応
+- `AudioThemeManager.js`: Layer→Theme解決（themeManager.jsのPhase境界を再利用、二重管理を避ける）
+- `AudioStateManager.js`: Current Theme/Scale/Chord/Pattern/Layer構成/Tempo/Seed/Voice数の状態コンテナ
+- `AudioDebugPanel.js`: `?debug=true`時のみ表示するAudio専用デバッグパネル（既存debug.jsと同じ方針）
+- `config/audioScales.js`: 6音階（D/E/F Dorian・Phrygian・Lydian・Minor Pentatonic）
+- `config/audioChords.js`: 4固定コード進行（research/neural/distortion/genesis）+Unknown用の半ランダム生成関数
+- `config/audioPatterns.js`: 6アルペジオパターン（ascending/descending/pulse/random/minimal/ambient）
+- `config/audioThemes.js`: 5Theme別設定（テンポ/スケール/コード進行/各Layer密度/ランダム性/フィルター/リバーブ量/Environment Audio構成）
+- `config/audioPresets.js`: Drone/Pad/Pulse/Arpeggio/Texture/Ambient/UI/Dialogue(ARIA/Dr.Leon/LostResearcher/System)の音色定義+Environment Audio 6種の定義
+- `config/audioEvents.js`: 14ゲームイベント→SFX+音楽的反応の対応表、UI Sound 9種の音程定義
+- `config/audioLayerTable.js`: Layer→有効Music Layerのしきい値テーブル
+- `synth/DroneSynth.js`/`PadSynth.js`/`PulseSynth.js`/`ArpeggioSynth.js`/`TextureSynth.js`/`AmbientSynth.js`/`UISynth.js`: 各音源の生成・発音・停止
+
+**削除ファイル**: `src/audioData.js`・`src/audioManager.js`（STEP43.5、新アーキテクチャへ完全移行のため）
+
+**既存ファイルの変更**: `ui.js`（`GameAudio`→`AudioManager`、`playSFX`→`playUiSfx`、Audio Settings画面のUIバス改名）、`endless.js`（`AdaptiveMusicEngine`を生成しRUN開始/Layer進行/14ゲームイベントすべてを委譲、Music Seedを生成）、`index.html`（`src/audio/`配下の読み込み・UI Sliderのid改名・Audio Debugパネル用CSS）、`docs/STORY_BIBLE.md`
+
+**Story Bible更新内容**: 15章「Adaptive Music System & Audio Data Architecture」を末尾に追加（既存章番号は変更していない）。Research Facility Soundscape（BGMではなく「施設が生きて音を発している」体験）・Audio Data Driven Architecture（新Theme追加にコード修正不要な構造）・Music Seed System（Unknown Layerの決定的なランダム音楽生成）の3節構成。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。**jsdomには実Web Audio APIが無いため、`beforeParse`で最小限のMock AudioContext（Oscillator/BufferSource/BiquadFilter/Gain/Convolver/Delay相当のノードを持ち、生成数・停止数を計測するカウンタ付き）を注入し、Voiceリーク検証を含む49項目を3回連続実行し全PASS**。加えてSTEP43の既存32項目テストも回帰無しで全PASS確認済み:
+- 設定データの純粋関数テスト（AudioScalesのオクターブ計算、AudioChordsのUnknown進行が同じSeedで決定的に生成されること、AudioPatterns各6種、AudioLayerTableのLayer1/5/10/15/21/31しきい値、AudioThemeManagerが既存`themeManager.js`と完全に同じPhase境界を返すこと）
+- AdaptiveMusicEngine単体テスト（RUN開始→12Layer遷移→14ゲームイベント全種→RUN終了が例外無く完走、Layer31到達でUnknown Modeになること）
+- **Voiceリーク検証**: Mock AudioContext経由でOscillator/BufferSource(ノイズ)の生成数と停止数を計測し、複数RUN・複数Theme切替を経ても完全に一致すること（3回連続実行いずれも99/99・8/8で完全一致）
+- Audio Settings画面のUI/Dialogue改名確認（`audioSettingsEffectSlider`が存在しないこと、`audioSettingsUiSlider`が機能すること）
+- 実RUNでLayer1到達時にAdaptiveMusicEngineがbasic Themeへ切り替わること、既存問題が解ける/正解判定正常/既存Protocol正常/スマホ表示正常（既存ゲーム動作への無影響）
+- Dialogue SE正常（`speakerId`付き`showDialogue()`が例外無く動作すること）、RUN終了でAdaptiveMusicEngineが停止すること
+- Save互換維持（3層構造・`saveVersion`="1.2.0"・旧Save移行）、Continue Snapshotの構造にAudio関連の新フィールドが追加されていないこと、Audio設定が既存Saveと完全に独立したキーに保存されること
+
+**未実装/既知の制約（確認項目のうち実機無しでは検証しきれなかった項目を含む）**:
+- **60FPS維持・CPU負荷**: 実ブラウザでの計測はできていない。設計上の対策（Lookaheadスケジューラ・共有ノイズバッファ/Reverb・ノードの確実な解放）は行ったが、実測値の報告は次回実機確認時が必要（後述「CPU負荷測定」参照）
+- **スマホ動作**: 実機のスピーカー/イヤホンでの聴感、Web Audio APIの初回タップ解錠（既存`sound.js`と同じ`pointerdown`一度きりのunlock方式を踏襲）が実際にモバイルSafari/Chromeで機能するかは未確認
+- BGMの和音・音色バランスは全て設計値であり、実際に聴いた上での音楽的な調整は行っていない
+
+## STEP43.6追加要件: Adaptive Scan Progress / Facility Audio Theme / Dynamic Layer Mixing / System Event SE
+
+STEP43.6本編に4つの機能を追加した。**ゲームルール・問題生成・判定には一切影響しない**。Web Audio API以外の外部ライブラリ・音源ファイルは引き続き使用していない。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Facility Audio Theme（WorldEnvironmentごとのAudio Theme）は、Phase Theme（audioThemes.js、STEP43.6本編、Layer範囲に応じたBGM本体）とは完全に独立した別軸として実装した**: 要求仕様の6ゾーン名（Digital Grid/Quantum Network/Neural Forest/Data Ocean/Fractal Core/Unknown Dimension）を調査したところ、既存の`worldEnvironment.js`（STEP30-1、5Layerごとに巡回する「今いるゾーン」システム）の6 Environment（`env_grid`等）の名前と完全一致することが判明した。これによりBGM本体はLayer進行（研究の深度）に、環境音・アクセント音はゾーン（5Layerごとに巡回）に、それぞれ独立に反応する2軸構造にした。これに伴い、STEP43.6本編でPhase Theme側が持っていた`environmentSounds`フィールドはZone駆動へ責務が移ったため削除した
+- **Hidden Environment（秘匿領域）用Theme6種は、既存の`hiddenEnvironmentData.js`のid（void_memory等）とそのまま対応させ、退場時は直前のWorldEnvironment用Themeへ自動復元する設計にした**: 秘匿領域は一時的な滞在（要求仕様の既存システム）のため、専用Theme→復元という単純な2状態モデルで十分と判断した
+- **Adaptive Scan Progressは、既存の`environmentScan.js`（STEP30-3のScan演出）の進捗バーロジックのみを変更した**: 「処理時間は維持」という要求を厳密に守るため、実時間ベースの連続的なランダム揺らぎ（ハングやオーバーシュートのリスクがある）ではなく、固定ステップ数(12ステップ、既存のPROGRESS_TICK_MS間隔のまま)に合計100%となるランダムな重み配分を事前生成する方式にした。これにより既存の完了タイマー（SCAN_DURATION_MS＝1200ms、Skipボタンの挙動含む）を一切変更せずに「見た目だけランダムに変化する」を実現した
+- **Dynamic Layer Mixingは、新しいポーリングタイマーを追加せず、既存の`_renderHud()`（高頻度で呼ばれる既存メソッド）に相乗りする形で実装した**: Risk Chainレベル・World Stability・Boss戦中かどうかの3条件から、Pulse/Texture（要求仕様の「Noise」に相当）を動的に追加・除去する。Layerしきい値による基本レイヤー構成と「強制レイヤー」の集合演算（和集合）で表現し、強制フラグが外れても基本構成に含まれるレイヤーは誤って停止しない設計にした
+- **System Event SEは、STEP43.6本編で未使用だった6つのイベント名（Analyze/Upgrade/Complete/Discovery/Error/Continue）のみを追加した**: Protocol/Warning/Layer Start/Layer Complete/Menu/Back/Confirmは本編で既に定義済みのため重複追加していない
+
+**新規ファイル**: `src/audio/config/audioEnvironmentThemes.js`（WorldEnvironment6種+Hidden Environment6種のFacility Audio Theme定義）
+
+**既存ファイルの変更**:
+- `audioEvents.js`: UI_SFXへAnalyze/Upgrade/Complete/Discovery/Error/Continueの6種を追加
+- `audioPresets.js`: `scanProgress`（Adaptive Scan Progress用tick音）・`bell`（Zone/Hidden Environment切替アクセント音）の2プリセットを追加
+- `AudioManager.js`: `playScanTick(progress01)`を追加
+- `AudioThemeManager.js`は無変更、`audioThemes.js`から`environmentSounds`フィールドを削除
+- `AdaptiveMusicEngine.js`: `setWorldEnvironment(envId)`/`setHiddenEnvironment(envId)`（Facility Audio Theme切替）、`syncGameState(snapshot)`/`_setForcedLayer()`（Dynamic Layer Mixing）を追加。`_syncContinuousLayerMembership()`は`_applyLayerMembership()`へ改名し、レイヤー除去（stop）にも対応させた
+- `environmentScan.js`: 進捗バーのステップ配分をランダム化し、Progress SE呼び出しを追加
+- `endless.js`: WorldEnvironment確定時に`setWorldEnvironment()`、Hidden Environment入退場時に`setHiddenEnvironment()`、`_renderHud()`内で`syncGameState()`を呼ぶよう配線
+- `docs/STORY_BIBLE.md`: 15章へRequest Facility Audio Design/Facility Audio Theme/Adaptive Scan Progress/System Event SEの4節を追記
+
+**動作確認（jsdom + Mock AudioContext）**: 追加要件専用テスト30項目（データ整合性、Adaptive Scan Progressの処理時間維持[±150ms以内]・単調増加・非一定ステップ・SE高音化、Facility Audio Themeの切替とHidden Environment離脱後の復元、Dynamic Layer Mixingの追加/除去[Risk Chain/World Stability/Boss]、Voiceリーク再検証、実RUN統合、Save/Continue互換）を3回連続実行し全PASS（Voiceリークは43/43・4/4で3回とも完全一致）。STEP43.6本編の既存49項目・STEP43の既存32項目も回帰無し全PASS確認済み。
+
+**未実装/既知の制約**: 実ブラウザでのScan Progress SEの聴感・Facility Audio Themeの実際の音の違いは未確認。Dynamic Layer Mixingのしきい値（Risk Chainレベル2以上、World Stability CRITICAL/COLLAPSE）は要求仕様に数値指定が無かったため設計した値で、実プレイでの体感を見て調整が必要になる可能性がある。
+
+## STEP43.6追加要件: Audio Timeline System
+
+複数の演出（SE/Music/Animation/Popup/Dialogue/Camera）を時間軸で束ねて制御する「Timeline」システムを追加した。**ゲームルール・問題生成・判定には一切影響しない**。Web Audio API以外の外部ライブラリ・音源ファイルは引き続き使用していない。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **「PriorityAudioManager」は独立ファイルとして分離せず、`AudioTimelineManager`自身へ統合した**: 優先度比較・pause/duck/cancelの判定はいずれも「今どのTimelineが再生中か」という`AudioTimelineManager`が既に持つ内部状態を直接必要とするため、分離するとむしろ同じ状態を2箇所で持つ二重管理になると判断した
+- **`FeedbackManager`は`src/audio/`配下ではなく`src/endless/feedbackManager.js`として新設した**: 役割が「画面側からTimelineへの唯一の窓口」という、純粋なAudio機能を超えたルーティング責務であるため、endless.js側の既存モジュール群と同じ置き場所にした。要求仕様の「Timelineは FeedbackManagerのみから起動する。画面側から直接Timelineを操作しない」を、endless.jsが`AudioTimelineManager`へ一切直接アクセスしないという構造で実際に強制している
+- **Popup/Dialogue/Callbackステップは、既存のReward/Story/Dialogueパイプライン（単一スロットの`nodeResultOverlay`/`dialogueManager`、`storySteps`キュー）には接続しなかった**: 深く接続すると二重発火やオーバーレイ競合（続けるボタン必須という既存方針との衝突）のリスクが高いため、新設の非モーダルなインジケータ`#timelinePopup`（STEP42のResearch Event Bannerと同じ「独立した控えめな通知要素」パターン）へ安全に留めた。`memoryDialogue`ハンドラは実際の会話ではなくPopupテキストの表示に留め、実際のDialogue再生は既存の`storySteps`キューが引き続き担う。`nextLayer`コールバックも同様に演出のみで、実際のLayer進行トリガーとしては使わない（既存の`nextStep`/`showRewardOverlay`が引き続き唯一の正本）
+- **要求仕様の「対応イベント」約15種のうち、手作りで複数ステップの時間軸を定義したのは要求仕様が具体例として挙げていたLayer Complete/Memory/Endingの3つ（`layerComplete`/`memoryObtain`/`ending`）のみとした**: 残りのイベント（Layer Start/Discovery/Protocol/Relationship/Story/Dialogue/Continue/Popup/Environment Change/Research Rank Up等）は、既存の`audioEvents.js`（STEP43.6本編のGAME_EVENTS）に定義済みのSE+Music反応から、`AudioTimelineManager`が単純な1ステップTimelineを自動合成する。これにより、ほぼ同じ内容のデータをTimeline用に二重定義することを避けた
+- **`play()`で同一idのTimelineが既に再生中の場合は、無条件に上書きせず必ずQueueする設計にした**（実装・テスト中に発見した修正）: 当初の実装は同一idの再生要求が来ると内部インスタンスをそのまま上書きしており、直前のインスタンスが持っていた未発火のタイマーが孤立して残り、キャンセルもできないまま後から多重発火する不具合があった。`play()`の先頭で「同一idが既にactiveならQueueへ積んで即return」という分岐を追加し、この漏れを解消した
+
+**新規ファイル**:
+- `src/audio/config/audioTimelines.js`: 手作りTimeline3種（layerComplete/memoryObtain/ending）のステップ定義、Priorityランク表
+- `src/audio/AudioTimelineManager.js`: Timelineエンジン本体（シングルトン`G.AudioTimelineManager`）
+- `src/endless/feedbackManager.js`: 画面側の唯一の呼び出し窓口（`trigger(eventId, context)`/`notify(eventName)`）、Popup/Dialogue/Callbackハンドラの実処理
+
+**既存ファイルの変更**:
+- `AudioManager.js`: `duckBusVolume(bus, targetRatio, durationSec, ease)`/`restoreBusVolume(bus, durationSec, ease)`（ユーザー設定の音量値自体は変更せず、ライブのGainノードのみ一時的に上下させる）・`playBell()`を追加
+- `AdaptiveMusicEngine.js`: 既存の`_applyMusicReaction()`を、Timelineの`musicReaction`ステップから呼べるよう`applyMusicReaction()`として公開化
+- `AudioDebugPanel.js`: 「TIMELINE」セクション（ACTIVE/STATE/PRIORITY/REMAINING/QUEUE）を追加
+- `audioEvents.js`: 要求仕様の「対応イベント」一覧のうち本編未定義だった6種（continueEvent/achievement/collection/environmentChange/researchRankUp/popup）を追加
+- `endless.js`: 既存の`this.adaptiveMusicEngine.onGameEvent(id)`直接呼び出し（18箇所）を全て`this.feedbackManager.trigger(id)`経由へ置き換え、RUN終了時に`feedbackManager.notify('runEnd')`を追加（`cancelOn: ['runEnd']`を持つTimelineを中断させるため）。新規追加した6イベントのうちcontinueEvent/achievement/environmentChangeの3つを実際のフック地点（Continue実行時/実績解除時/WorldEnvironment変化時）に配線し、collection/researchRankUp/popupはデータのみ定義してこの回では未配線とした（曖昧な/重複するフック地点を新規に発明することを避けるため）
+- `index.html`: `#timelinePopup`要素・CSS、新規スクリプトタグの追加
+- `docs/STORY_BIBLE.md`: 15章へAudio Timeline System/Timeline Driven Presentation/Research Facility Event Timelineの3節を追記
+
+**Timeline構造（要求仕様どおり）**: 各Timelineは`priority`（low/normal/high/critical）・`onLowerPriority`（cancel/pause/duck）・`cancelOn`（このイベント名の通知で中断する配列）と、複数の`steps`（`at`=開始時間・`delay`・`type`・種別ごとの追加パラメータ）を持つ。例えば`layerComplete`は0.0秒でLayer Clear SE→0.2秒でクリアPopup→0.5秒でRank表示→0.8秒でDiscovery SE→1.2秒でMusic反応（コード進行）→1.6秒で次Layerへの演出、という要求仕様の例をそのまま実装した。
+
+**Timelineイベント一覧**: Layer Start/Layer Complete/Discovery/Protocol/Memory/Relationship/Achievement/Collection/Story/Dialogue/Ending/Continue/Popup/Environment Change/Research Rank Upの計15イベントが、すべて`play(id)`で起動できる状態になっている（うち3種は手作りの複数ステップTimeline、残りは既存データからの自動合成の単純Timeline）。
+
+**Priority連携**: 高優先度のTimelineが再生中の低優先度Timelineへ割り込むと、低優先度側は自身の`onLowerPriority`に従い、`cancel`（即座に停止）・`pause`（一時停止、高優先度側の完了/中断で自動再開）・`duck`（スケジュールには触れず共存、高優先度側自身の`musicDuck`ステップがバス音量のみ下げる）のいずれかで道を譲る。例えばEnding開始時は`cancelOthers`ステップにより進行中の全Timelineを強制停止させてから、Ending専用のTimelineを独占的に進行する。
+
+**Timeline Debug**: `?debug=true`時の既存Audio Debugパネルに「TIMELINE」セクションを追加し、現在再生中のTimeline id・State（playing/paused）・Priority・残りステップ数・Queue中のTimeline id一覧をリアルタイム表示する。
+
+**動作確認（jsdom + Mock AudioContext）**: Timeline専用テスト44項目（データ整合性、基本再生順序[SE→Popup→Rank→SE→MusicReaction→Callbackの相対順序とタイミング]、Priority連携[duck時の共存確認・cancel時の即時停止確認]、Queue[同一id競合時のQueue化・先着完了後の自動再生]、Skip[残りcallbackの即時実行]、Pause/Resume[一時停止中は後続ステップが発火しないこと・再開後に発火すること]、notifyEvent/cancelOn、Voiceリーク再検証、実RUN統合、Save/Continue互換）を3回連続実行し全PASS。STEP43.6本編の既存49項目・追加要件の既存30項目・STEP43の既存32項目も回帰無し全PASS確認済み（既存の既知flake「並列jsdom実行時の`document`未定義」「Map Nodeランダム選択」が各1回発生したが、いずれも再実行で解消しコード起因ではないことを確認した）。
+
+**未実装/既知の制約**: 実ブラウザでのPopup表示・Duck時の実際の聴感（音量が滑らかに下がって戻るか）は未確認。`collection`/`researchRankUp`/汎用`popup`の3イベントはデータ定義のみでこの回では実際のゲームフックに配線していない（次回、図鑑コンプリート演出や研究ランクアップ演出を新設する際に配線する想定）。

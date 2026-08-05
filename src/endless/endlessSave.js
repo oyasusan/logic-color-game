@@ -156,7 +156,15 @@
 
       // ---- STEP40-2: 将来のアップデート用データ構造のみ（今回消費側は未実装） ----
       unlockedUI: [],
-      unlockedThemes: []
+      unlockedThemes: [],
+
+      // ---- STEP42: Dynamic Research Event System（生涯履歴。演出専用、ゲーム状態は持たない） ----
+      researchEventHistory: [],
+
+      // ---- STEP43: Research Progression System（Facility Restoration。表示専用でなく実際に
+      // 保存される進行度。増加のみ・減少しない。将来のStory演出フックとして再利用できるよう
+      // 単純な0〜100の数値として持つ） ----
+      facilityRestorationPercent: 0
     };
   }
 
@@ -244,6 +252,7 @@
   const WORLD_HISTORY_LIMIT = 100; // STEP30-4: World Stability変化履歴の保持件数上限
   const MUTATION_HISTORY_LIMIT = 100; // STEP30-5: World Mutation履歴の保持件数上限
   const ENVIRONMENT_EVENT_HISTORY_LIMIT = 100; // STEP30-6: Environment Event履歴の保持件数上限
+  const RESEARCH_EVENT_HISTORY_LIMIT = 50; // STEP42: Dynamic Research Event履歴の保持件数上限
   const HIDDEN_VISIT_HISTORY_LIMIT = 100; // STEP30-7: Hidden Environment入場履歴の保持件数上限
   const DIRECTOR_LOG_LIMIT = 100;    // STEP31: AI Directorログの保持件数上限
   const DIRECTOR_REPORT_LIMIT = 50;  // STEP31: Run Report Archiveの保持件数上限
@@ -1402,6 +1411,42 @@
     unlockTheme(id) {
       if (this.data.metaData.unlockedThemes.indexOf(id) !== -1) return false;
       this.data.metaData.unlockedThemes.push(id);
+      this.save();
+      return true;
+    }
+
+    /** ---------------- STEP42: Dynamic Research Event System（演出専用、生涯履歴のみ） ---------------- */
+
+    /** @param {{run:number, layer:number, id:string, category:string, text:string}} entry */
+    recordResearchEventHistory(entry) {
+      this.data.metaData.researchEventHistory.push(Object.assign({ timestamp: Date.now() }, entry));
+      if (this.data.metaData.researchEventHistory.length > RESEARCH_EVENT_HISTORY_LIMIT) {
+        this.data.metaData.researchEventHistory.splice(0, this.data.metaData.researchEventHistory.length - RESEARCH_EVENT_HISTORY_LIMIT);
+      }
+      this.save();
+    }
+
+    /** @returns {Array<Object>} 直近の履歴から新しい順 */
+    getResearchEventHistory() {
+      return this.data.metaData.researchEventHistory.slice().reverse();
+    }
+
+    /** ---------------- STEP43: Research Progression System（Facility Restoration） ---------------- */
+
+    getFacilityRestorationPercent() {
+      return this.data.metaData.facilityRestorationPercent;
+    }
+
+    /**
+     * @param {number} percent facilityRestoration.jsが算出した最新値（0〜100）。
+     *   既存の保存値を下回る場合は何もしない（減少しない、という要求仕様セクション2の
+     *   「進行度を保存する」性質を守るためのガード）
+     * @returns {boolean} 実際に更新されればtrue
+     */
+    recordFacilityRestorationPercent(percent) {
+      const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+      if (clamped <= this.data.metaData.facilityRestorationPercent) return false;
+      this.data.metaData.facilityRestorationPercent = clamped;
       this.save();
       return true;
     }
