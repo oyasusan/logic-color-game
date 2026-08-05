@@ -63,7 +63,10 @@
     DialogueManager,
     MemoryManager, MemoryArchiveUI, MemoryData, CharacterData,
     RelationshipManager, CharacterArchiveUI,
-    ChapterArchiveUI, ResearchArchiveUI
+    ChapterArchiveUI, ResearchArchiveUI,
+    PrologueManager,
+    CognitiveTheme,
+    ThemeManager, EvolutionTransition
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -98,6 +101,9 @@
   const RECOVERY_NODE_LIFE_AMOUNT = 1;  // Recovery Nodeで回復するライフ量
   const RESEARCH_DATA_RATIO = 0.1;      // STEP27: 1クリアごとのReward獲得額のうちResearch Dataへ回る割合
   const AI_WARNING_CHAIN_THRESHOLD = 2; // STEP27: Risk Chainがこのレベル以上になった瞬間にAI Warningトーストを出す
+  // STEP40-1: Continue System。タブをバックグラウンドで長時間放置した場合に
+  // プレイ時間が異常加算されないよう、1チェックポイントあたりの加算量に上限を設ける
+  const MAX_CHECKPOINT_PLAYTIME_MS = 3 * 60 * 60 * 1000; // 3時間
 
   class EndlessMode {
     /**
@@ -172,7 +178,7 @@
       // STEP32-4のrelationshipManagerがmemoryManagerに依存するため、
       // dialogueManager（STEP32-2）より先にここで生成する
       this.memoryManager = new MemoryManager({ save: this.save });
-      this.memoryArchiveUI = new MemoryArchiveUI({ ui, memoryManager: this.memoryManager });
+      this.memoryArchiveUI = new MemoryArchiveUI({ ui, memoryManager: this.memoryManager, save: this.save });
       this.memoryArchiveUI.onBack = () => this._showArchiveHub();
 
       // ---- STEP32-4: Character Relationship System ----
@@ -180,12 +186,21 @@
         save: this.save, memoryManager: this.memoryManager, storyManager: this.storyManager
       });
       this.characterArchiveUI = new CharacterArchiveUI({
-        ui, relationshipManager: this.relationshipManager, memoryManager: this.memoryManager
+        ui, relationshipManager: this.relationshipManager, memoryManager: this.memoryManager, save: this.save
       });
       this.characterArchiveUI.onBack = () => this._showArchiveHub();
 
       // ---- STEP32-2: Dialogue System ----
       this.dialogueManager = new DialogueManager({ ui, save: this.save, relationshipManager: this.relationshipManager });
+
+      // ---- STEP40-3: PROLOGUE「Awakening」（NEW RESEARCH開始時のみ再生、dialogueManagerに依存するためその直後に生成する） ----
+      this.prologueManager = new PrologueManager({ ui, dialogueManager: this.dialogueManager });
+
+      // ---- STEP41-3: Neural Evolution System（Layer進行に応じたUIテーマ切替） ----
+      this.themeManager = new ThemeManager();
+      this.evolutionTransition = new EvolutionTransition({ ui });
+      this._previousEvolutionThemeId = null; // RUN内で直前に表示していたTheme（RUNごとにリセット）
+      this._currentEvolutionTheme = null;    // クリア演出のテキスト等が参照する「現在のTheme」
 
       // ---- STEP30-3: Environment Visual / HUD Evolution ----
       this.environmentScan = new EnvironmentScan({ ui });
@@ -236,7 +251,7 @@
       this.protocolSelect.onSelect = def => this._handleProtocolSelected(def);
       this.protocolSignal = new ProtocolSignal({ ui, protocolManager: this.protocolManager, save: this.save });
       this.protocolSignal.onDecision = (action, def, targetId) => this._handleProtocolSignal(action, def, targetId);
-      this.protocolArchive = new ProtocolArchive({ ui, save: this.save });
+      this.protocolArchive = new ProtocolArchive({ ui, save: this.save, protocolManager: this.protocolManager });
 
       // ---- STEP33: Research Archive System ----
       this.chapterArchiveUI = new ChapterArchiveUI({ ui, save: this.save });
@@ -306,6 +321,12 @@
       this.clearsThisRun = 0;      // このRUNでクリアしたPuzzle/Elite/Boss総数（perfectRatio算出用）
       this._extractedThisRun = false; // Extract Systemで自主的にRUNを終えたか
 
+      // ---- STEP40-1: Continue System ----
+      this._runStartTimestamp = null;   // 現在のRUNが始まった時刻（プレイ時間集計の起点）
+      this._lastPlayTimeFlush = null;   // 直近にプレイ時間を加算した時刻（次回加算時の差分計算用）
+      this._continueTargetLayer = null; // continueRun()からのみ設定。_initializeRun()内で消費されるnextLayer
+      this._continueVisitedNodes = null; // 同上。復元するvisitedNodesスナップショット
+
       this.round.onClear = stats => this._handleRoundClear(stats);
       this.round.onTimeout = stats => this._handleRoundTimeout(stats);
       this.round.onTick = (remaining, limit) => this._renderTimer(remaining, limit);
@@ -364,7 +385,18 @@
         // STEP32-1: Story Framework Base System
         mapStoryStatus: document.getElementById('mapStoryStatus'),
         mapStoryChapterLabel: document.getElementById('mapStoryChapterLabel'),
-        mapStoryLayerProgress: document.getElementById('mapStoryLayerProgress')
+        mapStoryLayerProgress: document.getElementById('mapStoryLayerProgress'),
+
+        // STEP40-1: Continue System
+        titleContinueHint: document.getElementById('titleEndlessContinueHint'),
+        endlessContinuePanel: document.getElementById('endlessContinuePanel'),
+        endlessContinueLayer: document.getElementById('endlessContinueLayer'),
+        endlessContinueLayerLabel: document.getElementById('endlessContinueLayerLabel'),
+        endlessContinueMission: document.getElementById('endlessContinueMission'),
+        endlessContinueLocation: document.getElementById('endlessContinueLocation'),
+        endlessContinuePlayTime: document.getElementById('endlessContinuePlayTime'),
+        endlessContinueRank: document.getElementById('endlessContinueRank'),
+        endlessContinueBtn: document.getElementById('endlessContinueBtn')
       };
 
       this._bindEvents();
@@ -378,7 +410,10 @@
         this.el.modeSelectBackBtn.addEventListener('click', () => this._exitToTitle());
       }
       if (this.el.endlessStartBtn) {
-        this.el.endlessStartBtn.addEventListener('click', () => this.startRun());
+        this.el.endlessStartBtn.addEventListener('click', () => this._startNewResearch());
+      }
+      if (this.el.endlessContinueBtn) {
+        this.el.endlessContinueBtn.addEventListener('click', () => this.continueRun());
       }
       if (this.el.protocolSelectBackBtn) {
         this.el.protocolSelectBackBtn.addEventListener('click', () => this.showModeSelect());
@@ -482,8 +517,12 @@
      * STEP28: NEURAL RESEARCH LAB画面を表示する。
      * @param {boolean} showArrival RUN終了直後の帰還時のみtrue（Surface Arrival演出を出す）。
      *   MODE SELECTから直接開く場合はfalse
+     * STEP40-2: Continue System。Research Hub（Neural Research Lab）へ来るたびに、
+     *   「今どこにいるか」のチェックポイントをResearch Hub滞在状態として保存する
+     *   （死亡/Extract後にここへ来て、そのままアプリを閉じてもCONTINUEでHubへ戻れるようにする）
      */
     _showNeuralLab(showArrival) {
+      this._checkpointHub();
       this.neuralLab.show(showArrival);
     }
 
@@ -514,7 +553,78 @@
       if (this.el.endlessTotalBossClear) this.el.endlessTotalBossClear.textContent = String(this.save.getTotalBossClear());
       if (this.el.endlessMemoryFragments) this.el.endlessMemoryFragments.textContent = String(this.save.getMemoryFragments());
       this._renderPerformanceModeBtn();
+      this._renderContinuePanel();
       this.ui.showScreen('modeSelect');
+    }
+
+    /**
+     * STEP40-1/40-2: Continue System。MODE SELECT画面に、中断中のRUN（Continue可能な
+     * スナップショット）があればその概要（Layer/Environment/Play Time/Research Rank/
+     * Chapter/Mission、Research Hub滞在中ならその旨）を表示し、CONTINUEボタンを表示する。
+     * 無ければCONTINUEボタンを隠す（要求仕様どおり）。
+     */
+    _renderContinuePanel() {
+      const snapshot = this.save.getContinueSnapshot();
+      const has = !!snapshot;
+      if (this.el.endlessContinuePanel) this.el.endlessContinuePanel.classList.toggle('hidden', !has);
+      if (this.el.endlessContinueBtn) {
+        this.el.endlessContinueBtn.classList.toggle('hidden', !has);
+        this.el.endlessContinueBtn.disabled = !has;
+      }
+      if (!has) return;
+
+      const lastChapterEndLayer = LayerStoryData.ALL[LayerStoryData.ALL.length - 1].endLayer;
+      const isUnknownLayer = snapshot.nextLayer > lastChapterEndLayer;
+      const chapter = isUnknownLayer ? null : LayerStoryData.getByLayer(snapshot.nextLayer);
+      const chapterNumber = chapter ? LayerStoryData.ALL.indexOf(chapter) + 1 : null;
+
+      if (this.el.endlessContinueLayer) this.el.endlessContinueLayer.textContent = String(snapshot.nextLayer);
+      if (this.el.endlessContinueLayerLabel) {
+        this.el.endlessContinueLayerLabel.textContent = isUnknownLayer
+          ? 'Unknown Layer'
+          : (chapter ? `Chapter ${chapterNumber}: ${chapter.title}` : '');
+      }
+      // STEP40-2: 「Current Mission」= Chapter内でのLayer進行（要求仕様どおりの表示項目）。
+      // 専用のMissionデータ構造は今回無いため、既存のChapter/Layer情報から組み立てる
+      if (this.el.endlessContinueMission) {
+        this.el.endlessContinueMission.textContent = snapshot.inHub
+          ? 'RESEARCH HUB'
+          : (chapter ? `Layer ${snapshot.nextLayer - chapter.startLayer + 1} / ${chapter.endLayer - chapter.startLayer + 1}` : 'DEEP RESEARCH');
+      }
+      if (this.el.endlessContinueLocation) {
+        this.el.endlessContinueLocation.textContent = snapshot.inHub ? '🧪 RESEARCH HUB' : `🗺️ LAYER ${snapshot.nextLayer}`;
+      }
+      if (this.el.endlessContinuePlayTime) this.el.endlessContinuePlayTime.textContent = this._formatPlayTime(this.save.getPlayTimeMs());
+      if (this.el.endlessContinueRank) this.el.endlessContinueRank.textContent = String(this.metaProgression.getRankNumber());
+    }
+
+    /** @param {number} ms @returns {string} "hh:mm:ss"形式 */
+    _formatPlayTime(ms) {
+      const totalSeconds = Math.floor((ms || 0) / 1000);
+      const pad = n => String(n).padStart(2, '0');
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+
+    /**
+     * STEP40-1: Continue System。TITLE画面表示のたびに呼ばれ（main.js App#showTitle()から）、
+     * ENDLESS RESEARCHボタン下に「Layer Xから再開できます」という短いヒントを出す。
+     * 実際のCONTINUE操作自体はMODE SELECT画面（ENDLESS RESEARCHの実質的なホーム画面）で行う。
+     */
+    renderTitleHint() {
+      if (!this.el.titleContinueHint) return;
+      this.save.load();
+      const snapshot = this.save.getContinueSnapshot();
+      if (snapshot) {
+        this.el.titleContinueHint.textContent = snapshot.inHub
+          ? '▶ RESEARCH HUBから再開できます'
+          : `▶ Layer ${snapshot.nextLayer} から再開できます`;
+        this.el.titleContinueHint.classList.remove('hidden');
+      } else {
+        this.el.titleContinueHint.classList.add('hidden');
+      }
     }
 
     /** UI改修: 5種のArchive画面への入口をまとめたハブ画面を表示する */
@@ -584,15 +694,21 @@
       this.riskChain.reset();
       this._renderUpgrades();
       this._renderRiskChainBadge();
+      this._clearEvolutionThemeVisuals(); // STEP41-3: Stage/Tutorial/Daily Puzzleへ見た目を残さない
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
       this.app.showTitle();
     }
 
     /** GAME画面の「‹ BACK」から呼ばれる（main.js側でmode==='endless'の時だけ委譲される）。
-     *  RUNを記録せずに中断し、MODE SELECTへ戻る。 */
+     *  このRUNのスコア記録（ベスト記録・生涯統計等）は残さずMODE SELECTへ戻る。
+     *  STEP40-2: Continueスナップショットは破棄しない（直前のLayerクリア時点の
+     *  チェックポイントはそのまま有効であり続ける）。Story Progressを完全に
+     *  破棄する唯一の手段はMODE SELECTの「NEW RESEARCH」に一本化した。 */
     exitRun() {
       clearTimeout(this._advanceTimer);
+      this._flushPlayTime();
+      this._runStartTimestamp = null;
       this.round.stop();
       this.upgradeManager.reset();
       this.protocolManager.reset();
@@ -600,6 +716,7 @@
       this.riskChain.reset();
       this._renderUpgrades();
       this._renderRiskChainBadge();
+      this._clearEvolutionThemeVisuals(); // STEP41-3: Stage/Tutorial/Daily Puzzleへ見た目を残さない
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
       this.showModeSelect();
@@ -624,6 +741,53 @@
       this.protocolSelect.show();
     }
 
+    /**
+     * STEP40-2/40-3: MODE SELECTの「NEW RESEARCH」から呼ばれる。既にStory Progress
+     * （Chapter進行/Relationship/Memory等）がある場合は、失われることを確認してから
+     * storyData/runDataを初期値へ戻す（metaData＝Research Rank算出元・Protocol
+     * Unlock・Achievement・Ending・Collection等は一切変更しない）。
+     * STEP40-3: リセット直後、既存のstartRun()（Identity確認→Protocol Select）へ
+     * 進む前にPROLOGUE「Awakening」（Chapter0）を再生する。Prologueの再生要否は
+     * この呼び出し経路のみに紐づけており、CONTINUE（continueRun()）やNeural Research
+     * Labの「START RUN」（既存のstartRun()を直接呼ぶだけの経路）は一切経由しないため、
+     * 「NEW RESEARCH時のみ再生・CONTINUEではスキップ・同一周回内では再表示しない」を
+     * 新規のフラグ管理を追加せずに実現できる。
+     */
+    _startNewResearch() {
+      if (this.save.hasStoryProgress() &&
+          !global.confirm('現在のストーリー進行状況（Chapter/Relationship/Memory等）は失われます。新しい研究を開始しますか？')) {
+        return;
+      }
+      this.save.startNewResearch();
+      this.prologueManager.show(() => this.startRun());
+    }
+
+    /**
+     * STEP40-1/40-2: Continue System。MODE SELECTの「CONTINUE」から呼ばれる。
+     * スナップショットが無ければ何もしない（ボタン自体がその場合非表示のため通常到達しない）。
+     * `inHub`がtrueの場合はProtocol/Environmentの復元は不要（Research Hubから
+     * 改めてPROTOCOL SELECTを経由する既存フローに合流するだけでよい）ため、
+     * Research Hubをそのまま表示する。falseの場合は保存されていたProtocol/
+     * Environment/Layer/Research Map位置を復元し、Protocol Select/Environment
+     * Detectionを経由せず直接RUNを初期化する。
+     */
+    continueRun() {
+      const snapshot = this.save.getContinueSnapshot();
+      if (!snapshot) return;
+      clearTimeout(this._advanceTimer);
+      if (snapshot.inHub) {
+        this._showNeuralLab(false);
+        return;
+      }
+      this.protocolManager.reset();
+      this.protocolManager.restore(snapshot.protocolIds);
+      this.environmentManager.reset();
+      this.environmentManager.restoreSelection(snapshot.environmentSelectedId, snapshot.environmentResolvedId);
+      this._continueTargetLayer = snapshot.nextLayer;
+      this._continueVisitedNodes = (snapshot.mapVisitedNodes || []).slice();
+      this._initializeRun();
+    }
+
     /** Protocol Select画面でのカード選択（protocolSelect.onSelect経由）。続けてEnvironment Detectionを表示する */
     _handleProtocolSelected(def) {
       this.protocolManager.select(def.id);
@@ -646,6 +810,14 @@
       this.riskChain.reset();
       this._pendingEliteReward = false;
       this._firstMissConsumedThisRun = false;
+      // STEP41-1: Cognitive Neural Mapping System。RUNごとに1回だけ表示するARIAの
+      // 起動コメント（最初にCognitive Analysis=Puzzle系Nodeへ入った瞬間に表示する）
+      this._ariaAnalysisIntroShownThisRun = false;
+      // STEP41-3: Neural Evolution System。RUN開始直後は「直前のTheme」が無い状態に戻す
+      // （worldEnvironmentの_previousWorldEnvDefと同じ設計。新規RUN・Continue直後どちらも
+      // 最初のLayer移動で必ずTheme確定演出が走るようにするため）
+      this._previousEvolutionThemeId = null;
+      this._currentEvolutionTheme = null;
       this.researchData = 0;
       this.unknownAnalysisCount = 0;
       this.maxRiskMultiplierThisRun = 1;
@@ -699,6 +871,34 @@
       if (this.environmentManager.isUnstableRoll()) {
         this.save.unlockEnvironment(this.environmentManager.getResolvedId());
       }
+
+      // STEP40-1: Continue System。continueRun()からのみ設定される。ここまでの通常のRUN開始
+      // リセット（life/upgrades/worldStability等）は全てそのまま適用した上で、
+      // Depth（＝次に開始するLayerの1つ手前）とResearch Map表示用の訪問履歴だけを
+      // 保存済みスナップショットへ差し替える（要求仕様どおり、Continueはパズル途中の
+      // 状態やRUNのlife/scoreまでは復元しない＝新しいRUNとして開始する設計）
+      if (this._continueTargetLayer != null) {
+        this.depth = this._continueTargetLayer - 1;
+        this.visitedNodes = this._continueVisitedNodes || [];
+        this._continueTargetLayer = null;
+        this._continueVisitedNodes = null;
+      }
+      this._runStartTimestamp = Date.now();
+      this._lastPlayTimeFlush = this._runStartTimestamp;
+
+      // STEP40-2: RUNが実際に開始された（Protocol/Environmentが確定した）瞬間に、
+      // Continueスナップショットを即座に`inHub:false`へ更新する。これをしないと、
+      // 直前までResearch Hub（inHub:true）に滞在していた場合、最初のLayerを
+      // まだクリアしていない間（_checkpointRun()はdepth>=1でしか動かない）に
+      // アプリを閉じるとCONTINUEが誤ってResearch Hubへ戻してしまう
+      this.save.saveContinueSnapshot({
+        nextLayer: this.depth + 1,
+        environmentSelectedId: this.environmentManager.getSelectedId(),
+        environmentResolvedId: this.environmentManager.getResolvedId(),
+        protocolIds: this.protocolManager.getActiveIds(),
+        mapVisitedNodes: this.visitedNodes.slice(),
+        inHub: false
+      });
 
       this.app.mode = 'endless';
       if (this.el.endlessHud) this.el.endlessHud.classList.remove('hidden');
@@ -821,10 +1021,58 @@
       });
     }
 
+    /** ---------------- STEP40-1: Continue System ---------------- */
+
+    /**
+     * 直前のチェックポイント（RUN開始 or 前回の_checkpointRun）からの経過時間を
+     * playTimeMsへ加算する。バックグラウンドでタブを長時間放置した場合の異常な
+     * 加算を避けるため、1チェックポイントあたりの加算量に上限を設ける。
+     */
+    _flushPlayTime() {
+      if (this._runStartTimestamp == null) return;
+      const now = Date.now();
+      const elapsed = Math.max(0, Math.min(now - this._lastPlayTimeFlush, MAX_CHECKPOINT_PLAYTIME_MS));
+      this.save.addPlayTime(elapsed);
+      this._lastPlayTimeFlush = now;
+    }
+
+    /**
+     * Map選択画面へ戻るたび（＝直前のLayerを生存してクリアした瞬間）に呼ばれ、
+     * 次回Continueで再開できるスナップショットを保存する。RUN開始直後（Layer未クリア、
+     * depth===0）は保存対象外（フレッシュRUNと区別が付かず保存する意味が無いため）。
+     */
+    _checkpointRun() {
+      this._flushPlayTime();
+      if (this.depth < 1) return;
+      this.save.saveContinueSnapshot({
+        nextLayer: this.depth + 1,
+        environmentSelectedId: this.environmentManager.getSelectedId(),
+        environmentResolvedId: this.environmentManager.getResolvedId(),
+        protocolIds: this.protocolManager.getActiveIds(),
+        mapVisitedNodes: this.visitedNodes.slice()
+      });
+    }
+
+    /**
+     * STEP40-2: Research Hub（Neural Research Lab）に滞在していることをスナップショットへ
+     * 記録する。以前のMap上のチェックポイント（nextLayer等）はそのまま引き継ぎ、
+     * inHubフラグのみtrueへ切り替える（CONTINUE時、Protocol/Environment選択前の
+     * Research Hubへ直接戻すための目印）。
+     */
+    _checkpointHub() {
+      this._flushPlayTime();
+      const previous = this.save.getContinueSnapshot();
+      this.save.saveContinueSnapshot(Object.assign({ nextLayer: this.depth > 0 ? this.depth + 1 : 1 }, previous, { inHub: true }));
+    }
+
     /** ---------------- MAP GENERATION SYSTEM ---------------- */
 
     /** 次のDepth（this.depth+1）の分岐候補を生成し、Map画面で提示する */
     _showMapChoices() {
+      // STEP40-1: Continue System。ここに到達した時点で直前のthis.depth（Node種類を問わず、
+      // 生存してMAPへ戻ってきた＝Layerクリア）は必ずクリア済みのため、Continue用の
+      // チェックポイントとして保存する（RUN開始直後のdepth===0呼び出しは対象外）
+      this._checkpointRun();
       const nextDepth = this.depth + 1;
       // STEP28: Deep Scan（researchTree.js）の所持レベルに応じて分岐候補数が増える
       // STEP29: ExplorerのMap Scan（primaryBonus/perk）もここに合算される
@@ -914,10 +1162,75 @@
 
       if (changedThisRun) {
         this.transitionManager.show(previousDef, worldEnvResult.def, () => {
-          this.environmentScan.show(worldEnvResult.def, this.worldStabilityManager.getStatus(), () => this._afterLayerEnvironmentReady(node));
+          this.environmentScan.show(worldEnvResult.def, this.worldStabilityManager.getStatus(), () => this._afterWorldEnvironmentReady(node));
         });
       } else {
+        this._afterWorldEnvironmentReady(node);
+      }
+    }
+
+    /**
+     * STEP41-3: Neural Evolution System。WorldEnvironment側の演出（Transition→Scan、
+     * 変化時のみ）が終わった直後に呼ばれる。ここでLayer Phase（themeManager.js、
+     * WorldEnvironmentとは別の・もっと広い5段階の区切り）の変化を判定し、変化していれば
+     * 「NEW ANALYSIS AREA」演出を挟んでからMutation以降の既存フローへ合流する。
+     * 判定はWorldEnvironmentと同じ「RUN内で直前に表示していたThemeとの比較」方式
+     * （_previousEvolutionThemeIdがnull＝このRUNで最初のLayer、を含む）を踏襲する。
+     */
+    _afterWorldEnvironmentReady(node) {
+      const themeDef = this.themeManager.getTheme(this.depth);
+      const themeChangedThisRun = !this._previousEvolutionThemeId || this._previousEvolutionThemeId !== themeDef.id;
+      this._previousEvolutionThemeId = themeDef.id;
+      this._applyEvolutionTheme(themeDef); // 背景/Node Theme/UIカラーは変化の有無に関わらず常に最新へ揃える
+
+      if (themeChangedThisRun) {
+        this.evolutionTransition.show(themeDef, () => this._afterLayerEnvironmentReady(node));
+      } else {
         this._afterLayerEnvironmentReady(node);
+      }
+    }
+
+    /**
+     * STEP41-3: 現在のNeural Evolution Theme（Layer Phase）をUIへ反映する。表示のみの
+     * 変更で、問題生成・判定ロジック・セーブデータには一切触れない。
+     *   - #screen-gameの背景（evolution-bg-*クラス、5種）
+     *   - --evolution-accent CSS変数（Theme Transition演出・Node Link縁取り色が参照する）
+     *   - cognitiveTheme.jsのNODE_THEME（Memory Nodeの形状/接続線/アイドル演出）
+     * @param {Object} themeDef themeManager.jsのTHEME_DEFSエントリ
+     */
+    _applyEvolutionTheme(themeDef) {
+      this._currentEvolutionTheme = themeDef;
+      const screenEl = document.getElementById('screen-game');
+      if (screenEl) {
+        Object.keys(G.EvolutionThemeData ? G.EvolutionThemeData.THEME_DEFS : {}).forEach(id => {
+          screenEl.classList.remove(`evolution-bg-${id}`);
+        });
+        screenEl.classList.add(`evolution-bg-${themeDef.id}`);
+        // --evolution-accent: Theme Transitionオーバーレイの縁取り等、はっきり見せたい箇所用
+        // --evolution-accent-soft: Node Link縁取り等、控えめに使いたい箇所用（同じ色の半透明版）
+        screenEl.style.setProperty('--evolution-accent', themeDef.accentColor);
+        screenEl.style.setProperty('--evolution-accent-soft', this._hexToRgba(themeDef.accentColor, 0.35));
+      }
+      if (CognitiveTheme) CognitiveTheme.setActiveNodeTheme(themeDef.nodeTheme);
+    }
+
+    /** @param {string} hex '#rrggbb' @param {number} alpha 0〜1 @returns {string} 'rgba(r,g,b,alpha)' */
+    _hexToRgba(hex, alpha) {
+      const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+      if (!m) return hex;
+      const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    /** STEP41-3: Endless RESEARCHの puzzle画面から離れる際、Theme由来の見た目を残さない（Stage/Tutorial/Daily Puzzleへ影響させないため） */
+    _clearEvolutionThemeVisuals() {
+      const screenEl = document.getElementById('screen-game');
+      if (screenEl) {
+        Object.keys(G.EvolutionThemeData ? G.EvolutionThemeData.THEME_DEFS : {}).forEach(id => {
+          screenEl.classList.remove(`evolution-bg-${id}`);
+        });
+        screenEl.style.removeProperty('--evolution-accent');
+        screenEl.style.removeProperty('--evolution-accent-soft');
       }
     }
 
@@ -1202,6 +1515,20 @@
       return line;
     }
 
+    /**
+     * STEP41-1: Cognitive Neural Mapping System。RUN中で最初にCognitive Analysis系Node
+     * （Puzzle/Elite/Boss）へ入った瞬間だけ、ARIAの起動コメントを1つトースト表示する
+     * （AI Director（5人格、上記_showDirectorDialogue）とは別の、Layer Narrative System
+     * 側のARIAキャラクターとしての一言。両者は独立した存在のため混在させない）。
+     * 毎Layerでは表示しない（トースト連発を避けるため、RUNにつき1回のみ）。
+     */
+    _maybeShowAriaAnalysisIntro() {
+      if (this._ariaAnalysisIntroShownThisRun || !CognitiveTheme) return;
+      this._ariaAnalysisIntroShownThisRun = true;
+      const line = CognitiveTheme.ARIA_INTRO_LINES[0];
+      this.ui.showToast(`🤖 ARIA: 「${line}」`);
+    }
+
     /** ---------------- STEP32: Narrative & Story System ---------------- */
 
     /**
@@ -1372,12 +1699,14 @@
       switch (node.type) {
         case 'boss':
           this._showDirectorDialogue('bossBefore'); // STEP31: Dialogue System
+          this._maybeShowAriaAnalysisIntro(); // STEP41-1: Cognitive Neural Mapping System
           this.ui.showScreen('game');
           this.round.start(this.depth, node);
           this._renderNodeIndicator();
           break;
         case 'elite':
         case 'puzzle':
+          this._maybeShowAriaAnalysisIntro(); // STEP41-1: Cognitive Neural Mapping System
           this.ui.showScreen('game'); // Map画面から遷移するため、Puzzle開始前に明示的に切り替える
           this.round.start(this.depth, node);
           this._renderNodeIndicator();
@@ -2020,7 +2349,18 @@
       // STEP31: AI Director System「プレイヤー解析」。Adaptive Difficultyの入力(Solve Time/Accuracy)を更新する
       this.aiDirector.recordPuzzleResult({ cleared: true, elapsedSeconds: stats.elapsedSeconds, hintUsed: stats.hintUsed });
 
-      const title = stats.isBoss ? `${stats.bossName} DEFEATED!` : stats.isElite ? 'ELITE CLEAR' : `DEPTH ${this.depth} CLEAR`;
+      // STEP41-1: Cognitive Neural Mapping System。表示文言のみの変更（スコア/報酬計算・
+      // 判定ロジックは無変更）。Boss/Eliteの区別は維持しつつ「Cognitive Map Restored」
+      // という統一された完了文言に揃える。
+      // STEP41-3: Neural Evolution System。現在のLayer Phase（_currentEvolutionTheme）が
+      // 確定していればそちらのclearTitleを優先し、Phaseごとに異なる完了文言を表示する
+      // （未確定時=Endless RESEARCH以外からの呼び出し等は既存のCognitiveTheme.TERMSへ
+      // フォールバックし、STEP41-1時点の挙動と完全に一致させる）
+      const restoredTitle = this._currentEvolutionTheme ? this._currentEvolutionTheme.clearTitle
+        : (CognitiveTheme ? CognitiveTheme.TERMS.completeTitle : 'CLEAR');
+      const title = stats.isBoss ? `${stats.bossName} — ${restoredTitle}`
+        : stats.isElite ? `Elite Analysis — ${restoredTitle}`
+        : restoredTitle;
       const details = [`スコア +${reward}`];
       if (perfect) details.push('PERFECT');
       if (speedBonus > 0) details.push(`スピードボーナス +${speedBonus}`);
@@ -2030,6 +2370,19 @@
 
       this._renderHud();
       this._recordPuzzleHistory(stats, true);
+      // STEP41-1: Cognitive Neural Mapping System。要求仕様の3段階クリア演出
+      // （①解析開始 Cognitive Analysis → ②同期処理 Neural Synchronization →
+      // ③完了 Cognitive Map Restored）のうち①②を、情報量の少ない一瞬の処理状態として
+      // 既存のui.showToast()（短い一行トースト、自動消滅）で表現する。③は後続の
+      // 既存nodeResultOverlay（続けるボタン必須）がそのまま担う
+      {
+        const analysisToast = this._currentEvolutionTheme ? this._currentEvolutionTheme.analysisToast
+          : (CognitiveTheme ? CognitiveTheme.TERMS.analysisPhaseToast : null);
+        const syncToast = this._currentEvolutionTheme ? this._currentEvolutionTheme.syncToast
+          : (CognitiveTheme ? CognitiveTheme.TERMS.syncPhaseToast : null);
+        if (analysisToast) this.ui.showToast(analysisToast);
+        if (syncToast) setTimeout(() => this.ui.showToast(syncToast), 450);
+      }
       // UI改修: クリア演出（盤面のライン消灯・効果音）を見る間を置いてから、
       // 一連の演出（Story→Reward）を開始する（以前は同じ待ち時間の後トースト表示のみで
       // 自動的に次へ進んでいたが、結果を読み逃しやすいとの指摘を受けて変更した）
@@ -2360,6 +2713,15 @@
       this.round.stop();
       this.app.mode = null;
       if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
+
+      // STEP40-2: 死亡/Extractのいずれでも、このRUN自体は正式に終了する
+      // （＝次回はRESULT→NEURAL LAB→新しいRUNという既存フローに戻る）が、Continue
+      // スナップショットはここでは破棄しない。直後にRESULT→RETRYでNeural Research Lab
+      // へ進んだ瞬間、_showNeuralLab()側の_checkpointHub()がResearch Hub滞在状態へ
+      // 更新するため、「死亡→Research Hub→Continue→Research Hub再開」が成立する。
+      // 最後のチェックポイント以降の経過時間はここで反映しておく
+      this._flushPlayTime();
+      this._runStartTimestamp = null;
 
       // STEP29: AI Feedback System。protocolManager.reset()で消える前に、このRUNの
       // Active Protocol構成をここで確保しておく

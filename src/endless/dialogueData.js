@@ -503,6 +503,37 @@
         { speaker: 'player', text: 'なら、もう一度始めよう。' },
         { speaker: 'aria', text: '……はい。共に。' }
       ]
+    },
+
+    // ---- STEP40-3: PROLOGUE「Awakening」（Chapter0、prologueData.js/prologueManager.js参照） ----
+    // NEW RESEARCH開始時のみ再生されるLayer1開始前の導入シーケンス。dialogueHistoryは
+    // storyData層のためNEW RESEARCHのたびに空になり、既存のisDialogueCompleted()判定を
+    // 一切変更せずに「Continueでは再生しない／NEW RESEARCH毎に再生する」を実現している。
+    {
+      id: 'prologue_awakening',
+      lines: [
+        { speaker: 'player', text: '……ここは？' },
+        { speaker: 'player', text: '俺は……誰だ？' }
+      ]
+    },
+    {
+      id: 'prologue_aria_contact',
+      lines: [
+        { speaker: 'aria', text: '起動を確認しました。' },
+        { speaker: 'aria', text: 'Researcher-01。' },
+        { speaker: 'aria', text: 'あなたの生命反応を確認しています。' },
+        { speaker: 'player', text: 'Researcher-01？' },
+        { speaker: 'player', text: 'それが俺の名前なのか？' },
+        { speaker: 'aria', text: '確認できません。' },
+        { speaker: 'aria', text: 'しかし、アクセスIDとして登録されています。' }
+      ]
+    },
+    {
+      id: 'prologue_first_mission',
+      lines: [
+        { speaker: 'aria', text: '現在、施設データの大部分が破損しています。' },
+        { speaker: 'aria', text: '原因解析にはCognitive Mapping Systemの再起動が必要です。' }
+      ]
     }
   ];
 

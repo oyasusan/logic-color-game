@@ -24,10 +24,12 @@
   const G = global.LogicColor = global.LogicColor || {};
 
   const TYPES = {
+    // STEP41-1: Cognitive Neural Mapping System。表示名/説明文のみ変更（id='puzzle'は
+    // 既存のUNKNOWN_RESOLVABLE_TYPES・mapGenerator.js・endless.js等が参照するため無変更）
     puzzle: {
-      id: 'puzzle', name: 'Puzzle', icon: '🧩',
+      id: 'puzzle', name: 'Cognitive Analysis', icon: '🧩',
       risk: 'LOW', reward: 'スコア',
-      description: '通常の論理パズル。クリアでスコアを獲得する'
+      description: 'Memory Nodeの解析作業。失われたCognitive Mapを復元しスコアを獲得する'
     },
     event: {
       id: 'event', name: 'Event', icon: '✨',

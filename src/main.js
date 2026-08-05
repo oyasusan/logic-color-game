@@ -94,6 +94,9 @@
 
     showTitle() {
       this.ui.renderTitle({ level: this.progress.data.level });
+      // STEP40-1: Continue System。中断中のENDLESS RESEARCHがあれば「Layer Xから再開できます」
+      // というヒントをTITLE画面に表示する（実際のCONTINUE操作自体はMODE SELECT画面で行う）
+      if (this.endless) this.endless.renderTitleHint();
       this.ui.showScreen('title');
     }
 

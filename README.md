@@ -2198,3 +2198,222 @@ Layer30（Chapter6完了）到達時に本編の結末（Normal/True/Hidden/Bad 
 **テスト**: jsdomで実サーバー配信のHTML/JSに対する統合テスト（本番の`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは削除・`git diff`で無変更確認済み）を実施した。データ内容確認（`determineStoryEnding()`の優先順位ロジックをBad/True/Hidden/Normalの4パターンで単体確認、Epilogue Dialogue4件の話者構成確認）→Chapter1〜6の完全なプレイスルー（既定の進行＝World安定・Hidden Environment未発見のためNormal Endingが選ばれることを確認: CHAPTER 06 COMPLETE→「ENDING: END A — Complete Research」表示→`epilogue_normal`再生→Reward、ARIAはSELF_AWARE維持を確認）→True/Hidden/Bad Endingの3パターンを`_checkFinalChapterEnding()`の直接呼び出し（`hiddenEnvironmentManager.getDiscoveryRate`/`save.hasSimulationZeroCleared`/`worldStabilityManager.getStatus`を一時的にスタブ）で検証（各Endingの表示・専用Epilogue再生・onContinue発火・True EndingのみARIAがPARTNER_AIへ昇格しHidden/BadはSELF_AWARE維持であること・4種のEnding全てが`save.getEndingFlags()`に記録されることを確認）→Layer31〜33でCHAPTER 06 COMPLETE/ENDING表示が再表示されないこと（STEP39-2のバグ修正が引き続き機能していることの再確認）→Character/Story/Memory Archiveへの反映確認（Archive維持）→Save/Reload後の状態復元（ending_a記録・ARIA SELF_AWARE状態の永続化、Save互換維持）を含め計111項目、2回連続実行で全PASS。
 
 **未実装/既知の制約**: STORY_BIBLE.mdに記載のとおり、Story Ending確定後もENDLESS RESEARCH内の既存システム（生涯達成型5 Ending・Hidden Environment探索等）はそのまま独立に機能し続ける。Normal/Hidden/Bad Endingでは要求仕様どおりARIAの状態変更を行っていないが、Hidden/Bad Ending到達時のARIAの反応はEpilogue Dialogueの台詞のみで表現しており、Character/Story Archive側に「どのEndingで本編を終えたか」を表示する専用UIは今回追加していない（既存のENDING一覧＝生涯達成Ending表示と共通のResearch Archiveのみ）。
+
+## STEP40-1: Continue System
+
+ENDLESS RESEARCHを中断（ブラウザを閉じる等）しても、次回起動時に直近クリアしたLayerの次からCONTINUEで再開できる仕組みを追加した。ENDLESS RESEARCH専用の品質向上機能で、ゲームバランス・ストーリー・Protocol・Chapter・Endingには一切影響を与えない設計にした。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **「Continueは新しいRUNの開始点をずらす機能」として設計し、ライフ/スコア/ワールド安定度等の“RUN実行中の一時状態”までは復元しない**: 要求仕様の「Continue開始時に復元する項目」一覧（Layer/Environment/Research Map位置/Protocol/Meta Progression/Story/Archive/ARIA状態/Research Statistics）にはlife/score/combo/World Stability/Mutationが含まれておらず、「パズル途中は保存しない。Layer開始時に新しい問題を生成する」という記述とも整合するため、CONTINUEは「保存されたLayerを次の開始地点として、Protocol構成とResearch Environmentだけ引き継いだ新しいRUNを開始する」機能として実装した。既存の`_initializeRun()`（ライフ全回復・スコア0・World Stability100リセット等、既存のRUN開始処理）はCONTINUE時も完全にそのまま通し、その最後にDepth（＝Layer-1）とResearch Map表示用の訪問履歴だけを保存済みスナップショットへ差し替える設計にした。これによりRUN開始時の初期化ロジックを二重実装せずに済み、既存のゲームバランスにも一切手を加えていない
+- **チェックポイントの保存タイミングは「Map選択画面へ戻った瞬間」に統一**: Map Generation System（既存）は、Puzzle/Elite/Boss/Event/Research Lab/Recovery/Protocol Signal/UnknownのどのNodeを選んでも、最終的に必ず`_showMapChoices()`（次の分岐候補を出すMap画面表示）へ戻ってくる一本の合流点を持つ。「Layerクリア」を種類ごとに個別判定する代わりに、この`_showMapChoices()`の先頭でチェックポイントを保存する設計にした（Node種別を問わず「生存してMapへ戻ってきた＝直前のLayerは確定でクリア済み」という既存フローの性質をそのまま利用）。RUN開始直後の1回目の呼び出し（Depth未クリア）は対象外にしている
+- **「Continueスナップショット」と「既存の生涯進行データ」を明確に分離**: Protocol Archive（発見済み一覧）・Research Rank・Story/Chapter進行・Memory/Relationship・World Stability・Ending Flags・Hidden Environment等は元々STEP27〜39-3の各システムがLayerクリアの都度リアルタイムに永続化済みで、RUNの実行状態とは無関係にCONTINUE後も自然に最新化されている。そのため新規に保存するのは「そのRUN固有で他に永続化先が無い一時状態」（次に開始するLayer番号・Research Map表示用の訪問履歴・RUN中に組んでいたProtocol構成・選んでいたResearch Environment）の4項目のみに絞った（要求仕様の「protocolArchive」「researchRank」等は既存の仕組みをそのまま参照するだけで新規フィールドを増やしていない）
+- **明示的な「BACKボタンでの中断」ではContinueスナップショットを破棄する**: 既存の`exitRun()`（GAME画面のBACKボタン）は「このRUNの記録は残りません」という確認ダイアログの上で呼ばれる、既存から変更していないユーザー向けの約束であるため、Continue Systemもこの約束に合わせてスナップショットを破棄するようにした。CONTINUEが実際に効くのは「アプリを閉じる/リロードする」など、明示的な中断操作を経ない場合のみ、という設計に統一した
+- **RUN正式終了（死亡/Extract）でもスナップショットを破棄する**: 死亡・Extractのいずれも`_endRun()`（`recordRun()`でベスト記録に反映される正式なRUN終了）を経由するため、以降のプレイは既存どおりNEURAL RESEARCH LAB経由の新しいRUNへ戻る。CONTINUEは「まだ終わっていないRUNの再開」に限定し、終了済みRUNの再現機能ではないと整理した
+- **Play Timeは生涯累計をLayerクリアのたびに増分加算する方式にした**: 要求仕様に記録方法の指定が無かったため、RUN開始時刻を起点に、Map選択画面へ戻るたび（チェックポイント保存と同じタイミング）に直前チェックポイントからの経過時間を`playTimeMs`へ加算する設計にした。タブをバックグラウンドで長時間放置した場合の異常加算を避けるため、1回の加算量に3時間の上限を設けた
+- **CONTINUE/NEW RESEARCHの操作自体はMODE SELECT画面（`#screen-modeselect`）に配置**: 要求仕様は「タイトル画面に表示する」としているが、このゲームではTITLE画面はSTAGE SELECT/ENDLESS RESEARCH/STORY RESEARCHへの入口に過ぎず、ENDLESS RESEARCH自体の実質的なホーム画面はMODE SELECT（ベスト記録表示・START RUN等が既に集約されている画面）にあたる。既存の画面構成を変えずに機能を追加するため、CONTINUE/NEW RESEARCHのパネル・ボタンはMODE SELECT側に実装し、TITLE画面には「▶ Layer Xから再開できます」という短い一行ヒント（`#titleEndlessContinueHint`、操作ボタンでは無くテキストのみ）だけを追加する構成にした
+- **旧SaveとStar Version**: `saveVersion`フィールドを新設（現在値`"1.1.0"`）し、`load()`に`_migrateSaveVersion()`フックを追加した。旧Save（`saveVersion`未設定を含む）は既存の`Object.assign(defaultData(), JSON.parse(raw))`の時点で欠損フィールド（本STEPの4新規フィールドを含む）が既に補完されるため、追加の変換コードは不要だった。フックは「バージョン文字列が食い違っていた場合のみ更新して保存し直す」という将来の破壊的変更に備えた足場として追加した（今回は実質的な変換処理は無い）
+
+**新規ファイルは無し**。既存ファイルの変更:
+- `endlessSave.js`: `saveVersion`/`lastPlayed`/`playTimeMs`/`continueSnapshot`の4フィールドと、`getSaveVersion`/`getLastPlayed`/`getPlayTimeMs`/`addPlayTime`/`hasContinueSnapshot`/`getContinueSnapshot`/`saveContinueSnapshot`/`clearContinueSnapshot`/`_migrateSaveVersion`を追加
+- `protocolManager.js`: `restore(ids)`を追加（無効なid・スロット超過分は無視する）
+- `environmentManager.js`: `restoreSelection(selectedId, resolvedId)`を追加（`onSelect`を発火させずに選択・解決結果を直接復元する）
+- `endless.js`: `continueRun()`・`_checkpointRun()`・`_flushPlayTime()`・`_renderContinuePanel()`・`_formatPlayTime()`・`renderTitleHint()`を新設。`_showMapChoices()`冒頭で`_checkpointRun()`を呼ぶよう変更、`_initializeRun()`末尾に継続用のDepth/Research Map履歴の差し替えブロックを追加、`exitRun()`/`_endRun()`にスナップショット破棄処理を追加、`showModeSelect()`から`_renderContinuePanel()`を呼ぶよう変更
+- `main.js`: `App#showTitle()`から`this.endless.renderTitleHint()`を呼ぶよう変更
+- `index.html`: MODE SELECT画面にCONTINUEパネル（Current Layer/Chapter or Unknown Layer/Play Time/Research Rank）とCONTINUEボタンを追加、既存`endlessStartBtn`のラベルを「NEW RESEARCH」に変更、TITLE画面にヒント用の`#titleEndlessContinueHint`を追加、対応するCSSを追加
+
+**Continue処理の流れ**: `_showMapChoices()`（Node解決後、次のMap候補を出す直前）→ `_checkpointRun()`が`this.depth>=1`なら`{nextLayer: depth+1, environmentSelectedId, environmentResolvedId, protocolIds, mapVisitedNodes}`を`saveContinueSnapshot()`で保存 → アプリを閉じる/リロード → TITLE画面で`renderTitleHint()`がヒントを表示、MODE SELECT画面で`_renderContinuePanel()`がCONTINUEボタンとLayer/Play Time/Research Rankを表示 → CONTINUEタップで`continueRun()`が`protocolManager.restore()`/`environmentManager.restoreSelection()`で構成を復元し、`_continueTargetLayer`/`_continueVisitedNodes`を設定した上で`_initializeRun()`を呼ぶ → `_initializeRun()`は既存どおりライフ全回復・スコア0・World Stability100等の通常のRUN開始処理を行った後、末尾で`this.depth = nextLayer-1`・`this.visitedNodes`を復元してMap画面を表示する。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`インスタンスを一時的なテスト専用フック（`global.__TEST_HOOK_app`/`__TEST_HOOK_endless`）経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。以下52項目を3回連続実行し全PASS:
+- 新規セーブのデフォルト値（Continueスナップショット無し・`saveVersion`="1.1.0"・`playTimeMs`=0）
+- RUN開始（Identity/Protocol/Environment選択）直後はDepth未クリアのためスナップショット未保存であること
+- 実際にLayer Narrative System（Dialogue/Story Choice等の演出オーバーレイ）を通過しながら複数Layerを実クリアし、Map画面へ戻るたびにスナップショット（`nextLayer`/`protocolIds`/`environmentSelectedId`/`mapVisitedNodes`）が正しく保存されること、`playTimeMs`が増加すること
+- 「アプリを閉じる」相当（`save.load()`での再読込）を経てもスナップショットが残ること、MODE SELECTのCONTINUEパネル（Layer番号・Play Time表示形式hh:mm:ss・NEW RESEARCHへのラベル変更）が正しく表示されること
+- `exitRun()`（BACKボタン、既存の「記録は残りません」確認ダイアログ経由）でスナップショットが破棄され、CONTINUEボタンが再度隠れること
+- 2回目のRUNで`continueRun()`を呼んだ際、Protocol構成・Environment（selected/resolved）・Depth・Research Map訪問履歴が正しく復元され、Map画面が表示されること。**ライフはRUN開始時のフル回復・スコアは0から再開する（仕様どおりlife/scoreは復元しない設計）ことも確認**
+- Continue後もさらにLayerを実クリアして進行できること、Research Map画面（🗺️）が表示できること
+- RUN正式終了（`_endRun()`）でスナップショットが破棄され、`totalRuns`が増加すること
+- 旧Save（`saveVersion`/`continueSnapshot`等本STEPの新規フィールドを一切持たない`localStorage`データ）を読み込んでも`getBestDepth()`/`getTotalRuns()`等の既存値が保持されたまま、新規フィールドが安全なデフォルト値（`saveVersion`="1.1.0"・`playTimeMs`=0・`continueSnapshot`=null）で補完されること、値変更時に旧フィールドを保持したまま正しく書き戻ること
+
+**未実装/既知の制約**: CONTINUEは「Layer/Environment/Research Map位置/Protocol構成」のみを復元し、ライフ・スコア・コンボ・World Stability・Mutation・Risk Chain等のRUN実行中の一時状態は復元しない（要求仕様の記述と整合させた設計上の判断、詳細は上記）。Play Timeの計測はチェックポイント間の壁時計時間の単純合算のため、タブをバックグラウンドで長時間放置した場合は（3時間/回の上限はあるが）実際のプレイ時間よりやや多く計上されうる。`saveVersion`の移行フックは足場のみで、実際のフィールド構造変換処理は今回発生していない。
+
+## STEP40-2: Continue System完成 + セーブデータ3層分離 + NEW RESEARCH + Archive Collection
+
+STEP40-1で実装したContinue Systemを、死亡/Extract後のResearch Hub（Neural Research Lab）滞在中も対象に含めて完成させた。あわせてセーブデータを`metaData`（生涯永続）/`storyData`（現在の周回）/`runData`（現在のRUN/Hub滞在の再開スナップショット）の3層へ物理的に再構成し、この分離を基盤として「NEW RESEARCH＝Chapter1から物語を最初から体験できる、ただし生涯データは保持される」機能と、Archiveの「CURRENT RUN」/「COLLECTION」タブ分離を実装した。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **3層データ構造は`this.data = {saveVersion, metaData, storyData, runData}`という物理的なネストで実装し、全getter/setterメソッドの名前・シグネチャは一切変えなかった**: `endlessSave.js`は150個近いgetter/setterを持ち、30以上のファイルから呼ばれている。呼び出し側を変更せずに済ませるため、各メソッドの内部実装だけを「どの層のどのフィールドを読み書きするか」に書き換える方式にした。この結果、`endlessSave.js`以外の全ファイル（`memoryManager.js`/`relationshipManager.js`/`dialogueManager.js`含む）は無変更で3層化を達成できた
+- **フィールドの層分けは「NEW RESEARCHでリセットすべきか」を基準に判断した**: Protocol Unlock/Achievement/Ending/Hidden Environment/Research Tree/Identity/AI Director/各種履歴等はmetaDataへ、Chapter進行(`layerStoryProgress`)/Dialogue既読/Memory取得/Relationship・ARIA状態はstoryDataへ。Story Scenario Framework（CASE001〜006、Endless Researchとは独立したStory Mode）の進行データは、ENDLESS RESEARCHのNEW RESEARCHに巻き込まれると別モードの進行が意図せず失われるため、あえてmetaData側に据え置いた。World Stability/Active Mutation/Active Environment Event等「RUN開始時に必ず100/nullへリセットされる値」はrunDataへ統合した（既存のreset()呼び出しタイミングは無変更のため、この移動によるゲームプレイへの影響は無い）
+- **「死亡/Extract後もCONTINUEでResearch Hubへ戻れるようにする」ため、`continueSnapshot`に`inHub`フラグを追加し、STEP40-1で入れていた「RUN終了/BACKボタンでスナップショットを破棄する」処理を撤廃した**: ユーザーからの実機フィードバック（「Extract後もCONTINUEできるようにしたい」）を受けた設計変更。`_showNeuralLab()`（Neural Research Lab表示、RETRY経由・MODE SELECTの🧪ボタン経由の両方）の先頭で`_checkpointHub()`を呼び、直前のMapチェックポイントの`nextLayer`等はそのまま維持しつつ`inHub:true`へ更新する。`continueRun()`は`inHub`を見て「Research Hubへ直接戻す（Protocol/Environment復元不要）」か「既存どおりMapへ復元する」かを分岐する。これにより、Story Progressを完全に破棄する手段はMODE SELECTの「NEW RESEARCH」に一本化された
+- **RUN開始（Protocol/Environment確定）の瞬間に`inHub:false`のチェックポイントを即座に保存するようにした**: 「Research Hubから新しいRUNを開始した直後、まだ1つもLayerをクリアしていない間にアプリを閉じる」と、古い`inHub:true`のスナップショットが残り続けCONTINUEが誤ってResearch Hubへ戻してしまう問題を実装中に発見・修正した
+- **「NEW RESEARCH」ボタンの意味をSTEP40-1から再定義した**: STEP40-1では単に「新しいRUNを始める」ボタンだったが、STEP40-2の要求仕様が「NEW RESEARCH＝Chapter1から物語を最初から」を明確に求めたため、`_startNewResearch()`（Story Progressがあれば確認ダイアログ→`save.startNewResearch()`でstoryData/runDataを初期化→既存の`startRun()`へ合流）へ差し替えた。一方、死亡後のNeural Research Labの「START RUN」ボタン（`onStartRun`）は既存どおり素の`startRun()`のまま変更しておらず、Story Progressを保ったまま次のRUN攻略に挑む既存ループ（既存ゲームデザイン）には一切手を加えていない
+- **NEW RESEARCH後のChapter1再生に、既読スキップを個別に無効化する仕組みは追加していない**: 要求仕様は「既読判定による自動スキップは行わない」を求めていたが、`dialogueHistory`（既読判定の実データ）はstoryData層に属し、NEW RESEARCHで自動的に空になるため、既存の`DialogueManager.startDialogue()`（既読なら`false`を返すだけ）の判定ロジックを一切変更しないままChapter1が最初から再生される。要求仕様の「将来的にイベントスキップ設定を追加できる構造にする」は、`storyData.storyFlags`（汎用フラグ配列、今回は消費側未実装）をその足場として用意した
+- **Memory/Dialogue/Characterの「Current Run」と「Collection」は同じ記録操作で同時に更新する設計にした**: `recordMemoryCollected()`/`recordDialogueCompleted()`/`setRelationshipState()`（UNKNOWN→発見時のみ）の内部で、storyData（今の周回、既存の戻り値=「今回新規取得か」の意味は不変）とmetaData.collectionXxx（生涯、初回取得時のみ`{firstUnlockedAt, firstUnlockedLayer}`を記録）の両方を1回の呼び出しで更新する。呼び出し側（`memoryManager.js`等）は無変更のまま、STEP34以降で確立していた「Layer Clear→Memory Unlock」等の一連処理にCollection記録が自動的に相乗りする
+- **Archiveの「Current Run」/「Collection」タブは、既存の各Archive画面（Memory/Character/Protocol）にタブ切り替えを追加する形で実装し、新しい共通コンポーネントは作らなかった**: 3画面それぞれのデータ形状・表示項目が異なる（Memory=内容全文、Character=State/Relationship、Protocol=レア度/解放条件）ため、共通化するとかえって複雑になると判断し、各クラスに`mode`プロパティと`_setMode()`を個別追加した。Protocol Archiveのみ「Current Run」の意味が他と異なる（生涯Unlock一覧ではなく、今のRUNでActiveな2枠の構成）ため、既定タブをCollection側にした（Memory/Characterは既定がCurrent Run）
+- **Dialogue Archive専用の閲覧UIは今回追加していない**: 要求仕様は「取得日時・初回取得Layerなども表示可能な構造にする」（＝データ構造の準備を求めるもので、UI実装まで必須とは限らない）ため、`collectionDialogue`/`getDialogueCollectionProgress()`等のAPIは用意したが、閲覧専用の新規画面は作らず、既存のDialogue関連画面（Chapter Archive等）への統合は今後の課題として残した
+- **`unlockedUI`/`unlockedThemes`（metaData）と`storyFlags`（storyData）は、要求仕様に明示されたがこのゲームに対応する既存概念が無いため、データ構造のみ（getter/setter一式）を用意し、消費側の実装は行っていない**: Hybrid Identity System（STEP29）で同様の「データ構造のみ先行実装」を行った前例に倣った
+
+**新規ファイルは無し**。既存ファイルの変更:
+- `endlessSave.js`: 全面書き換え。`defaultData()`を`{saveVersion, metaData, storyData, runData}`の3層構造へ再構成し、旧フラットSave（STEP40-1形式を含む）を新構造へ変換する`migrateFlatToTiered()`を新設。`collectionMemory`/`collectionCharacter`/`collectionDialogue`/`unlockedUI`/`unlockedThemes`（metaData）、`storyFlags`（storyData）を新規フィールドとして追加。`hasStoryProgress()`/`startNewResearch()`/`getMemoryCollection()`/`getMemoryCollectionProgress()`/`getCharacterCollection()`/`getCharacterCollectionProgress()`/`getDialogueCollection()`/`getDialogueCollectionProgress()`/`getStoryFlags()`/`hasStoryFlag()`/`setStoryFlag()`/`getUnlockedUI()`/`unlockUI()`/`getUnlockedThemes()`/`unlockTheme()`を新設。`recordMemoryCollected()`/`recordDialogueCompleted()`/`setRelationshipState()`にCollection dual-write処理を追加。`saveVersion`を`1.2.0`へ更新
+- `endless.js`: `_startNewResearch()`・`_checkpointHub()`を新設。`continueRun()`に`inHub`分岐を追加。`_showNeuralLab()`冒頭で`_checkpointHub()`を呼ぶよう変更。`_initializeRun()`末尾でRUN開始直後に`inHub:false`のチェックポイントを即座に保存するよう変更。`exitRun()`/`_endRun()`から`clearContinueSnapshot()`呼び出しを削除（Story Progressの破棄は`_startNewResearch()`に一本化）。`_renderContinuePanel()`にChapter/Mission/Location（🗺️ Layer / 🧪 Research Hub）表示を追加。`endlessStartBtn`のクリックハンドラを`_startNewResearch()`へ差し替え
+- `protocolManager.js`/`environmentManager.js`: STEP40-1で追加した`restore()`/`restoreSelection()`は無変更のまま流用
+- `memoryArchiveUI.js`/`characterArchiveUI.js`/`protocolArchive.js`: 「CURRENT RUN」/「COLLECTION」タブ切り替え（`mode`プロパティ、`show(mode)`、`_setMode()`）を追加
+- `main.js`: 変更無し（STEP40-1の`renderTitleHint()`呼び出しをそのまま流用）
+- `index.html`: MODE SELECTのCONTINUEパネルに「Current Mission」「Location」表示を追加、Memory/Character/Protocol Archive画面にタブボタンを追加、対応するCSS（`.archive-tab-row`等）を追加
+
+**Continue処理**: `_showMapChoices()`到達時（Layerクリア後）またはNeural Research Lab表示時（`_checkpointHub()`）に`runData.continueSnapshot`を更新（後者は`inHub:true`、前者は`inHub:false`）。TITLE/MODE SELECTでスナップショットの有無・`inHub`に応じてヒント/パネルを表示。CONTINUEタップで`continueRun()`が`inHub`を見て「Research Hub直接表示」または「既存どおりProtocol/Environment復元＋Map復元」を実行する。RUN終了（死亡/Extract）・BACKボタンではスナップショットを破棄しない（STEP40-1からの変更点）。
+
+**NEW RESEARCH処理**: MODE SELECTの「NEW RESEARCH」タップ→`hasStoryProgress()`がtrueなら確認ダイアログ→`save.startNewResearch()`（`storyData`/`runData`を初期値へ、`metaData`は無変更）→既存の`startRun()`（Identity確認→Protocol Select→Environment Select→`_initializeRun()`）に合流。Depthは既存どおり0から始まり、`layerStoryProgress`/`dialogueHistory`が初期化済みのため、Layer1クリア時に`chapter01_layer01_clear`等のDialogueが「未読」として自然に再生される（既読スキップ機構自体には一切手を加えていない）。
+
+**Archive改善内容**: Memory/Character/Protocol Archiveの各画面にタブボタン（`archiveTabCurrentRun`/`archiveTabCollection`相当のID）を追加。「CURRENT RUN」は今の周回（storyData、Memory/Characterは既存のmanager経由、ProtocolはRUN中の`protocolManager.getActiveDefs()`）を、「COLLECTION」は生涯記録（metaData、初回取得日時・Layerも表示）を表示する。切り替えは各画面内で完結し、既存の`onBack`/Hub遷移構造（`researchArchiveUI.js`等）は無変更。
+
+**Collection管理構造**: `metaData.collectionMemory`/`collectionCharacter`/`collectionDialogue`はいずれも`{[id]: {firstUnlockedAt(または firstDiscoveredAt): timestamp, firstUnlockedLayer(または firstDiscoveredLayer): number|null}}`という共通形状。取得の都度、既存のstoryData側記録と同じ呼び出し内で追記され（初回のみ、2回目以降は上書きしない）、NEW RESEARCHでもクリアされない。`getXxxCollectionProgress()`が`{collected, total, rate}`を返し、Archive画面のCollectedカウント表示にそのまま使える。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。70項目を3回連続実行し全PASS:
+- セーブ層API単体検証（27項目）: 3層構造の形状・`saveVersion`="1.2.0"・`hasStoryProgress()`の真偽・Memory/Dialogue/CharacterのCurrent Run+Collection同時記録（初回取得Layerを含む）・`startNewResearch()`後のstoryData/runData初期化とmetaData（Protocol Unlock/Research Rank算出元/Achievement/Ending/Hidden Environment/Collection/totalRuns）保持・NEW RESEARCH後は同じMemoryでも「今回の周回では新規取得」扱いになること
+- 旧Save互換性（9項目）: STEP40-1以前の完全フラット構造、およびSTEP40-1形式（フラット+`saveVersion`+`continueSnapshot`）の両方から新構造への移行、`continueSnapshot`への`inHub:false`補完、移行結果が実際に新形式でlocalStorageへ書き戻されること
+- 実アプリ統合フロー（34項目）: ①複数Layerクリア後のスナップショット（`inHub:false`）保存とそこからのContinue再開、②Neural Research Lab（Research Hub）表示でのスナップショット（`inHub:true`）更新とMODE SELECTでの表示・そこからのContinue、③実際に死亡させてRESULT→RETRY→Research Hub到達までのフローでスナップショットが破棄されないこと・そこからのContinueでResearch Hub再開、④NEW RESEARCH後にDepth/Dialogue既読がリセットされ実際にLayer1クリアでDialogueが再度既読化される（オープニング再生の実証）、Archiveタブの表示・切り替え
+
+**未実装/既知の制約**: Dialogue専用の閲覧Archive画面は追加していない（データAPIのみ、上記参照）。`unlockedUI`/`unlockedThemes`/`storyFlags`は消費側ロジック未実装のデータ構造のみ。Research Hub滞在中（`inHub:true`）のスナップショットは、Protocol/Environmentの選び直しが必要なためRUN構成を保持しない（既存のNeural Research Lab「START RUN」フローに委ねる設計）。Play Time/Research Rank等の計測方法自体はSTEP40-1から変更していない。
+
+## STEP40-3: PROLOGUE「Awakening」（Chapter0）
+
+NEW RESEARCH開始時、Layer1開始前にプレイヤーが世界観・目的を理解できる導入シーケンス（Chapter0「Awakening」、Layer番号を持たないPROLOGUE）を追加した。System Boot（システムステータス表示）→Researcher-01 Awakening（主人公の独白）→ARIA First Contact（ARIAとの初接触）→First Mission（施設データ破損の説明とミッション提示）の4Sceneで構成される。CONTINUEでは再生されず、NEW RESEARCHのたびに毎回再生される。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Prologueの再生要否に新規フラグを追加せず、`_startNewResearch()`という単一の呼び出し経路にのみ紐づける設計にした**: 「NEW RESEARCHでのみ再生」「CONTINUEではスキップ」「同一周回内では再表示しない」という3条件は、`prologueManager.show()`を`_startNewResearch()`内でのみ呼び、`continueRun()`（Continue）や`startRun()`単体（Neural Research LabのRETRY等、既存のまま無変更）からは一切呼ばないことで自動的に満たされる。仮に「未読なら次回起動時も再生する」ような永続フラグを追加すると、Continueで再開した際にも誤って再生されうる設計になってしまうため、あえて持たせなかった
+- **Scene002〜004の会話部分は新規のDialogue再生システムを作らず、既存のDialogueManager/`ui.showDialogue()`をそのまま流用した**: `dialogueData.js`へ`prologue_awakening`/`prologue_aria_contact`/`prologue_first_mission`の3件を追加しただけで、タップで全文表示→次のタップで次のセリフ、という既存の演出・操作性がそのまま適用される。`dialogueHistory`はstoryData層に属しNEW RESEARCHで自動的に空になるため、既存の既読スキップ判定（`DialogueManager.startDialogue()`）を一切変更しないまま「NEW RESEARCH毎に必ず再生される」を実現できた（STEP40-2で確立した3層データ構造の設計がそのまま活きた）
+- **Chapter0は`layerStoryData.js`（Layer1〜30、Chapter1〜Final Chapterの区切り）には追加せず、`prologueData.js`という完全に独立したデータファイルにした**: Chapter0はLayer範囲を持たないため、`LayerStoryData.getByLayer()`等の既存のLayer番号ベースの判定ロジック（Continue画面のChapter表示、Research Archive等）に影響を与えないための設計判断。STORY_BIBLE.mdのChapter一覧表には参考情報として行を追加したが、実装上は独立している
+- **Scene001「System Boot」とScene004後半「Mission Briefing」は、Dialogueではなく専用の小さなパネル（`prologueManager.js`）として実装した**: この2つは特定キャラクターの会話ではなく「システムのステータス表示」「ミッション名の提示」という異なる性質の情報のため、Dialogue Systemに無理に押し込めず、`showNodeResult()`と同じ「情報系オーバーレイは自動消滅させない」方針（既存フィードバック）に従う専用DOM（`#prologueBootPanel`/`#prologueMissionPanel`、いずれも「続ける」ボタン必須）を新設した
+- **UI演出（暗転・System Log・Boot Animation等）は、既存のCSS/画面遷移の枠内で表現できる範囲に留めた**: Boot Panelは`--blue`のグロー枠+モノスペースフォントでターミナル風のステータス表示にし、ok/errorで緑/赤に色分けした。新しいJS描画ループ（canvas等）は追加せず、既存のdialogueOverlay（タイプライター演出込み）をそのまま重ねて使うことで、「ARIA起動演出」「Layer1へのトランジション」を新規の演出システム無しに表現している
+
+**新規ファイル**:
+- `src/endless/prologueData.js`: Chapter0のメタデータ（`{id:'chapter00', title:'Awakening', type:'PROLOGUE'}`）、Scene001のBoot Status行データ（`BOOT_LINES`）、Scene004のミッション名（`MISSION_TITLE`）、Scene順序（`SCENES`）
+- `src/endless/prologueManager.js`: Prologueシーケンス全体の進行制御（Boot Panel表示→Dialogue3件を順に再生→Mission Briefing表示→`onComplete`コールバック）
+
+**既存ファイルの変更**:
+- `dialogueData.js`: `prologue_awakening`/`prologue_aria_contact`/`prologue_first_mission`の3件を追加
+- `endless.js`: `PrologueManager`をインポート・生成（`DialogueManager`生成の直後）。`_startNewResearch()`が`this.startRun()`を直接呼ぶ代わりに`this.prologueManager.show(() => this.startRun())`を呼ぶよう変更
+- `ui.js`: `screens`マップに`prologue: document.getElementById('screen-prologue')`を追加
+- `index.html`: `#screen-prologue`（Boot Panel/Mission Panelを含む）を新設、`<script src>`に`prologueData.js`/`prologueManager.js`を追加、対応するCSS（`.prologue-*`）を追加
+- `docs/STORY_BIBLE.md`: 3章にChapter0「Awakening」の節とChapter一覧表への行を追加
+
+**開始フロー**: NEW RESEARCH（MODE SELECT）→（Story Progressがあれば確認ダイアログ）→`save.startNewResearch()`（storyData/runData初期化）→`prologueManager.show()`：Boot Panel（続けるボタン）→Dialogue「Researcher-01 Awakening」→Dialogue「ARIA First Contact」→Dialogue「First Mission」→Mission Briefingパネル（「研究を開始する」ボタン）→`onComplete`→既存の`startRun()`（Identity確認→Protocol Select→Environment Select→Depth0→Layer1のMap表示）。CONTINUE（`continueRun()`）はこのフローを一切経由しないため、Prologueは表示されない。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。20項目を3回連続実行し全PASS:
+- ①NEW RESEARCH直後にPROLOGUE画面が表示され、Boot Panelに"Research Facility"/"ONLINE"・"Memory System"/"ERROR"が含まれること
+- ②Boot→Dialogue3件→Mission Briefingを最後まで進めるとPROLOGUE画面から離脱し、既存のIdentity/Protocol/Environment Select（無変更）を経てMAP画面（Layer1候補提示、Depth0）へ到達すること
+- ③CONTINUE（`continueRun()`）ではPROLOGUE画面が一切表示されず、MAP画面へ直接復帰すること
+- ④2周目のNEW RESEARCHでも、`dialogueHistory`がリセットされた状態から再度PROLOGUE画面が表示され、Prologue用Dialogueが再び既読化される（実際に再生された証跡）こと
+- ⑤Prologue後もLayer1を通常どおり実クリアできること、`layerStoryProgress.currentChapter`が`chapter01`のまま（Chapter0は独立管理でChapter1〜Final Chapterの進行に影響しない）であること、`LayerStoryData.ALL`にChapter0が含まれずLayer番号ベースの既存判定に影響しないこと
+
+**未実装/既知の制約**: 「イベントスキップ」設定（要求仕様が「将来的に追加できる構造に」とした項目）自体のUI実装は今回行っていない（STEP40-2で用意した`storyData.storyFlags`がその足場になりうる）。Boot Animation・暗転演出は既存CSS/DOMの範囲内の簡易表現に留め、専用のcanvas演出等は追加していない。
+
+## STEP41-1: Cognitive Neural Mapping System（表示・演出のみのリブランド）
+
+現在のColor Puzzle表現を「研究施設内の認知ネットワークを解析し、失われたCognitive Mapを復元する作業」として再定義する表示・演出変更を行った。**ゲームルール・問題生成・判定ロジック・セーブデータ構造は一切変更していない**（`board.js`のCellState内部id`'EMPTY'/'BLUE'/'RED'/'GREEN'`、`generator.js`/`solver.js`のアルゴリズム、`endlessSave.js`のsaveVersion="1.2.0"のスキーマ、いずれも無変更）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **適用範囲をENDLESS RESEARCH（ARIA/Layer/Protocol/Storyの世界観が既に存在する場所）に限定した**: STAGE SELECT/TUTORIAL/DAILY PUZZLEはARIAや研究施設の物語と結びついていない独立モードで、確認項目もすべてEndless Research/Story/Protocol文脈で書かれていたため、そちらの既存ラベル（"STAGE CLEAR!"等）はあえて変更していない（要求仕様の「過度な変更は行わない・既存UI構造を維持する」を優先）。一方でSignal名（色の表示名）だけは、レイアウトに一切影響しない付加情報（`title`/`aria-label`属性）のため全モード共通で適用した
+- **Signal名（Color→Signal）はテキストラベルではなく`title`/`aria-label`属性として追加した**: 調査の結果、現在の色ヒント表示（凡例の丸・ヒントチップの数字）はそもそも色名を文字として一切表示しておらず、色そのもの（CSSの色）で伝える設計だった。要求仕様の「BLUE 3」→「LOGIC SIGNAL / 3 Nodes」という例をそのまま可視テキスト化すると、小さなヒントチップの中に長い英単語を詰め込むことになり、確認項目⑦「スマホ表示確認」で要求される「既存UI構造を維持する」「過度な変更を行わない」と衝突する。そのため、見た目（色の丸・数字のみ）は一切変えず、`title`属性（PC）／`aria-label`相当の情報としてSignal名を付与する設計にした
+- **3段階のクリア演出（①Cognitive Analysis→②Neural Synchronization→③Cognitive Map Restored）は、新しい演出システムを作らず既存のトースト（自動消滅）+ 既存のnodeResultOverlay（続けるボタン必須）の组み合わせで実現した**: ①②は「一瞬の処理状態」で情報量が少ないため既存の`ui.showToast()`（フィードバック方針どおり短い一行トーストは自動消滅でよい）、③「Cognitive Map Restored」（スコア等の実際の報酬情報を含む）は既存の`nodeResultOverlay`（情報系オーバーレイは自動消滅させない方針）にそのまま乗せた
+- **ARIAコメントはRUNにつき1回のみ表示する設計にした**: 要求仕様の「Layer開始時などで表示」を文字どおり毎Layer実装すると、既存のAI Director（5人格、STEP31）の`layerStart`トーストと表示が競合・上書きし合う（`ui.showToast`は単一トーストの上書き式）。ARIA（Layer Narrative Systemのキャラクター）とAI Director（5人格、汎用の難易度調整コメント担当）は別の存在として独立実装されている既存方針（STORY_BIBLE.md 2章）を踏まえ、ARIAの起動コメントはRUN開始後、最初にCognitive Analysis系Node（Puzzle/Elite/Boss）へ入った瞬間の1回だけに絞った
+- **`nodeTypes.js`のPuzzle Node定義は`name`/`description`のみ変更し、`id:'puzzle'`は変更していない**: `id`は`mapGenerator.js`/`endless.js`の`switch(node.type)`分岐やCSSクラス名（`map-node-puzzle`）等、既存ロジックの随所で参照されているため、表示名のみを変更した（要求仕様の「表示のみ変更、判定ロジックは変更しない」と正確に一致する設計）
+
+**新規ファイル**: `src/endless/cognitiveTheme.js` — Signal名マッピング（`SIGNAL_LABELS`/`getSignalLabel()`）、Cognitive Analysis用語（`TERMS`）、ARIA起動コメント（`ARIA_INTRO_LINES`）を持つ純粋データモジュール
+
+**既存ファイルの変更**:
+- `ui.js`: `renderColorLegend`の凡例ドット・`_renderHintChips`のヒントチップに、`CognitiveTheme.getSignalLabel()`を使った`title`属性を追加（可視テキスト・レイアウトは無変更）
+- `endless.js`: `CognitiveTheme`をインポート。`_handleRoundClear()`のクリアタイトルを`Cognitive Map Restored`（Boss/Eliteは接頭辞付き）へ変更し、クリア直後に①②の短いトースト演出を追加。`_enterNode()`のPuzzle/Elite/Boss分岐に`_maybeShowAriaAnalysisIntro()`（RUN1回限りのARIAコメント）を追加。`_initializeRun()`にRUNスコープのフラグ`_ariaAnalysisIntroShownThisRun`を追加
+- `nodeTypes.js`: `puzzle`ノード定義の`name`を`'Puzzle'`→`'Cognitive Analysis'`、`description`をMemory Node解析の文脈に変更（`id`は無変更）
+- `index.html`: `<script src="src/endless/cognitiveTheme.js">`をnodeTypes.js等より前に追加
+- `docs/STORY_BIBLE.md`: 1章「LOGIC COLOR Cognitive Mapping System」の直後に「Cognitive Neural Mapping System」節（用語対応表・Signal名・適用範囲）を追加
+
+**既存ロジック維持確認**: `board.js`のCellState定数・`generator.js`/`solver.js`のアルゴリズム・`endlessSave.js`の3層データ構造（`saveVersion`="1.2.0"のまま）は一切変更していない。`cognitiveTheme.js`は既存コードへの参照を持たない純粋なデータ+ヘルパーのみのモジュールで、既存の`board.js`/`game.js`/`generator.js`/`solver.js`のいずれからも参照されていない（一方向: `ui.js`/`endless.js`が`cognitiveTheme.js`を参照するのみ）。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`/`Generator`/`Game`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。16項目を3回連続実行し全PASS:
+- ①②既存問題生成・正解判定（`Generator.generatePuzzle()`→`validatePuzzle()`唯一解確認→`Game`へ正解を投入し`cleared`になることを実際に確認）
+- ③Layer進行（Depth進行）が通常どおり動作すること
+- ④Save互換（`metaData`/`storyData`/`runData`の3層構造・`saveVersion`="1.2.0"が維持されていること、STEP40-2の旧Save移行も引き続き正常なこと）
+- ⑤Protocolが通常どおり選択・保持されること
+- ⑥Story（`layerStoryProgress`・Dialogue既読記録）が通常どおり進行すること
+- ⑦Hint chip/Legend dotの可視テキストが数字/色のみ（Signal名で視覚的にクラッターしていないこと）を実際のDOM上で確認
+- ⑧`CellState.BLUE/RED/GREEN/EMPTY`・`COLORS`配列が変更されていないこと、`CognitiveTheme.getSignalLabel()`が内部idを変えずに表示名だけを返すこと、Hint chip/Legend dotに実際に`SIGNAL`を含む`title`属性が付与されていること
+
+**未実装/既知の制約**: System Log風表示・Node発光・同期エフェクト等の高度なアニメーションは、既存CSS/DOMの範囲内の簡易表現（トースト+既存オーバーレイ）に留め、新規の描画エンジンは追加していない。STAGE SELECT/TUTORIAL/DAILY PUZZLE側のラベル文言は意図的に未変更（上記設計判断参照）。Memory Nodeの円形/近未来的デザインへの盤面セルの見た目変更（CSS）は、既存の正方形マスのタップ操作性・実装済みの盤面レイアウト計算（`clamp()`によるレスポンシブサイズ調整）への影響が大きいため、今回は見送った。
+
+## STEP41-2: Grid Cell → Memory Node表示
+
+STEP41-1で見送っていたGrid CellのMemory Node（円形/SF Node UI）化を実施した。**問題生成・判定処理・Save・Protocol・Storyは一切変更していない**（`board.js`のCellState内部id、`game.js`の判定ロジック、`endlessSave.js`のスキーマ、いずれも無変更）。今回は`.board-cell`（盤面のタップ可能ボタン要素）自体の矩形サイズ・grid配置・クリックハンドラは一切変更せず、CSSの見た目（`border-radius`等）とクラスの付け外しだけで「Memory Node」を表現した。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **STEP41-1で見送った理由（タップ操作性・レスポンシブレイアウトへの影響）を、`.board-cell`のサイズ・grid配置・クリックイベントを一切変えずCSSの`border-radius`のみ変更する方式で解消した**: `<button>`要素自体の矩形の当たり判定（クリック領域）は`border-radius`の値に左右されないため、見た目を円形にしても既存のタップ精度・レスポンシブな`clamp()`サイズ計算はそのまま維持される。実装前に懸念していたリスクを、DOM構造・サイズ計算に触れない設計で回避した
+- **Node Link（Grid隣接関係からの接続線描画）は、正確なピクセル単位のコネクタ線ではなく、Node同士の縁取り色をネットワーク色に変える方式で実装した**: 盤面は`clamp()`による可変サイズ・5×5〜8×8の複数サイズに対応しており、隙間（gap）をまたぐ正確な接続線を疑似要素で描くには実機での目視調整が前提になる（本セッションでは実ブラウザでの見た目確認ができない）。「Grid隣接関係に基づく視覚的な接続」という要件の趣旨を、既存の`.board-cell`の`border`色を変えるだけの低リスクな手段で満たし、過度な変更を避けた
+- **Node状態（UNKNOWN/SYNCING/STABLE）は、board.jsに新しい内部状態を追加せず、ui.js側がCellStateから都度算出する表示専用の概念にした**: `_nodeStateClass(color)`が`EMPTY`→`node-unknown`、それ以外→`node-stable`を返すだけの純粋関数で、SYNCINGは配置アニメーション中だけ`node-syncing`クラスとして一時的に重ねる（`board.js`/`game.js`は一切参照・変更していない）
+- **「未選択:pulse」「選択:highlight」「正解:synchronization effect」の一部は、既存の演出資産をそのまま活用した**: 調査の結果、選択時のハイライトは既存の`select-pulse`（`Animation.selectPulse()`）、クリア（正解）時の同期発光は既存の`sync-flash`（`Animation.syncFlashBoard()`、コメントに「CLEAR時: 全ライトを同期発光」と既に明記されていた）がそのまま該当した。今回新規に追加したのは「未選択（UNKNOWN）Nodeのアイドルパルス」（`nodeIdlePulse`、既存には無かった）と、配置演出をより豊かにする「SYNCING」「Signal Inject」の2つの追加アニメーションのみ
+- **nodeTheme（Layer Theme対応準備）は、データだけの空箱にせず実際にui.jsの描画を左右する構造にした**: `cognitiveTheme.js`の`NODE_THEME`（`{type, shape, connection, animation}`）を`buildBoard()`が読み、`#boardWrapper`へ`theme-circle`/`theme-connected`/`theme-pulse`クラスとして反映する。現時点では全Layer共通で単一テーマのみ使うが、値を変えれば実際に見た目が変わる構造のため、将来Chapter/WorldEnvironmentごとに異なるテーマを割り当てる拡張が容易になっている
+
+**新規ファイルは無し**。既存ファイルの変更:
+- `cognitiveTheme.js`: `NODE_THEME`（盤面テーマ設定）・`SIGNAL_LABELS_SHORT`/`getSignalLabelShort()`（凡例用の短縮Signal名）を追加
+- `ui.js`: `_nodeStateClass()`/`_cellClassName()`を新設（`renderCells`/`updateCell`で共有）。`updateCell()`の配置アニメーションに`signal-inject`/`node-syncing`クラスを追加。`buildBoard()`で`#boardWrapper`へテーマクラスを付与、盤面セルへアイドルパルスの`animation-delay`をインラインstyleで設定。`renderColorLegend()`の色ドットを`.legend-item`（縦積みラッパー）で包み、`.legend-label`に短縮Signal名を可視テキストとして追加
+- `index.html`: `.board-cell`のテーマ別CSS（`theme-circle`/`theme-connected`/`theme-pulse`スコープ）、`nodeIdlePulse`/`nodeSyncing`/`signalInject`の新規`@keyframes`、`.legend-item`/`.legend-label`のCSS、`prefers-reduced-motion`除外リストへの新規アニメーションクラス追加
+- `docs/STORY_BIBLE.md`: 「Cognitive Neural Mapping System」節の下に「Memory Node / Neural Node / Cognitive Mapping UI」小節を追加（Node状態3種・Node Link・nodeTheme設計思想を記載）
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`/`Generator`/`Game`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。24項目を3回連続実行し全PASS:
+- 既存問題が解ける・正解判定正常（`Generator`→`Game`の実経路で確認）
+- 既存Color ID維持（`CellState`/`COLORS`が無変更）
+- `#boardWrapper`に`theme-circle`/`theme-connected`/`theme-pulse`クラスが`NODE_THEME`どおり付与されること
+- 未配置のNodeが`node-unknown`、実際にタップ（`app.handleCellTap`経由）すると`node-stable`+`signal-inject`+`node-syncing`へ切り替わり、4回タップで巡回して`node-unknown`へ戻ること（既存のタップ巡回ロジックが無変更のまま動作）
+- スマホ操作正常（`aria-label`保持・`gridRow`/`gridColumn`配置が既存どおりであることを含む）
+- Signal Button改善（凡例にLOGIC/MEMORY/EMOTIONの短縮ラベルが表示されること）
+- Layer進行正常（Endless ResearchのDepthが通常どおり進行すること）
+- Save互換（3層構造・`saveVersion`="1.2.0"・旧Save移行が維持されていること）
+
+**未実装/既知の制約**: Node Linkは正確な接続線ではなく縁取り色によるメッシュ表現に留めた（上記設計判断参照）。System Log風表示・Boot Animation等の高度な演出はSTEP41-1同様、既存の枠内表現に留めている。本セッションでは実ブラウザでの視覚確認（色合い・アニメーションの実際の見え方）ができておらず、CSSの記述内容の妥当性確認とDOM/クラスの付け外しの動作確認（jsdom）に留まる点に注意。
+
+## STEP41-3: Neural Evolution System
+
+Layer進行に応じて解析対象（Cognitive Neural Mapping UI）が5段階に進化していく世界観を、UI・演出・背景・Node Themeの変化で表現した。**ゲームルール・問題生成・判定ロジックは一切変更していない**（Themeは`themeManager.js`の`getTheme(layer)`という純粋関数がLayer番号から算出するだけの表示専用の値で、`board.js`/`game.js`/`generator.js`/`solver.js`・`endlessSave.js`のスキーマ、いずれも無変更）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **既存のWorldEnvironmentシステム（STEP30-1〜、5Layerごとの細かい周期でのEnvironment切替）とは意図的に別概念として実装した**: 要求されたPhase区切り（Layer1-4/5-12/13-20/21-30/31+の5段階）は、既存のWorldEnvironment（5Layerごと）ともChapter区切り（3章、Layer1-4/5-8/9-12/13-16/17-20/21-30の6章）とも一致しない、もっと粗い独立した第3の区切りだった。STEP30-1で「Research Environment」と「WorldEnvironment」を名前衝突回避のため独立させた設計判断をそのまま踏襲し、`ThemeManager`/`EvolutionThemeData`という別名で実装した
+- **Theme Transitionは、既存の`transitionManager.js`（WorldEnvironment用、「ENVIRONMENT SHIFT」固定タイトル）を流用せず、同じ「スキップボタン必須・自動消滅しない」パターンを踏襲した新規の`evolutionTransition.js`として実装した**: 両システムは同じLayer移動タイミングで判定されるため、Layerによっては同一Layerで両方の変化（WorldEnvironment切替とNeural Evolution Theme切替）が重なることがある。既存の`transitionManager.js`はDOM要素・タイトル文言（「環境遷移」）がWorldEnvironment専用に固定されており、使い回すと2つの概念が同じオーバーレイに混在してしまう。オーバーレイを分離し、`_afterWorldEnvironmentReady()`という新しい合流点でWorldEnvironment側の演出（Transition→Scan）が完了した"後に"Neural Evolution Theme側の演出を続けて挟む設計にすることで、両者が独立しつつも順序立てて表示される
+- **Continue復元・Save互換のために新しいセーブフィールドは一切追加していない**: `getTheme(layer)`はLayer番号だけから決定的に計算できる純粋関数のため、「現在のTheme」を保存・復元する必要が無い（WorldEnvironmentの`currentWorldEnvironmentId`のような永続フィールドは不要）。CONTINUE後、最初のLayer移動で`_afterWorldEnvironmentReady()`が現在のDepthに対応するThemeを自動的に正しく再計算する。「変化したかどうか」の判定用に`_previousEvolutionThemeId`をRUN内限定のインスタンス変数として持つのみで、これはWorldEnvironmentの`_previousWorldEnvDef`（STEP30-3で確立した「RUN内で直前に表示していた値との比較」方式）と同じ設計
+- **Themeの適用範囲を`#screen-game`（実際にパズルを解いている画面）に限定した**: Map画面（`#screen-map`、Node選択中）は対象外とした。「解析（Cognitive Analysis）そのものを行っている画面の背景が変わる」という体験に絞り、Map画面の既存の見た目（WorldEnvironmentバッジ等）には触れていない。RUN終了時（`exitRun()`/`_exitToTitle()`）には`#screen-game`からTheme由来のクラス・CSS変数を明示的に取り除き、STAGE SELECT/TUTORIAL/DAILY PUZZLE（`#screen-game`を共有する別モード）に見た目が漏れないようにした
+- **「Nodeデザイン・接続線・発光」はSTEP41-2で実装済みの`NODE_THEME`（shape/connection/animation）をThemeごとに差し替えるだけで表現した**: Memory Distortion（歪み）は`connection:false`でNode Linkを切り、Unknown Structure（未知の構造）は`shape:'square'`で円形から意図的に外すことで視覚的な違いを作った。「発光」はUIカラー（`accentColor`、Theme Transitionの縁取りとNode Linkの縁取り両方に使う`--evolution-accent`/`--evolution-accent-soft`のCSS変数）で表現し、新しいCSSキーフレームは追加していない（STEP41-2で確立済みの`nodeIdlePulse`/`nodeSyncing`/`signalInject`をそのまま使う）
+- **「解析エフェクト・クリア演出」はSTEP41-1で確立済みのトースト2段階＋nodeResultOverlayの仕組みに、Themeごとの文言を差し込むだけで表現した**: 新しい演出システムは追加せず、`this._currentEvolutionTheme`（現在のTheme定義）があればそちらの`analysisToast`/`syncToast`/`clearTitle`を優先し、無ければ既存のSTEP41-1の固定文言にフォールバックする設計にした（Endless RESEARCH以外からの呼び出しパスでもSTEP41-1時点の挙動を完全に維持する）
+
+**新規ファイル**:
+- `src/endless/themeManager.js`: `PHASES`（Layer区切り5段階）・`THEME_DEFS`（Themeごとの設定一式）・`ThemeManager`クラス（`getThemeIdForLayer(layer)`/`getTheme(layer)`）
+- `src/endless/evolutionTransition.js`: Theme Transition演出（「NEW ANALYSIS AREA」＋Theme名＋ARIAコメント、スキップボタン必須・自動消滅しない）
+
+**既存ファイルの変更**:
+- `cognitiveTheme.js`: `setActiveNodeTheme(partial)`を追加（`NODE_THEME`の中身を差し替える、参照は据え置き）
+- `endless.js`: `themeManager`/`evolutionTransition`を生成。`_handleMapNodeSelected()`の合流先を`_afterLayerEnvironmentReady`から新設の`_afterWorldEnvironmentReady`へ変更し、そこでTheme変化判定・`_applyEvolutionTheme()`（背景クラス・CSS変数・NODE_THEME反映）・Transition表示を行う。`exitRun()`/`_exitToTitle()`に`_clearEvolutionThemeVisuals()`を追加。`_handleRoundClear()`のクリアタイトル/トースト文言を現在のThemeから取得するよう変更（フォールバックあり）
+- `index.html`: `#evolutionTransitionOverlay`（新規オーバーレイ）、`#screen-game`のTheme別背景CSS（`evolution-bg-basic`等5種）、Node Linkの縁取り色を`--evolution-accent-soft`参照へ変更、`<script src>`に`themeManager.js`/`evolutionTransition.js`を追加
+- `docs/STORY_BIBLE.md`: 「Neural Evolution System」節（9章、旧9章「今後の開発ルール」は10章へ繰り下げ）を追加。Research Depth・Theme一覧・Theme Transitionの設計思想を記載
+
+**Theme構造**: `THEME_DEFS[phaseId] = {id, name, backgroundLabel, nodeTheme:{shape,connection,animation}, accentColor, analysisToast, syncToast, clearTitle, ariaLine}`。将来テーマを追加する場合はこのオブジェクトへ1エントリ追加し、`PHASES`にLayer範囲を1行追加するだけでよい構造にしてある。
+
+**LayerごとのTheme一覧**:
+| Phase | id | Theme名 | Layer範囲 | 背景 | Node形状 | 接続線 |
+|---|---|---|---|---|---|---|
+| Phase1 | basic | Basic Cognitive Map | 1〜4 | Basic Research Lab | circle | あり |
+| Phase2 | network | Neural Network | 5〜12 | Neural Network | circle | あり |
+| Phase3 | distortion | Memory Distortion | 13〜20 | Broken Memory | circle | なし（歪みの表現） |
+| Phase4 | genesis | Genesis Neural Core | 21〜30 | Genesis Core | circle | あり |
+| Phase5 | unknown | Unknown Structure | 31〜 | Unknown Dimension | square（未知の表現） | なし |
+
+**Transition仕様**: WorldEnvironment側の演出（Transition→Scan、変化時のみ）が完了した直後の`_afterWorldEnvironmentReady()`でTheme変化を判定する。変化していれば（RUN最初のLayerも「変化」扱い）、`evolutionTransition.show(themeDef, onComplete)`で「NEW ANALYSIS AREA」＋Theme名＋背景ラベル＋ARIAコメントを表示し、スキップボタンのタップで次（Mutation判定以降の既存フロー）へ進む。変化していなければ演出を挟まず即座に次へ進む（既存のWorldEnvironment Transitionと同じ判定方式）。
+
+**動作確認（jsdom + 実サーバー配信のHTML/JSに対する統合テスト）**: 本番の`App`/`EndlessMode`/`ThemeManager`インスタンスを一時的なテスト専用フック経由で直接検証し、テスト後にフックは`main.js`から削除・`git diff`で無変更確認済み。28項目を3回連続実行し全PASS:
+- LayerごとにTheme切替（Phase境界Layer4/5・12/13・20/21・30/31を含む10パターンを`ThemeManager`の純粋関数として直接確認）
+- 既存Color IDに影響しないこと（THEME_DEFSにBLUE/RED/GREEN内部idが登場しないことを確認）
+- 実RUNでLayer1のNode進入時に`evolution-bg-basic`クラス・`--evolution-accent`CSS変数が正しく設定されること
+- 既存Protocol正常（RUN開始でProtocolがActiveになること）
+- Continue復元正常（Themeが保存データに依存せずDepthのみから常に正しく再計算されること）
+- 既存問題が解ける・正解判定正常・既存Story正常（実際にLayer1をクリアし`layerStoryProgress`が進行すること）
+- スマホ表示正常（Memory Nodeが引き続き`theme-circle`で描画され、`aria-label`が維持されていること）
+- Save互換維持（3層構造・`saveVersion`="1.2.0"・旧Save移行）
+- Endless RESEARCH終了後、`#screen-game`のTheme由来クラスが解除されStage/Tutorial/Daily Puzzleへ影響しないこと
+
+**未実装/既知の制約**: Theme適用範囲は`#screen-game`（実際にパズルを解いている画面）に限定し、Map画面自体の背景・配色は変更していない。「発光」「同期エフェクト」はSTEP41-2の既存アニメーション資産＋色替えで表現し、Theme専用の新規アニメーションは追加していない（上記設計判断参照）。本セッションでは実ブラウザでの視覚確認ができておらず、CSS記述の妥当性確認とDOM/クラス付け外しの動作確認（jsdom）に留まる。

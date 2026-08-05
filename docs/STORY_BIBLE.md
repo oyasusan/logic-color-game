@@ -9,6 +9,36 @@
 ### LOGIC COLOR Cognitive Mapping System
 プレイヤーが解く論理パズル（色の配置ロジック）そのものが、研究施設のCognitive Mapping System（認知マッピングシステム）の一部として位置づけられる。パズルを解く行為＝施設の論理構造・記憶データを解析する行為、という二重の意味を持つ。「LOGIC COLOR」という名称自体が、色彩と論理の関係を解明する実験（Chapter3「Color Experiment」）に由来する（`scenarioData.js` CASE003の説明文参照）。
 
+### Cognitive Neural Mapping System（STEP41-1で表示用語を追加）
+上記のCognitive Mapping Systemを、ENDLESS RESEARCHのパズル画面表示上でより具体的に呼ぶ際の名称。パズル解析システムであり、Memory NodeへSignalを配置し、失われた認知構造（Cognitive Map）を復元する作業として表現する。**ゲームルール・問題生成・判定ロジック・セーブデータ構造は一切変更していない**（`board.js`のCellState内部id`'EMPTY'/'BLUE'/'RED'/'GREEN'`はそのまま）。表示用語のマッピングは`src/endless/cognitiveTheme.js`が正本。
+
+用語対応表:
+
+| 内部/旧表示 | 新しい表示名 |
+|---|---|
+| Puzzle | Cognitive Analysis |
+| Grid（盤面） | Cognitive Map |
+| Cell（マス） | Memory Node |
+| Clear | Cognitive Map Restored（完了時） |
+| （3段階のクリア演出） | ①Cognitive Analysis → ②Neural Synchronization → ③Cognitive Map Restored |
+
+Signal（色の表示名。内部id=BLUE/RED/GREENは無変更）:
+- BLUE → **Logic Signal**
+- RED → **Memory Signal**
+- GREEN → **Emotion Signal**
+
+適用範囲: この用語変更はENDLESS RESEARCH（ARIA/Layer/Protocol/Storyの世界観が既にある場所）のパズル画面・クリア演出に適用する。STAGE SELECT/TUTORIAL/DAILY PUZZLEは元々ARIAや研究施設の物語と結びついていない独立モードのため、ラベル文言はそのまま維持している（Signal名はtitle/aria-label属性としてのみ全モード共通で付与、見た目には影響しない）。詳細はREADME.md STEP41-1セクション参照。
+
+### Memory Node / Neural Node / Cognitive Mapping UI（STEP41-2で追加）
+盤面のマス（Grid Cell）は、施設の記憶を保持する「Memory Node」として表示される。円形（近未来的なSF Node UI）で描画され、以下の3状態を持つ（内部の判定ロジック・CellState id`'EMPTY'/'BLUE'/'RED'/'GREEN'`は無変更、表示専用の概念）:
+- **UNKNOWN**（未解析）: まだSignalが配置されていないNode。アイドル時にゆっくりとしたパルス演出で「解析待ち」を示す
+- **SYNCING**（同期中）: Signalを配置した直後の一瞬の状態。Signal Inject（注入）演出と共に表示される
+- **STABLE**（安定）: Signalが配置され安定した状態
+
+Node同士は、Grid上の隣接関係に基づく網目状の縁取り（Node Link）で視覚的に接続されているように見える。これは演出上の表現であり、パズルの判定ロジックには一切使用されない（あくまで隣接するMemory Node同士が同じネットワークの一部であることを示す装飾）。
+
+盤面全体の見た目（Node形状・Node Linkの有無・アイドルパルスの有無）は`cognitiveTheme.js`の`NODE_THEME`設定（`{type, shape, connection, animation}`）で制御される。現時点では全Layer共通で単一のテーマ（`basic_neural`）のみを使うが、将来的にChapter/WorldEnvironmentごとに異なるNode Themeを割り当てられるよう、この設定値が実際に描画へ反映される構造にしてある（詳細はREADME.md STEP41-2セクション参照）。
+
 ### Genesis Protocol
 施設の研究プロジェクトの中核。物語冒頭では単なる「初期実験」としてのみ記録が残っているが（Memory001「Genesis Beginning」）、物語が進むにつれ、施設そのものの起源・ARIAの秘密・研究の真の目的に関わる中心的なキーワードであることが明らかになる。最終Chapter「Genesis Protocol」（Layer21〜30）で全貌が明かされる。
 
@@ -61,10 +91,21 @@ Layer30（Genesis Protocol完了）より先に広がる、本編ストーリー
 
 ## 3. Chapter構成
 
+### Chapter0: PROLOGUE「Awakening」（STEP40-3で追加）
+- Layer番号を持たない、Layer1開始前の導入シーケンス。`layerStoryData.js`（Layer1〜30のChapter1〜Final Chapterの区切り）とは別枠のため、`LayerStoryData.ALL`には含めていない（`prologueData.js`が正本）。
+- **NEW RESEARCH開始時のみ再生**する（Continueでは再生しない。一度開始したRunでは完了済み扱いとして、以降のRETRY等では再表示しない）。
+- Scene構成:
+  1. **System Boot** — システムステータス表示（Research Facility: ONLINE / Memory System: ERROR / Cognitive Data: Unavailable）
+  2. **Researcher-01 Awakening** — 主人公が記憶を失った状態で目覚める最初の独白（Dialogue: `prologue_awakening`）
+  3. **ARIA First Contact** — ARIAとの初接触。Researcher-01というAccess IDが登場するが、主人公自身はそれが本当に自分の名前かを確信できない（Dialogue: `prologue_aria_contact`）
+  4. **First Mission** — 施設データの大部分が破損していることが明かされ、原因解析にはCognitive Mapping Systemの再起動が必要と告げられる。最初のミッション「Restore Cognitive Mapping System」が示される（Dialogue: `prologue_first_mission`）
+- 設定としての位置づけ: Researcher-01の覚醒、ARIAとの初接触、Cognitive Mapping System復旧開始という「物語の起点」を、Chapter1「First Signal」より手前に明示的に置く。Chapter1 Layer1の既存Dialogue（`chapter01_layer01_clear`、「システム起動を確認しました」等）とテーマは重なるが、Prologueは記憶を失った主人公の視点からの導入、Chapter1 Layer1はその後のシステム側の詳細確認という位置づけで、矛盾はしない（両者とも変更していない）。
+
 Layer Narrative System（`layerStoryData.js`）に実装済みの区切り。
 
 | Chapter | Title | Layer範囲 | 実装状況 |
 |---|---|---|---|
+| Chapter0 | Awakening（PROLOGUE） | Layerなし | ✅ コンテンツ完成（STEP40-3で追加。NEW RESEARCH開始時のみ再生、`layerStoryData.js`のLayer区切りには含まれない） |
 | Chapter1 | First Signal | Layer1〜4 | ✅ コンテンツ完成（STEP32-5-1で本文実装、STEP34でLayer Clear演出と正式に接続してNarrative完成） |
 | Chapter2 | Lost Data | Layer5〜8 | ✅ コンテンツ完成（STEP35で本文実装） |
 | Chapter3 | Color Experiment | Layer9〜12 | ✅ コンテンツ完成（STEP36で本文実装） |
@@ -290,7 +331,32 @@ Story Ending確定後もENDLESS RESEARCHは通常どおり継続され、生涯�
 
 ---
 
-## 9. 今後の開発ルール
+## 9. Neural Evolution System（STEP41-3で追加）
+
+Layer進行に応じて「解析対象そのものが進化していく」という世界観を、表示・演出のみで表現する仕組み。ゲームルール・問題生成・判定ロジックには一切影響しない（`themeManager.js`が正本）。
+
+### Research Depth（5段階のPhase区切り）
+既存のChapter区切り（Layer1-4/5-8/9-12/13-16/17-20/21-30の6章、3章参照）・WorldEnvironment区切り（5Layerごとの細かい周期、1章参照）とは異なる、もっと広い5段階の区切り。研究がどれだけ深部へ到達したか（Research Depth）を表す。
+
+| Phase | Theme名 | Layer範囲 | 背景 |
+|---|---|---|---|
+| Phase1 | Basic Cognitive Map | Layer1〜4 | Basic Research Lab |
+| Phase2 | Neural Network | Layer5〜12 | Neural Network |
+| Phase3 | Memory Distortion | Layer13〜20 | Broken Memory |
+| Phase4 | Genesis Neural Core | Layer21〜30 | Genesis Core |
+| Phase5 | Unknown Structure | Layer31〜 | Unknown Dimension |
+
+Phase1はChapter1「First Signal」、Phase4はFinal Chapter「Genesis Protocol」、Phase5はUnknown Layer（8章）とLayer範囲が一致する。Phase2/Phase3はそれぞれ2つのChapterをまたぐ、より粗い区切りとして意図的に設計した（「解析対象の進化」という体感は、個々のChapterの物語展開よりもゆっくりしたペースで訪れる方が「深化していく研究」というテーマに合うと判断したため）。
+
+### Theme一覧（詳細設定）
+各Themeは背景・Node形状・Node Link（接続線）の有無・アイドル演出・UIアクセントカラー・解析中/同期中のトースト文言・クリア完了文言・ARIAコメントを持つ（`themeManager.js`のTHEME_DEFS参照）。Memory Distortion（Phase3）はNode Linkを意図的に切り、Unknown Structure（Phase5）はNode形状を円形から外すことで、それぞれ「歪み」「未知」を表現している。
+
+### Theme Transition
+Phaseが切り替わるLayerでは、「NEW ANALYSIS AREA」＋新Theme名＋ARIAの一言（「解析対象が変化しています。」に相当する、Themeごとの専用セリフ）を表示する。既存のWorldEnvironment Transition演出（1章）と同じ「スキップ/続けるボタン必須、自動消滅しない」方針を踏襲しつつ、別の独立したオーバーレイとして実装した（両者は概念が異なり、同一Layerで両方の切り替えが重なることもあるため）。
+
+---
+
+## 10. 今後の開発ルール
 
 **今後LOGIC COLORへ新しいストーリー・キャラクター・イベント・Protocolを追加する場合、STORY_BIBLE.mdを基準設定として扱うこと。**
 

@@ -79,6 +79,14 @@
     }
 
     /**
+     * STEP40-1: Continue System。保存されていたActive Protocol id一覧をそのまま復元する。
+     * 無効なid・MAX_SLOTSを超える分は静かに無視する（Save側のデータ破損に対する耐性）。
+     */
+    restore(ids) {
+      this.activeProtocols = (ids || []).filter(id => this._getDef(id)).slice(0, MAX_SLOTS);
+    }
+
+    /**
      * Protocol Signalの「Replace」選択。指定した所持中のoldIdをnewIdへ置き換える。
      * @returns {Object|null} 置換できた場合は新Protocolの定義、oldIdを所持していない場合はnull
      */

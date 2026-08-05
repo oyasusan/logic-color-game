@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { CellState, COLORS, Score, Animation, Sound } = G;
+  const { CellState, COLORS, Score, Animation, Sound, CognitiveTheme } = G;
 
   const DIALOGUE_TYPE_SPEED_MS = 30; // STEP32-2: Dialogue System。1文字あたりの表示間隔
 
@@ -42,6 +42,8 @@
         // 画面コンテナ
         screens: {
           title: document.getElementById('screen-title'),
+          // STEP40-3: PROLOGUE「Awakening」（Chapter0、NEW RESEARCH開始時のみ）
+          prologue: document.getElementById('screen-prologue'),
           stageSelect: document.getElementById('screen-stageselect'),
           game: document.getElementById('screen-game'),
           // ENDLESS RESEARCH用の画面（src/endless/配下が利用する）
@@ -292,7 +294,22 @@
       const makeDot = colorName => {
         const dot = document.createElement('span');
         dot.className = colorName ? `legend-dot legend-${colorName.toLowerCase()}` : 'legend-dot legend-empty';
-        return dot;
+        // STEP41-1: Cognitive Neural Mapping System。見た目（色の丸のみ）は変えず、
+        // title/aria-labelとしてのみSignal名を付与する（表示レイアウトへの影響ゼロ）
+        if (colorName && CognitiveTheme) dot.title = CognitiveTheme.getSignalLabel(colorName);
+        if (!colorName) return dot; // EMPTY側の丸にはSignal名が無いためそのまま返す
+        // STEP41-2: Signal Button改善。丸の下に短縮Signal名を可視テキストとして添える
+        // （EMPTY側の丸・矢印のレイアウトはそのまま、色の丸だけ縦積みラッパーで包む）
+        const item = document.createElement('span');
+        item.className = 'legend-item';
+        item.appendChild(dot);
+        if (CognitiveTheme) {
+          const label = document.createElement('span');
+          label.className = 'legend-label';
+          label.textContent = CognitiveTheme.getSignalLabelShort(colorName);
+          item.appendChild(label);
+        }
+        return item;
       };
       const makeArrow = () => {
         const arrow = document.createElement('span');
@@ -332,6 +349,14 @@
       wrapper.style.gridTemplateRows = `clamp(32px, 14vw, 64px) repeat(${size}, 1fr)`;
       // 6×6以上の大盤面はマス数が多く、隙間(gap)がその分マスの実サイズを圧迫するため詰める
       wrapper.style.gap = size >= 8 ? '2px' : size >= 6 ? '3px' : '4px';
+
+      // STEP41-2: Layer Theme対応準備。NODE_THEMEの値に応じて盤面全体の見た目
+      // （Memory Nodeの形状/Node Link風の縁取り/アイドルパルスの有無）を切り替える。
+      // タップ領域（.board-cellの矩形サイズ・grid配置）自体は一切変更しない
+      const nodeTheme = CognitiveTheme ? CognitiveTheme.NODE_THEME : null;
+      wrapper.classList.toggle('theme-circle', !!nodeTheme && nodeTheme.shape === 'circle');
+      wrapper.classList.toggle('theme-connected', !!nodeTheme && nodeTheme.connection === true);
+      wrapper.classList.toggle('theme-pulse', !!nodeTheme && nodeTheme.animation === 'pulse');
 
       this.cellEls = Array.from({ length: size }, () => new Array(size));
       this.rowHintEls = Array.from({ length: size }, () => ({}));
@@ -374,6 +399,10 @@
           cell.className = 'board-cell';
           cell.style.gridRow = String(r + 2);
           cell.style.gridColumn = String(c + 2);
+          // STEP41-2: 未解析(UNKNOWN)Nodeのアイドルパルスを位置ごとに少しずらし、
+          // 全マス同時に点滅する単調さを避ける（インラインstyleのためupdateCell()の
+          // className上書きでも消えず、pulse自体の有無はCSS側のtheme-pulseで制御する）
+          cell.style.animationDelay = `${((r + c) % 6) * 0.12}s`;
           cell.setAttribute('aria-label', `row${r + 1} col${c + 1}`);
           cell.addEventListener('click', () => {
             if (Sound) Sound.tap();
@@ -401,6 +430,9 @@
         chip.className = `hint-chip chip-${color.toLowerCase()}`;
         // Hidden Color Modifier: 該当色だけ数値を伏せて「?」表示にする
         chip.textContent = (opts.hiddenColor === color) ? '?' : String(count);
+        // STEP41-1: Cognitive Neural Mapping System。チップの見た目（数字のみ）は変えず、
+        // title属性として「Signal名 + Node数」を付与する（例: "LOGIC SIGNAL — 3 Nodes"）
+        if (CognitiveTheme) chip.title = `${CognitiveTheme.getSignalLabel(color)} — ${count} Nodes`;
         container.appendChild(chip);
         storeMap[color] = chip;
       });
@@ -413,12 +445,31 @@
       this.renderStatus(game);
     }
 
+    /**
+     * STEP41-2: Memory Node表示。CellState（'EMPTY'/'BLUE'/'RED'/'GREEN'、判定ロジックが
+     * 参照する内部状態）は一切変更せず、表示専用のNode状態名だけをここで都度算出する。
+     *   - UNKNOWN: 未解析（EMPTY）
+     *   - STABLE: Signal配置済みで安定している状態
+     * SYNCING（同期中）はupdateCell()の配置アニメーション中だけ一時的に付与する別軸の
+     * クラスのため、ここでは扱わない。
+     * @returns {string} 'node-unknown'|'node-stable'
+     */
+    _nodeStateClass(color) {
+      return color === CellState.EMPTY ? 'node-unknown' : 'node-stable';
+    }
+
+    /** @returns {string} `.board-cell`に設定すべきclassName全体（Node状態＋lit/color） */
+    _cellClassName(color) {
+      const state = this._nodeStateClass(color);
+      return color !== CellState.EMPTY ? `board-cell ${state} lit color-${color.toLowerCase()}` : `board-cell ${state}`;
+    }
+
     renderCells(game) {
       for (let r = 0; r < game.size; r++) {
         for (let c = 0; c < game.size; c++) {
           const color = game.board.get(r, c);
           const el = this.cellEls[r][c];
-          el.className = 'board-cell' + (color !== CellState.EMPTY ? ` lit color-${color.toLowerCase()}` : '');
+          el.className = this._cellClassName(color);
         }
       }
     }
@@ -426,12 +477,15 @@
     /** 特定マスだけ更新し、配置時は発光アニメーションを再生する */
     updateCell(r, c, color, animate) {
       const el = this.cellEls[r][c];
-      el.className = 'board-cell' + (color !== CellState.EMPTY ? ` lit color-${color.toLowerCase()}` : '');
+      el.className = this._cellClassName(color);
       if (animate && color !== CellState.EMPTY) {
-        el.classList.remove('flash');
+        el.classList.remove('flash', 'signal-inject', 'node-syncing');
         // reflowを挟んでアニメーションを再トリガー
         void el.offsetWidth;
-        el.classList.add('flash');
+        // STEP41-2: 既存のflash（配置発光）に加え、Signal Inject（注入演出）・
+        // Node Syncing（同期中の一瞬の演出）を追加する。いずれも一度だけ再生される
+        // CSSアニメーションで、時間経過後は自然に静止画（STABLE状態の見た目）へ収束する
+        el.classList.add('flash', 'signal-inject', 'node-syncing');
         if (Animation) Animation.placeLight(el);
         if (Sound) Sound.place(color);
       }

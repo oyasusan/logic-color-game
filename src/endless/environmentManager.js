@@ -106,6 +106,18 @@
       return picked.id;
     }
 
+    /**
+     * STEP40-1: Continue System。RUN開始時のDetection画面を経由せず、保存されていた
+     * 選択・解決結果をそのまま復元する（onSelectは発火させない＝_initializeRun()を
+     * 誤って再入させない）。Unstable Systemの場合も、再抽選せず保存済みresolvedIdを
+     * そのまま使う（Continue時に効果が変わってしまうのを避けるため）。
+     */
+    restoreSelection(selectedId, resolvedId) {
+      if (!selectedId || !Environments.getById(selectedId)) return;
+      this.selectedId = selectedId;
+      this.resolvedId = (resolvedId && Environments.getById(resolvedId)) ? resolvedId : selectedId;
+    }
+
     getSelectedId() { return this.selectedId; }
     getResolvedId() { return this.resolvedId; }
 

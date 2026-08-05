@@ -11,6 +11,10 @@
  * 追加した。ARCHIVE HUB（従来の入口）とRESEARCH ARCHIVE（STEP33で新設した5カテゴリ
  * まとめ画面）の両方からこの画面を開けるようにするため、「戻る」の行き先を呼び出し側が
  * 動的に指定できるようにする必要があった。
+ *
+ * 【STEP40-2追記】Archiveの「CURRENT RUN」/「COLLECTION」タブに対応した。
+ *   - COLLECTION（既定）: 従来どおりの生涯発見済み/未発見一覧（無変更）
+ *   - CURRENT RUN: 今のRUNでActiveなProtocol（protocolManager、RUN中のみ意味を持つ）
  */
 (function (global) {
   'use strict';
@@ -25,25 +29,47 @@
      * @param {Object} deps
      * @param {Object} deps.ui 既存UIインスタンス（showScreenを再利用する）
      * @param {Object} deps.save EndlessSaveStoreインスタンス（解放状況・Fragment所持数を読む）
+     * @param {Object} [deps.protocolManager] STEP40-2: CURRENT RUNタブ（今のRUNでActiveな構成）に使う
      */
-    constructor({ ui, save }) {
+    constructor({ ui, save, protocolManager }) {
       this.ui = ui;
       this.save = save;
+      this.protocolManager = protocolManager || null;
       this.onBack = null; // () => {}
+      this.mode = 'collection'; // STEP40-2: 'collection'|'currentRun'（既定はCollection＝従来どおりの表示）
 
       this.el = {
         fragments: document.getElementById('archiveFragments'),
         discovered: document.getElementById('archiveDiscovered'),
-        cards: document.getElementById('archiveCards')
+        cards: document.getElementById('archiveCards'),
+        tabCollection: document.getElementById('protocolArchiveTabCollection'),
+        tabCurrentRun: document.getElementById('protocolArchiveTabCurrentRun')
       };
+
+      if (this.el.tabCollection) this.el.tabCollection.addEventListener('click', () => this._setMode('collection'));
+      if (this.el.tabCurrentRun) this.el.tabCurrentRun.addEventListener('click', () => this._setMode('currentRun'));
     }
 
-    show() {
+    show(mode) {
+      this.mode = mode || this.mode;
       this._render();
       this.ui.showScreen('protocolArchive');
     }
 
+    _setMode(mode) {
+      this.mode = mode;
+      this._render();
+    }
+
+    _renderTabs() {
+      if (this.el.tabCollection) this.el.tabCollection.classList.toggle('active', this.mode === 'collection');
+      if (this.el.tabCurrentRun) this.el.tabCurrentRun.classList.toggle('active', this.mode === 'currentRun');
+    }
+
     _render() {
+      this._renderTabs();
+      if (this.mode === 'currentRun') { this._renderCurrentRun(); return; }
+
       const unlockedIds = this.save.getUnlockedProtocols();
       const allDefs = ProtocolUnlock.getAllDefs();
 
@@ -75,6 +101,27 @@
         }
         container.appendChild(card);
       });
+    }
+
+    /** STEP40-2: 今のRUNでActiveなProtocol（無ければ「RUN中ではない」旨を示す） */
+    _renderCurrentRun() {
+      if (this.el.fragments) this.el.fragments.textContent = String(this.save.getProtocolFragments());
+      const activeDefs = this.protocolManager ? this.protocolManager.getActiveDefs() : [];
+      if (this.el.discovered) this.el.discovered.textContent = `${activeDefs.length} / 2`;
+
+      const container = this.el.cards;
+      if (!container) return;
+      if (activeDefs.length === 0) {
+        container.innerHTML = `<div class="archive-card locked"><span class="archive-card-name">現在RUN中ではありません</span></div>`;
+        return;
+      }
+      container.innerHTML = activeDefs.map(def => `
+        <div class="archive-card rarity-${def.rarity || 'common'} unlocked">
+          <span class="archive-card-rarity">${RARITY_LABEL[def.rarity] || def.rarity}</span>
+          <span class="archive-card-name">${def.name}</span>
+          <span class="archive-card-desc">${def.description}</span>
+        </div>
+      `).join('');
     }
   }
 
