@@ -2795,3 +2795,15 @@ STEP43.6本編に4つの機能を追加した。**ゲームルール・問題生
 **動作確認（jsdom）**: 実HTML/実JSを読み込む統合テスト8項目を3回連続実行し全PASS。盤面セルを実イベントで連打しても`AudioManager.playCategorySfx`が一切呼ばれないこと・`.fx-press`が付与されないこと・Animation数カウントが0のままであること、UNDOボタン等の専用クラス無しボタンは引き続きButton Feedback対象であること、`.primary-btn`等の明示クラスは引き続き機能すること、大量タップの同期処理コストを検証した。STEP44の既存46項目・STEP45の既存55項目・Continue機能バグ修正の既存26項目も回帰無し全PASS再確認済み。テスト用フック（`main.js`の`__TEST_HOOK_app`）は検証後に削除済み。
 
 **未実装/既知の制約**: 実機での体感改善（本当に「数タップで詰まる」現象が解消しているか）は未確認（jsdomでは実機の重さ自体を再現できないため、根本原因の特定は静的コードレビューに基づく）。開発サーバーでの実機再確認を推奨する。
+
+## Bug Fix: PROLOGUE等の連続Dialogueで会話が暗転して消える不具合の修正
+
+**症状**: PROLOGUE「Awakening」のScene002（Researcher-01 Awakening）で、最後のセリフ「俺は……誰だ？」をタップして次のScene（ARIA First Contact）へ進むと、直後に画面が暗転する（Dialogueが一瞬で消える）。
+
+**原因**: 直前のBug Fix（Research Facility Interaction Pass「Dialogue Polish」）で`ui.js`の`hideDialogue()`に追加した「終了時の軽いFade」（`.dialogue-fade-out`クラスを付け、150ms後に`hidden`を付ける遅延処理）が原因だった。`DialogueManager.endDialogue()`は`hideDialogue()`を呼んだ直後、同期的に`onComplete()`経由で次のDialogueの`showDialogue()`を呼ぶことがある（PROLOGUEのようにScene間が連続している場合）。この時、次のDialogueが既に表示された後で、古い（1つ前の）`hideDialogue()`の150ms遅延タイマーが発火し、**今表示されているはずの新しいDialogueへ`hidden`を付け直してしまい**、会話が一瞬で消えて暗転して見えていた。
+
+**修正**: `showDialogue()`が呼ばれるたびに増える世代カウンタ（`_dialogueGeneration`）を追加し、`hideDialogue()`の遅延タイマーは「スケジュールした時点の世代のまま」であることを確認してから`hidden`を付けるよう変更した。間に新しいDialogueが始まっていれば（＝世代が進んでいれば）何もしない。
+
+**既存ファイルの変更**: `src/ui.js`（`showDialogue()`/`hideDialogue()`）
+
+**動作確認（jsdom）**: PROLOGUE「Awakening」を実際に最後まで進める統合テスト8項目を3回連続実行し全PASS。**修正前のコードに戻して同じテストを実行し、実際に暗転が再現する（Dialogueオーバーレイに`hidden`が付き消える）ことを確認した上で**、修正を戻して解消することを検証した。STEP44/45・Continue機能バグ修正・盤面タップ詰まり修正の既存135項目も回帰無し全PASS再確認済み。

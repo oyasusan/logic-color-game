@@ -857,6 +857,10 @@
     showDialogue({ speakerName, text, onTap, speakerId }) {
       if (!this.el.dialogueOverlay) { if (onTap) onTap(); return; }
       clearTimeout(this._dialogueTypeTimer);
+      // バグ修正: hideDialogue()の遅延Fade処理（下記）が、既に次のshowDialogue()で
+      // 再表示された後に古いタイマーで`hidden`を付け直してしまわないよう、世代カウンタで
+      // 「このshowDialogue呼び出し以降か」を判定できるようにする
+      this._dialogueGeneration = (this._dialogueGeneration || 0) + 1;
 
       this.el.dialogueSpeaker.textContent = speakerName || '';
       this.el.dialogueText.textContent = '';
@@ -913,9 +917,19 @@
       // Research Facility Interaction Pass: Dialogue Polish「終了時の軽いFade」。
       // 実際に`hidden`を付けるのはフェード分だけ遅らせるが、`pointer-events:none`を
       // 即座に付けるため、フェード中に裏の操作を誤って拾うことは無い
+      //
+      // 【バグ修正】endDialogue()はhideDialogue()を呼んだ直後、同期的にonComplete()経由で
+      // 次のDialogue（例: PROLOGUEのScene間の連続会話）のshowDialogue()を呼ぶことがある。
+      // この場合、次のDialogueが既に表示された後にこの遅延タイマーが発火して`hidden`を
+      // 付け直してしまい、「次の会話が一瞬で消えて真っ暗になる」不具合があった
+      // （例: PROLOGUE「俺は……誰だ？」の次のセリフへ進んだ瞬間に画面が暗転する）。
+      // showDialogue()が呼ばれるたびに増える世代カウンタを比較し、間に新しいDialogueが
+      // 始まっていたら（＝世代が進んでいたら）このタイマーは何もしない
+      const expectedGeneration = this._dialogueGeneration;
       this.el.dialogueOverlay.classList.add('dialogue-fade-out');
       setTimeout(() => {
         if (!this.el.dialogueOverlay) return;
+        if (this._dialogueGeneration !== expectedGeneration) return;
         this.el.dialogueOverlay.classList.add('hidden');
         this.el.dialogueOverlay.classList.remove('dialogue-fade-out');
       }, DIALOGUE_FADE_MS);
