@@ -71,7 +71,8 @@
     ResearchEventManager, ResearchEventBanner,
     FacilityRestorationManager, ResearchGrade, DatabaseCompletion, ResearchReportUI,
     AudioManager, AdaptiveMusicEngine, FeedbackManager,
-    CalibrationManager, Game
+    CalibrationManager, Game,
+    StateBasedUX
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -228,7 +229,20 @@
       // Ambient/Environment Audioの生成・スケジューリングは全てこのインスタンスに委譲する
       // （endless.js自身はLayer番号とゲームイベントを伝えるだけで、Web Audioには触れない） ----
       this.adaptiveMusicEngine = new AdaptiveMusicEngine();
-      if (G.AudioDebugPanel) G.AudioDebugPanel.bind(this.adaptiveMusicEngine);
+      if (G.AudioDebugPanel) {
+        G.AudioDebugPanel.bind(this.adaptiveMusicEngine);
+        // Research Facility Interaction Pass: Debug拡張（PRESENTATIONセクション）。
+        // interactionFeedbackはmain.js側(App)がこのEndlessMode構築より後に生成するため、
+        // ここでは値そのものではなく、呼ばれた時点でthis.appを辿るgetterだけを渡す
+        G.AudioDebugPanel.bindPresentation({
+          getZoneThemeName: () => {
+            const def = this.worldEnvironmentManager ? this.worldEnvironmentManager.getCurrentEnvironment() : null;
+            return def ? def.name : null;
+          },
+          getPresentationQuality: () => this.environmentRenderer ? this.environmentRenderer.getPerformanceMode() : null,
+          getAnimationCount: () => (this.app && this.app.interactionFeedback) ? this.app.interactionFeedback.getActiveAnimationCount() : 0
+        });
+      }
 
       // ---- STEP30-3: Environment Visual / HUD Evolution ----
       this.environmentScan = new EnvironmentScan({ ui });
@@ -248,6 +262,8 @@
       // 触れるのはfeedbackManager.trigger()のみとし、AudioTimelineManager自体は直接操作しない ----
       if (G.AudioTimelineManager) G.AudioTimelineManager.setMusicEngine(this.adaptiveMusicEngine);
       this.feedbackManager = new FeedbackManager({ metaProgression: this.metaProgression });
+      // Research Facility Interaction Pass: State Based UX
+      this.stateBasedUX = StateBasedUX ? new StateBasedUX() : null;
 
       // ---- STEP43: Research Progression System（researchDatabase/memoryManager/
       // relationshipManager/endingManager/metaProgressionはすべて上で生成済みのため、
@@ -295,6 +311,10 @@
       });
       this.neuralLab.onStartRun = () => this.startRun();
       this.neuralLab.onExit = () => this.showModeSelect();
+      // Continue機能バグ修正「Research Lab UI」: Signal AnchorからのCONTINUE。
+      // MODE SELECTの既存CONTINUEボタンと全く同じcontinueRun()を呼ぶことで、
+      // PresentationManager相当のCalibrationフローと処理経路を完全に一本化する
+      this.neuralLab.onContinueRun = () => this.continueRun();
 
       // ---- STEP29: Research Identity System ----
       this.identitySelect = new IdentitySelect({ ui });
@@ -412,6 +432,8 @@
         characterArchiveBtn: document.getElementById('characterArchiveModeSelectBtn'),
         researchArchiveHubBtn: document.getElementById('researchArchiveHubBtn'),
         performanceModeBtn: document.getElementById('performanceModeBtn'),
+        // Research Facility Interaction Pass: Accessibility「Presentation」設定
+        presentationQualityBtns: Array.from(document.querySelectorAll('.presentation-quality-btn')),
         archiveHubBtn: document.getElementById('archiveHubBtn'),
         archiveHubBackBtn: document.getElementById('archiveHubBackBtn'),
         endlessBestDepth: document.getElementById('endlessBestDepth'),
@@ -496,7 +518,8 @@
         this.el.environmentArchiveBackBtn.addEventListener('click', () => this._showArchiveHub());
       }
       if (this.el.neuralLabBtn) {
-        this.el.neuralLabBtn.addEventListener('click', () => this._showNeuralLab(false));
+        // バグ修正: 単なる閲覧目的のため、既存のSignal Anchor(inHub:false等)を上書きしない
+        this.el.neuralLabBtn.addEventListener('click', () => this._showNeuralLab(false, false));
       }
       if (this.el.researchProfileBtn) {
         this.el.researchProfileBtn.addEventListener('click', () => this.researchProfile.show());
@@ -535,6 +558,16 @@
         this.el.performanceModeBtn.addEventListener('click', () => this._cyclePerformanceMode());
         this._renderPerformanceModeBtn();
       }
+      // Research Facility Interaction Pass: Accessibility「Presentation」設定。
+      // 既存performanceModeBtn（⚙️アイコン、high/normal/low巡回）と同じ値を、
+      // Audio Settings画面の3択セグメントからも直接選べるようにする（保存先は共通）
+      this.el.presentationQualityBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.environmentRenderer.setPerformanceMode(btn.dataset.mode);
+          this.environmentRenderer.render(this.worldEnvironmentManager.getCurrentEnvironment());
+          this._renderPerformanceModeBtn();
+        });
+      });
       if (this.el.mapOverviewBtn) {
         this.el.mapOverviewBtn.addEventListener('click', () => this._showResearchMap());
       }
@@ -578,13 +611,25 @@
      * STEP28: NEURAL RESEARCH LAB画面を表示する。
      * @param {boolean} showArrival RUN終了直後の帰還時のみtrue（Surface Arrival演出を出す）。
      *   MODE SELECTから直接開く場合はfalse
-     * STEP40-2: Continue System。Research Hub（Neural Research Lab）へ来るたびに、
-     *   「今どこにいるか」のチェックポイントをResearch Hub滞在状態として保存する
-     *   （死亡/Extract後にここへ来て、そのままアプリを閉じてもCONTINUEでHubへ戻れるようにする）
+     * @param {boolean} [checkpoint=true] STEP40-2: Continue System。Research Hub（Neural
+     *   Research Lab）へ「RUN終了の結果として」到着した場合のみtrueにする。「今どこに
+     *   いるか」のチェックポイントをResearch Hub滞在状態として保存する（死亡/Extract後に
+     *   ここへ来て、そのままアプリを閉じてもCONTINUEでHubへ戻れるようにするため）。
+     *
+     * 【バグ修正】Research Facility Save/Research Suspend分離。MODE SELECTの
+     * 「🧪 NEURAL RESEARCH LAB」ボタン（いつでも押せる、単なる閲覧目的の画面遷移）が
+     * これまでこの関数を`checkpoint`省略（＝常にtrue）で呼んでいたため、実際には
+     * まだ中断していないRUN（`inHub:false`・特定のnextLayerを持つ正当なSignal Anchor）を
+     * 持ったままLabを覗いただけで、そのSignal Anchorが問答無用で`inHub:true`へ
+     * 上書きされてしまっていた。結果、その後のCONTINUEは常にLab（「START NEW RESEARCH」
+     * しか無い画面）へ戻るだけになり、元のLayerへは二度と戻れなくなる不具合があった。
+     * 「単に画面を見るだけ」の遷移ではSignal Anchorへ一切書き込まないよう、呼び出し元で
+     * 明示的に`checkpoint:false`を渡せるようにした。
      */
-    _showNeuralLab(showArrival) {
-      this._checkpointHub();
+    _showNeuralLab(showArrival, checkpoint) {
+      if (checkpoint !== false) this._checkpointHub();
       this.neuralLab.show(showArrival);
+      this._renderNeuralLabContinueOption();
     }
 
     /** MAP画面の🗺️ボタンから呼ばれる。現在のRUN状況をリサーチマップ画面に渡して表示する */
@@ -657,6 +702,41 @@
       }
       if (this.el.endlessContinuePlayTime) this.el.endlessContinuePlayTime.textContent = this._formatPlayTime(this.save.getPlayTimeMs());
       if (this.el.endlessContinueRank) this.el.endlessContinueRank.textContent = String(this.metaProgression.getRankNumber());
+    }
+
+    /**
+     * Continue機能バグ修正「Research Lab UI」/「Research Status」。Neural Research Lab
+     * 画面へ、CONTINUE RESEARCHボタンの表示要否と、Research Suspend(Signal Anchor)の
+     * 状態（Current Layer/Suspend Time/Signal Integrity）を渡す。MODE SELECTの
+     * `_renderContinuePanel()`と同じくContinue Snapshot(=Signal Anchor)だけを参照し、
+     * Neural Research Lab自身の画面状態（Facility Save）とは完全に独立させている。
+     */
+    _renderNeuralLabContinueOption() {
+      const snapshot = this.save.getContinueSnapshot();
+      if (!this.neuralLab) return;
+      if (!snapshot) { this.neuralLab.renderSuspendStatus({ hasSuspend: false }); return; }
+
+      const layerLabel = snapshot.inHub ? '🧪 RESEARCH HUB' : `🗺️ LAYER ${snapshot.nextLayer}`;
+      const integrity = G.SignalIntegrity ? G.SignalIntegrity.getTier(this.save.getLastPlayed(), Date.now()).integrity : 100;
+      this.neuralLab.renderSuspendStatus({
+        hasSuspend: true,
+        layerLabel,
+        suspendTimeLabel: this._formatSuspendTimeAgo(snapshot.timestamp),
+        integrityLabel: `${integrity}%`
+      });
+    }
+
+    /** @param {number} [timestamp] @returns {string} "3時間前"のような相対時間表示（Suspend Time用） */
+    _formatSuspendTimeAgo(timestamp) {
+      if (!timestamp) return '-';
+      const elapsedMs = Math.max(0, Date.now() - timestamp);
+      const minutes = Math.floor(elapsedMs / 60000);
+      if (minutes < 1) return 'たった今';
+      if (minutes < 60) return `${minutes}分前`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}時間前`;
+      const days = Math.floor(hours / 24);
+      return `${days}日前`;
     }
 
     /** @param {number} ms @returns {string} "hh:mm:ss"形式 */
@@ -738,12 +818,18 @@
     }
 
     /** UI改修: 下部の縦積みボタンからヘッダーの⚙️アイコンボタンへ変更したため、
-     *  現在値はtitle（ツールチップ）とaria-labelで示す */
+     *  現在値はtitle（ツールチップ）とaria-labelで示す。Research Facility Interaction Pass:
+     *  Audio Settings画面のPresentationセグメント（3択）も同じ値でここから同期する */
     _renderPerformanceModeBtn() {
-      if (!this.el.performanceModeBtn) return;
-      const mode = this.environmentRenderer.getPerformanceMode().toUpperCase();
-      this.el.performanceModeBtn.title = `描画負荷設定: ${mode}（タップで切替）`;
-      this.el.performanceModeBtn.setAttribute('aria-label', `描画負荷設定: ${mode}`);
+      const mode = this.environmentRenderer.getPerformanceMode();
+      const modeUpper = mode.toUpperCase();
+      if (this.el.performanceModeBtn) {
+        this.el.performanceModeBtn.title = `描画負荷/Presentation設定: ${modeUpper}（タップで切替）`;
+        this.el.performanceModeBtn.setAttribute('aria-label', `描画負荷/Presentation設定: ${modeUpper}`);
+      }
+      this.el.presentationQualityBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
     }
 
     _exitToTitle() {
@@ -814,6 +900,11 @@
      */
     startRun() {
       clearTimeout(this._advanceTimer);
+      // Continue機能バグ修正「削除条件」: 新しいRUNを開始する（＝既存のSignal Anchorを
+      // 継続しない）と決めた以上、古いSuspend状態は破棄する。startNewResearch()経由の
+      // 場合は既にnullだが、Neural Research Labの「START NEW RESEARCH」から直接
+      // 呼ばれる場合はここが唯一の削除ポイントになる
+      this.save.clearContinueSnapshot();
       this.protocolManager.reset();
       this.environmentManager.reset();
       if (!this.identityManager.isSelected()) {
@@ -1837,6 +1928,14 @@
       });
       this.environmentRenderer.render(def);
       this._renderStoryStatus(); // STEP32-1: Story Framework Base System
+
+      // Research Facility Interaction Pass: State Based UX。Environment/World Stability/
+      // Unknown Layerのいずれも、このバッジ更新のタイミングで最新化されるため合わせて呼ぶ
+      if (this.stateBasedUX) {
+        this.stateBasedUX.syncEnvironment();
+        this.stateBasedUX.syncStability(this.worldStabilityManager.getStatus());
+        this.stateBasedUX.syncLayer(this.depth >= 26); // Layer26+=Unknown Dimensionがプールに入る境界（STEP30-3準拠）
+      }
     }
 
     /** STEP32-1: Story Framework Base System セクション7。現在Chapter/Layer進行の表示のみ */
@@ -2549,6 +2648,9 @@
       // API自体はテスト・将来利用のため残している）
       const chapterBeforeClear = this.storyManager.getCurrentChapter();
       const layerEvent = this.storyManager.onLayerClear(this.depth);
+      // Research Facility Interaction Pass: State Based UX。Story本編はLayer1〜30のため、
+      // その範囲でのみ進行率(0〜1)として反映する（Layer31以降のENDLESS RESEARCHでは1のまま）
+      if (this.stateBasedUX) this.stateBasedUX.syncStoryProgress(Math.min(1, this.depth / 30));
       // STEP39-2修正: 従来`this.depth >= chapterBeforeClear.endLayer`（以上）で判定していたが、
       // 最終Chapter（chapter06）には次のChapterが存在せずcurrentChapterが恒久的にchapter06の
       // ままになるため、Layer30到達後のENDLESS RESEARCH（Layer31以降）でこの条件が
@@ -2724,6 +2826,9 @@
           // STEP32-4: ARIA状態遷移はStory演出が完全に終わった後に判定する
           // （このLayerクリアで表示されるDialogueのcondition評価に影響させないため）
           this.relationshipManager.checkAriaEvolution();
+          // Research Facility Interaction Pass: State Based UX。実際に遷移したかに関わらず
+          // 現在のARIA状態を反映する（変化が無ければ同じ値を再設定するだけで副作用は無い）
+          if (this.stateBasedUX) this.stateBasedUX.syncAriaState(this.relationshipManager.getCharacterState('aria'));
           // STEP32-5-1: Chapter Complete表示。Story演出が完全に終わった後にのみ表示する
           if (chapterJustCompleted) {
             this._runTimeline.push({ icon: '📖', label: `Chapter完了: ${chapterBeforeClear.title}` }); // STEP43: Research Report

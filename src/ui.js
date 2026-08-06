@@ -22,6 +22,11 @@
   const { CellState, COLORS, Score, Animation, Sound, CognitiveTheme, AudioManager } = G;
 
   const DIALOGUE_TYPE_SPEED_MS = 30; // STEP32-2: Dialogue System。1文字あたりの表示間隔
+  // Research Facility Interaction Pass: Dialogue Polish。句読点の直後は表示間隔を
+  // 何倍にするか（要求仕様に数値指定が無かったため設計した値。全角の方が読点の
+  // 重みを大きく取り、より長い間を作る）
+  const PUNCTUATION_PAUSE_WEIGHT = { '、': 2.5, '。': 4, '，': 2.5, '．': 4, ',': 2, '.': 3, '!': 3, '?': 3, '！': 3, '？': 3 };
+  const DIALOGUE_FADE_MS = 150; // Dialogue終了時のフェード時間
 
   class UI {
     /**
@@ -162,6 +167,9 @@
         dialogueSpeaker: document.getElementById('dialogueSpeaker'),
         dialogueText: document.getElementById('dialogueText'),
         dialogueNextIndicator: document.getElementById('dialogueNextIndicator'),
+        // Research Facility Interaction Pass: Dialogue Polish（ARIA発話中のバッジ点灯用。
+        // researchConsole.jsと同じ`.rc-aria-badge`をquerySelectorで参照する）
+        ariaBadge: document.querySelector('.rc-aria-badge'),
 
         // Cognitive Re-Synchronization System: 状態通知の自動送り
         statusSequenceOverlay: document.getElementById('statusSequenceOverlay'),
@@ -848,33 +856,48 @@
      */
     showDialogue({ speakerName, text, onTap, speakerId }) {
       if (!this.el.dialogueOverlay) { if (onTap) onTap(); return; }
-      clearInterval(this._dialogueTypeTimer);
+      clearTimeout(this._dialogueTypeTimer);
 
       this.el.dialogueSpeaker.textContent = speakerName || '';
       this.el.dialogueText.textContent = '';
       this.el.dialogueNextIndicator.classList.add('hidden');
+      this.el.dialogueOverlay.classList.remove('dialogue-fade-out');
       this.el.dialogueOverlay.classList.remove('hidden');
+      // Research Facility Interaction Pass: Dialogue Polish。ARIAが話している間だけ
+      // Research Console HUDのARIAバッジを点灯させる（既存researchConsole.setAriaActive()と
+      // 同じ`.rc-aria-active`クラスをここでも使うため、二重に呼ばれても副作用は無い）
+      if (this.el.ariaBadge) this.el.ariaBadge.classList.toggle('rc-aria-active', speakerId === 'aria');
 
       const fullText = text || '';
       let charIndex = 0;
       const revealFull = () => {
-        clearInterval(this._dialogueTypeTimer);
+        clearTimeout(this._dialogueTypeTimer);
         this.el.dialogueText.textContent = fullText;
         this.el.dialogueNextIndicator.classList.remove('hidden');
         this._dialogueTyping = false;
       };
 
-      this._dialogueTyping = true;
-      this._dialogueTypeTimer = setInterval(() => {
+      // Research Facility Interaction Pass: Dialogue Polish「句読点ウェイト」。句読点の
+      // 直後は次の文字までの間隔を通常より長く取り、実際の話し言葉のような間を作る
+      // （setIntervalの固定間隔では表現できないため、setTimeoutの再帰呼び出しへ変更した。
+      // 1文字ごとの表示自体・Dialogue Text Sound・全文表示までの合計文字数はいずれも
+      // 既存どおり不変で、字間の"間"だけを可変にしている）
+      const typeNext = () => {
         charIndex++;
         this.el.dialogueText.textContent = fullText.slice(0, charIndex);
         // STEP43.6: Dialogue Text Sound。1文字ごとに鳴らすと煩雑なため、2文字に1回だけ
         // 短いtick音を鳴らす（空白文字はスキップし、無音の間延びを避ける）
-        if (AudioManager && charIndex % 2 === 0 && fullText[charIndex - 1] && fullText[charIndex - 1] !== ' ') {
+        const ch = fullText[charIndex - 1];
+        if (AudioManager && charIndex % 2 === 0 && ch && ch !== ' ') {
           AudioManager.playDialogueTick(speakerId);
         }
-        if (charIndex >= fullText.length) revealFull();
-      }, DIALOGUE_TYPE_SPEED_MS);
+        if (charIndex >= fullText.length) { revealFull(); return; }
+        const weight = PUNCTUATION_PAUSE_WEIGHT[ch] || 1;
+        this._dialogueTypeTimer = setTimeout(typeNext, DIALOGUE_TYPE_SPEED_MS * weight);
+      };
+
+      this._dialogueTyping = true;
+      this._dialogueTypeTimer = setTimeout(typeNext, DIALOGUE_TYPE_SPEED_MS);
 
       this._dialogueTapHandler = () => {
         if (this._dialogueTyping) { revealFull(); return; }
@@ -883,9 +906,19 @@
     }
 
     hideDialogue() {
-      clearInterval(this._dialogueTypeTimer);
-      if (this.el.dialogueOverlay) this.el.dialogueOverlay.classList.add('hidden');
+      clearTimeout(this._dialogueTypeTimer);
+      if (this.el.ariaBadge) this.el.ariaBadge.classList.remove('rc-aria-active');
       this._dialogueTapHandler = null;
+      if (!this.el.dialogueOverlay) return;
+      // Research Facility Interaction Pass: Dialogue Polish「終了時の軽いFade」。
+      // 実際に`hidden`を付けるのはフェード分だけ遅らせるが、`pointer-events:none`を
+      // 即座に付けるため、フェード中に裏の操作を誤って拾うことは無い
+      this.el.dialogueOverlay.classList.add('dialogue-fade-out');
+      setTimeout(() => {
+        if (!this.el.dialogueOverlay) return;
+        this.el.dialogueOverlay.classList.add('hidden');
+        this.el.dialogueOverlay.classList.remove('dialogue-fade-out');
+      }, DIALOGUE_FADE_MS);
     }
 
     /**

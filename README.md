@@ -2722,3 +2722,76 @@ STEP43.6本編に4つの機能を追加した。**ゲームルール・問題生
 **未実装/既知の制約**: 実ブラウザでのStatus Sequence/Signal Integrity/Calibrationカードの実機視覚・専用SE5種の聴感は未確認。Operation Review/Logic Reviewの文面は進行状況に依存しない固定テキストとした（要求仕様が「操作方法/考え方の再確認」とのみ求めており、Memory/Relationship/Protocol Reviewのような動的差し替えの対象とは判断しなかったため）。Mini Puzzleの盤面サイズ（3×3/4×4）・カード組み合わせ表・数値（確認ダイアログの文言含む）はいずれも要求仕様に指定が無かったため設計した値であり、実プレイでの体感を見て調整が必要になる可能性がある。
 
 **未実装/既知の制約**: 実ブラウザでのPopup表示・Duck時の実際の聴感（音量が滑らかに下がって戻るか）は未確認。`collection`/`researchRankUp`/汎用`popup`の3イベントはデータ定義のみでこの回では実際のゲームフックに配線していない（次回、図鑑コンプリート演出や研究ランクアップ演出を新設する際に配線する想定）。
+
+## STEP45: Research Facility Interaction Pass
+
+新機能追加ではなく、ゲーム全体のUX（入力の気持ち良さ・音・UIレスポンス・演出・アニメーション）を磨き込む回。**ゲームルール・パズル判定・スコア計算・進行データには一切影響しない**。「プレイヤーはゲームを操作するのではなく研究施設OSを操作する」というテーマに沿って、ボタン押下・ポップアップ表示・状態変化の全てに一貫した反応を後付けした。前回のSTEP44「Cognitive Re-Synchronization System」とはREADME上の章番号のみ独立させている（同じSTEP44を名乗ると既存セクションと衝突するため、この回はSTEP45とした）。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Button/Popup Feedbackはいずれも既存の117箇所の個別クリックハンドラ・25個のオーバーレイ表示コードに一切手を加えず、event delegation（`document`直下1系統のpointerイベント）とMutationObserver（`.overlay`の`hidden`クラス変化監視）だけで全画面へ後付けした**: 個別に手を加える設計では変更範囲・既存動作を壊すリスクが大きすぎると判断した。新しいボタン/ポップアップが将来追加されても自動的に対応する
+- **Research Facility Audio Language（14カテゴリ）とPopup Feedback（12カテゴリ、うちWarning/Error/Discovery/Story/Memory/Protocolは14カテゴリ側と共有）を、同じ`audioLanguage.js`のテーブル・同じ`AudioManager.playCategorySfx()`という1つの経路に統合した**: 2つの別々の分類体系を維持するとメンテナンスコストが増えるため、実質20カテゴリの1つの語彙として実装した
+- **UI音の連打防止（Cooldown/Priority）は、既存のAudioTimelineManagerには接続せず、AudioManager内に軽量な独立機構として実装した**: Timelineは複数ステップ・Queue・pause/duck/cancelという重い管理を持ち、ボタン押下のような高頻度・低レイテンシが求められる単発UI音に使うのは責務過剰と判断した（既存のTimeline経由のUI音、`playUiSfx()`直接呼び出しの3箇所は無変更のまま）
+- **Popup Feedbackの専用Animationは、オーバーレイ直下のカード要素ではなくオーバーレイ自身（`.overlay`）へ適用した**: 既存の`.clear-card { animation: clearCardIn }`が持つ入場演出とCSSの`animation`ショートハンドが同一要素上で衝突し、後勝ちで入場演出が消えてしまうことをテスト前に発見したため。`.overlay`自体は元々animationを持たないため、これにより衝突なく「揺れる/弾む」効果を追加できた
+- **Idle Motion（呼吸アニメーション）は`filter:drop-shadow`を使わず、`box-shadow`は静的値（stateBasedUX.jsが状態変化時だけ更新、毎フレームは動かさない）・実際にアニメーションするのは`opacity`のみに限定した**: 要求仕様の「Filter乱用禁止」「CSS Transform/Opacity優先」を字面どおり守るための設計。グロー効果自体は諦めず、動的に変化する部分と静的な部分を分離することで両立させた
+- **Presentation Quality（High/Normal/Minimal）は新しい保存領域を作らず、既存のSTEP30-3「描画負荷設定」（`environmentRenderer`のperformanceMode、high/normal/low）をそのまま再利用した**: 概念としては「Canvas描画負荷」と「演出強度」で完全一致ではないが、どちらも「端末に合わせて演出量を絞りたい」という同じユーザーニーズに応えるものであり、設定項目を2つに割ると混乱すると判断した。既存のヘッダー⚙️ボタン（巡回式）とAudio Settings画面の新規3択セグメントの両方から同じ値を操作できる
+- **State Based UXのTone計算は、複数の状態変化が同時に主張し合わないよう優先順位を1本化した**（World Stability悪化 > Unknown Layer > ARIA後期状態 > Environment既定色）: 要求仕様は6つの状態を列挙するのみで優先順位の指定が無かったため、常に「今施設で一番注意すべきこと」だけをUIトーンに反映する設計にした
+- **Dialogue Polishの「ARIAアイコン点灯」は、既存の`researchConsole.setAriaActive()`（Layer Narrative Dialogueの発火元）とは別に、`ui.showDialogue()`/`hideDialogue()`自体にも同じクラス操作を追加した**: STEP44で新設した`calibrationManager`のStory Recapは`dialogueManager`を経由せず`ui.showDialogue()`を直接呼ぶため、既存の発火点だけでは点灯しない。両方から同じ`.rc-aria-active`クラスを触れる設計だが、`classList.toggle`は冪等なため二重に呼ばれても副作用は無い
+
+**新規ファイル**:
+- `src/audio/config/audioLanguage.js`: Audio Language 20カテゴリ（Button用14+Popup専用6）の周波数/duration/preset/priority定義
+- `src/endless/interactionFeedback.js`: Button Feedback（Press/Hover/Focus/Disabled/長押し/Toggle）を全ボタンへ一括付与するevent delegationコーディネータ
+- `src/endless/popupFeedback.js`: Popup Feedback（カテゴリ別SE+専用Animation）を全オーバーレイへ一括付与するMutationObserverコーディネータ
+- `src/endless/stateBasedUX.js`: State Based UX。Environment/Layer/World Stability/ARIA State/Unknown Layer/Story ProgressからCSS変数・Ambient Volumeを更新する
+
+**既存ファイルの変更**:
+- `audio/config/audioPresets.js`: `lang_*`プリセット20種を追加（UISynth.js自体は無変更）
+- `audio/AudioManager.js`: `playCategorySfx(category)`を追加（Cooldown+Priority抑制付き）
+- `audio/AudioDebugPanel.js`: PRESENTATIONセクション（ZONE THEME/QUALITY/ANIM/FPS）を追加。FPSのみデバッグパネル表示時専用の軽量rAFループで計測（通常プレイには追加しない）
+- `endless.js`: `stateBasedUX`の生成と6箇所の既存フック（Environment/Stability更新箇所・Layer Clear箇所・ARIA Evolution判定箇所）への配線、Presentation Qualityセグメントの配線、Debug Panelへの`bindPresentation()`配線
+- `ui.js`: `showDialogue()`/`hideDialogue()`に句読点ウェイト（`setInterval`→`setTimeout`再帰へ変更）・ARIAバッジ点灯・終了時Fadeを追加
+- `main.js`: `InteractionFeedback`/`PopupFeedback`をApp直下（グローバル）で生成
+- `index.html`: State Based UX用CSS変数の既定値、Button/Popup Feedback用の汎用CSS（`.fx-press`/`.fx-hover`/`.fx-held`/`.idle-breathe`/`.popup-fx-shake`/`.popup-fx-bounce`/`:focus-visible`）、Presentation Qualityセグメントコントロール、新規スクリプトタグ4つを追加
+- `docs/STORY_BIBLE.md`: 17章「Research Facility Interaction Pass」を新設
+
+**動作確認（jsdom）**: `python3 -m http.server`経由で実HTML/実JSを読み込む統合テスト55項目を3回連続実行し全PASS。Audio Language（20カテゴリ定義・Cooldown・Priority抑制）5項目、Button Feedback（Press即時発火・カテゴリ判定confirm/cancel・Disabled無反応・長押し・Presentation=Minimal時のAnimation間引き）12項目、Popup Feedback（MutationObserver経由のカテゴリSE、既存`.clear-card`アニメとの非衝突確認）4項目、State Based UX（World Stability CRITICAL時のCSS変数反映・STABLE復帰時のフォールバック）4項目、Presentation Quality（3択セグメントと既存⚙️ボタンの値同期）5項目、Dialogue Polish（ARIAバッジ点灯・終了時Fade・句読点ウェイトによる表示時間差）5項目、既存Stage機能への無影響（実際にステージをクリアできることまで含む）4項目を検証した。STEP44 Cognitive Re-Synchronization Systemの既存46項目も回帰無し全PASS確認済み（`stateBasedUX.js`の読み込み順序をendless.jsより前へ移動した変更を含む）。実装中に発見・修正したバグ2件: `stateBasedUX.js`のスクリプトタグを誤って`endless.js`より後ろに置いたため、endless.js冒頭のトップレベルdestructureが`undefined`を捕捉し続けてしまう不具合（endless.js自身のクラス定義時点で発生する既存の依存順序ルールを踏み外した）。テスト用フック（`main.js`の`__TEST_HOOK_app`）は検証後に削除済み（`git diff`で無変更を確認済み）。
+
+**未実装/既知の制約**: 実ブラウザでのFPS・CPU負荷・全ボタンの押下感・全ポップアップの演出は未確認（jsdomにはWeb Audio/実描画が無いため、テストは論理的な発火条件・CSSクラスの付け外しのみを検証しており、実際の音色・体感の滑らかさは実機確認が必要）。Audio Language 20カテゴリの周波数/duration/preset、Popup Feedbackのid→カテゴリ対応表、Cooldown/Priorityの秒数、State Based UXの優先順位・Ambient Volume比率は、いずれも要求仕様に数値指定が無かったため設計した値であり、実プレイでの体感を見て調整が必要になる可能性がある。CPU負荷増加5%以内という定量目標は実機計測手段が無く未検証（新規rAFループを通常プレイに追加していないこと・Animation同時数上限を設けたことなど、論理的な設計面での配慮に留まる）。
+
+## Bug Fix: Continue機能修正（Facility Save / Research Suspend分離）
+
+**症状**: Neural Research Lab（ENDLESS RESEARCH終了後・「🧪 NEURAL RESEARCH LAB」ボタンから到達する画面）には「START NEW RESEARCH」しか無く、中断中のRUN（Signal Anchor）が存在していてもCONTINUEできない状態になっていた。
+
+**根本原因**: MODE SELECTの「🧪 NEURAL RESEARCH LAB」ボタン（いつでも押せる、単なる閲覧目的のボタン）が`_showNeuralLab()`を呼ぶ際、この関数が内部で無条件に`_checkpointHub()`を呼んでいた。`_checkpointHub()`は既存のContinue Snapshot（Signal Anchor）の`inHub`フラグを問答無用で`true`へ上書きする（STEP40-2、RUN終了後にHubへ来た場合の正規の記録手段）。結果、まだ中断していない正当なSignal Anchor（`inHub:false`・特定のLayerを指す）を持ったままLabを覗いただけで、その中身が「Hubにいる」という状態へ静かに書き換わってしまい、以後のCONTINUEは常にLab（START NEW RESEARCHしか無い画面）へ戻るだけになっていた。「施設内のどの画面を見ているか」（Facility Save）と「研究そのものが中断しているか」（Research Suspend/Signal Anchor）という本来別々であるべき2つの状態が、同じ`_checkpointHub()`呼び出しを通じて混同されていたのが原因。
+
+**修正内容**:
+- `_showNeuralLab(showArrival, checkpoint)`に第3引数を追加し、「RUN終了の結果としてHubへ到着した」場合（`onRetry`、既定でtrue）と「単に画面を見るだけ」の場合（MODE SELECTの🧪ボタン、`checkpoint:false`を明示）を区別した。閲覧目的の遷移ではSignal Anchorへ一切書き込まない
+- `startRun()`（Neural Research Labの「START NEW RESEARCH」・MODE SELECTの「NEW RESEARCH」いずれからも最終的に呼ばれる、新しいRUNを開始する唯一の入口）の先頭で`save.clearContinueSnapshot()`を呼び、「新しい研究を始める」と決めた時点で古いSignal Anchorを明示的に破棄するようにした（削除条件「New Research開始」を満たす）
+- Neural Research Lab画面に「▶ CONTINUE RESEARCH」ボタンとResearch Status パネル（CURRENT LAYER/SUSPEND TIME/SIGNAL INTEGRITY）を新設し、Signal Anchorが存在する場合のみ表示する。CONTINUE RESEARCHはMODE SELECTの既存CONTINUEボタンと同じ`continueRun()`（STEP44のCalibrationフロー）をそのまま呼ぶため、処理経路は完全に一本化されている
+- 新しい保存フィールドは追加していない（Signal Anchorの実体は既存のContinue Snapshotのまま、Signal Integrityは既存の`lastPlayed`から都度計算）ため、**既存Save形式との後方互換は自明かつ移行コード不要**
+
+**新規ファイル**: 無し（既存ファイルの修正のみ）
+
+**既存ファイルの変更**:
+- `endless.js`: `_showNeuralLab()`のcheckpoint分離、`startRun()`冒頭でのSuspend削除、`_renderNeuralLabContinueOption()`/`_formatSuspendTimeAgo()`の新設、`neuralLab.onContinueRun`の配線
+- `neuralLab.js`: `onContinueRun`コールバック・`renderSuspendStatus(data)`メソッド・関連DOM参照を追加
+- `index.html`: Neural Research Lab画面へ`#neuralLabSuspendPanel`（Research Status表示）・`#neuralLabContinueBtn`を追加
+- `docs/STORY_BIBLE.md`: 16章へ「Facility SaveとResearch Suspendの分離」節を追記
+
+**動作確認（jsdom）**: 実HTML/実JSを読み込む統合テストで、Signal Anchor（`inHub:false`・特定のnextLayer）を用意した状態でMODE SELECTの🧪ボタンからLabを複数回閲覧してもAnchorの中身（`inHub`/`nextLayer`）が一切変化しないこと、そのままCONTINUE RESEARCHから元のLayerへ正しく復帰できること、Signal Anchorが無い場合はCONTINUE RESEARCHボタン自体が表示されないこと、START NEW RESEARCHを選ぶとSignal Anchorが削除されること、Research Statusパネル（CURRENT LAYER/SUSPEND TIME/SIGNAL INTEGRITY）の表示内容、RUN終了後にHubへ帰還した場合は従来どおり`inHub:true`のAnchorが正しく記録されることを検証した。計26項目を3回連続実行し全PASS。STEP44の既存46項目・STEP45の既存55項目も回帰無し全PASS再確認済み。テスト用フック（`main.js`の`__TEST_HOOK_app`）は検証後に削除済み（`git diff`で無変更を確認済み）。
+
+## Bug Fix: 新しい探索の盤面タップが数回で反応しなくなる不具合の修正
+
+**症状**: 開発サーバーでの実機確認で「新しい探索（ENDLESS RESEARCHのPuzzle）を始めると、最初の数タップで盤面が反応しなくなる」という報告を受けた。
+
+**調査**: jsdomで実HTML/実JSを読み込み、実際のDOMイベント（`pointerdown`→`mousedown`→`pointerup`→`mouseup`→`click`という実ブラウザの発火順）で盤面セルを連打する統合テストを組んで再現を試みた。Stage/Tutorial/Daily Puzzleとの共通コード経路・ENDLESS RESEARCH側どちらも、jsdom上ではmoveCountが期待どおり増え続けエラーも一切発生しなかった（jsdomは実機のレイアウト計算コスト・Web Audio合成コストを再現しないため、「動くには動くが実機では重い」という種類の不具合は検出できないという既知の限界を踏まえ、コードを静的に見直した）。**STEP45「Research Facility Interaction Pass」で追加した`interactionFeedback.js`のevent delegationセレクタ（`TARGET_SELECTOR`）が、UI Chrome用に列挙したクラス群に加えて保険として置いていた汎用`button, [role="button"]`を含んでいた**ことが原因と判明。盤面セル（`ui.js`が`document.createElement('button')`で生成、`class="board-cell"`）はこの汎用セレクタに合致してしまい、盤面タップのたびに以下が**既存の盤面演出（`flash`/`signal-inject`/`node-syncing`/`Sound.tap()`/`AudioManager.playUiSfx('nodeSelect')`）に無関係に二重で**発生していた: ①`AudioManager.playCategorySfx('selection')`（新しいWeb Audio合成ノードの生成）②`.fx-press`クラスの付け外し③`void el.offsetWidth`による強制同期リフロー（`updateCell()`側が既に行っている強制リフローと合わせて2重）。1回のタップごとの余剰コストは小さくても、盤面が埋まっていく（DOM/CSSクラスが複雑化する）ほど蓄積し、実機の非力な端末ほど「数タップで詰まって見える」形で表面化していたと考えられる。
+
+**修正**: `interactionFeedback.js`のターゲット判定を2段階に分離した。①UI Chromeと明示的に分かっているクラス（`.primary-btn`等）は常に対象。②専用クラスを持たない素の`<button>`（UNDO/RESET/HINT等）を拾うための汎用フォールバックは、`#boardWrapper`（盤面コンテナ）の中では一切マッチさせないようにした。これにより盤面セルは完全に対象から外れ、UNDO/RESET/HINT等の既存ボタンへの適用は維持される。
+
+**新規ファイル**: 無し
+
+**既存ファイルの変更**:
+- `endless/interactionFeedback.js`: `TARGET_SELECTOR`を`SPECIFIC_SELECTOR`（明示クラス）+`GENERIC_FALLBACK_SELECTOR`（素の`<button>`、`#boardWrapper`除外）の2段階判定に分離した`_findTarget(e)`を新設し、`_handlePress`/`_handleHoverIn`/`_handleHoverOut`から利用するよう変更
+
+**動作確認（jsdom）**: 実HTML/実JSを読み込む統合テスト8項目を3回連続実行し全PASS。盤面セルを実イベントで連打しても`AudioManager.playCategorySfx`が一切呼ばれないこと・`.fx-press`が付与されないこと・Animation数カウントが0のままであること、UNDOボタン等の専用クラス無しボタンは引き続きButton Feedback対象であること、`.primary-btn`等の明示クラスは引き続き機能すること、大量タップの同期処理コストを検証した。STEP44の既存46項目・STEP45の既存55項目・Continue機能バグ修正の既存26項目も回帰無し全PASS再確認済み。テスト用フック（`main.js`の`__TEST_HOOK_app`）は検証後に削除済み。
+
+**未実装/既知の制約**: 実機での体感改善（本当に「数タップで詰まる」現象が解消しているか）は未確認（jsdomでは実機の重さ自体を再現できないため、根本原因の特定は静的コードレビューに基づく）。開発サーバーでの実機再確認を推奨する。

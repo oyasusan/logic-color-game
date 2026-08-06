@@ -19,7 +19,7 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug, EndlessMode, StoryMode } = G;
+  const { Game, UI, Score, ProgressStore, StageManager, TutorialController, PuzzleManager, Theme, Debug, EndlessMode, StoryMode, InteractionFeedback, PopupFeedback } = G;
 
   class App {
     constructor() {
@@ -57,6 +57,15 @@
       // モードだが、save/AI Director/Environment描画はthis.endless側を再利用するため、
       // 必ずthis.endlessの生成より後にここで生成する（storyMode.js冒頭のコメント参照）
       this.storyMode = (StoryMode && this.endless) ? new StoryMode({ ui: this.ui, puzzleManager: this.puzzleManager, app: this }) : null;
+
+      // Research Facility Interaction Pass: Button/Popup Feedback。Stage/Tutorial/Story/
+      // Endless問わずゲーム全体のボタン・ポップアップへ一括で効くevent delegation方式のため、
+      // 個別モードに属さずApp直下（グローバル）で1回だけ生成する
+      this.interactionFeedback = InteractionFeedback ? new InteractionFeedback({
+        getPresentationQuality: () => (this.endless && this.endless.environmentRenderer)
+          ? this.endless.environmentRenderer.getPerformanceMode() : 'normal'
+      }) : null;
+      this.popupFeedback = PopupFeedback ? new PopupFeedback() : null;
 
       // デバッグモード(?debug=true)の時だけ、答え表示トグルを盤面へ反映する
       if (Debug) {

@@ -39,13 +39,19 @@
       this.memoryManager = memoryManager || null;
       this.relationshipManager = relationshipManager || null;
       this.endingManager = endingManager || null;
-      this.onStartRun = null; // () => {} START NEW RESEARCH
-      this.onExit = null;     // () => {} BACK TO TITLE
+      this.onStartRun = null;  // () => {} START NEW RESEARCH
+      this.onExit = null;      // () => {} BACK TO TITLE
+      this.onContinueRun = null; // () => {} CONTINUE RESEARCH（Continue機能バグ修正で追加）
 
       this.el = {
         backBtn: document.getElementById('neuralLabBackBtn'),
         exitBtn: document.getElementById('neuralLabExitBtn'),
         startRunBtn: document.getElementById('neuralLabStartRunBtn'),
+        continueBtn: document.getElementById('neuralLabContinueBtn'),
+        suspendPanel: document.getElementById('neuralLabSuspendPanel'),
+        suspendLayer: document.getElementById('neuralLabSuspendLayer'),
+        suspendTime: document.getElementById('neuralLabSuspendTime'),
+        suspendIntegrity: document.getElementById('neuralLabSuspendIntegrity'),
 
         dataValue: document.getElementById('neuralLabDataValue'),
         rankValue: document.getElementById('neuralLabRankValue'),
@@ -73,6 +79,25 @@
       if (this.el.startRunBtn) {
         this.el.startRunBtn.addEventListener('click', () => { if (this.onStartRun) this.onStartRun(); });
       }
+      if (this.el.continueBtn) {
+        this.el.continueBtn.addEventListener('click', () => { if (this.onContinueRun) this.onContinueRun(); });
+      }
+    }
+
+    /**
+     * Continue機能バグ修正「Research Lab UI」。Research Suspend（Signal Anchor）が
+     * 存在する場合のみ「▶ CONTINUE RESEARCH」ボタンとResearch Status（Current Layer/
+     * Suspend Time/Signal Integrity）パネルを表示する。値の計算自体はendless.js側の責務
+     * （このクラスはDOM描画のみという既存の役割分担を踏襲する）。
+     * @param {{hasSuspend:boolean, layerLabel?:string, suspendTimeLabel?:string, integrityLabel?:string}} data
+     */
+    renderSuspendStatus(data) {
+      if (this.el.continueBtn) this.el.continueBtn.classList.toggle('hidden', !data.hasSuspend);
+      if (this.el.suspendPanel) this.el.suspendPanel.classList.toggle('hidden', !data.hasSuspend);
+      if (!data.hasSuspend) return;
+      if (this.el.suspendLayer) this.el.suspendLayer.textContent = data.layerLabel || '-';
+      if (this.el.suspendTime) this.el.suspendTime.textContent = data.suspendTimeLabel || '-';
+      if (this.el.suspendIntegrity) this.el.suspendIntegrity.textContent = data.integrityLabel || '-';
     }
 
     _exit() {

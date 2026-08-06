@@ -512,6 +512,9 @@ ENDLESS RESEARCH中にRUNを離れる（GAME画面の「‹ BACK」、またはR
 ### Signal Anchor
 最後に到達したLayer・選択中のProtocol/Environment・Research Mapの進行状況を指す、施設側が設置する目印。実体は既存のContinue Snapshotそのもの（新しい保存領域を追加したわけではない）で、「最後のLayerへ設置される」という演出上の意味づけを与えている。次回のCONTINUEはこのSignal Anchorから再開する。
 
+### Facility SaveとResearch Suspendの分離（バグ修正で明文化）
+研究施設の状態は2種類に分かれる。**Facility Save**は「今どの施設内画面を見ているか」（Main Menu/Research Lab/Archive/Protocol Lab/Settings等）という表層の状態で、CONTINUEの判断材料には一切使わない。**Research Suspend**（Signal Anchor）は「中断中の研究そのもの」（Layer/Environment/Story/Protocol/Relationship/Suspend Time/Signal Integrity）を指し、CONTINUEは必ずこちらだけを参照する。この2つを混同すると、「Neural Research Labの画面を単に開いただけ」で中断中のLayerへ戻れなくなる不具合が起きる（施設内を見て回ることと、研究そのものを中断・再開することは別の行為であるべき、という設計原則）。Signal Anchorは、実際にRUNを離れる（Research Suspend演出）・RUNが終了してHubへ帰還する、という「研究が本当に一区切りついた瞬間」にのみ設置・更新され、Labを覗く・Titleへ戻る・ブラウザを閉じるといった行為では一切変化しない。新しい研究を始める（START NEW RESEARCH）と宣言した時だけ、古いSignal Anchorは役目を終えて消える。
+
 ### Signal Integrity
 最後にプレイした時刻からの経過時間に応じて低下していく、Signal Anchorとの同期強度（%）。24時間以内は100%、3日で95%、1週間で85%、2週間で75%、それ以上経過すると下限の60%で安定する（60%を下回ることはない＝復帰そのものが不可能になることは無い）。CONTINUE時、Restoring Signalの直後に必ず表示される。
 
@@ -523,3 +526,24 @@ CONTINUE時、Cognitive Driftの程度とプレイヤーの進行状況に応じ
 
 ### Adaptive Recap System
 Story RecapはARIAの声で語られる、その時点の進行状況（現在のChapter・直近に復元したMemory Fragment）に応じて毎回組み立て直される短い要約。Memory/Relationship/Protocol Reviewも同様に、その時点でセーブ済みの実データ（取得済みMemory Fragment・各キャラクターとの関係値・解放済みProtocol）から動的に生成され、あらかじめ書かれた固定文章ではない。Mini Puzzleは通常Layerより明確に簡単な問題（3×3〜4×4）で、操作方法とパズルの考え方だけを思い出させることを目的とし、正誤判定以外はスコア・ライフ等の既存RUN進行には一切影響しない。
+
+---
+
+## 17. Research Facility Interaction Pass（STEP45で追加）
+
+「プレイヤーはゲームを操作しているのではなく、研究施設OSを操作している」という一貫した体感を作るための、UX/演出/音響の全体的な磨き込み。新しいゲームルール・新しい遊び方は一切追加していない（**ゲームルール・パズル判定・スコア計算・進行データには一切影響しない**）。ボタンを押した瞬間の手応え、パネルが開く瞬間の質感、施設の状態そのものがUIの色・音・動きへにじみ出てくることを狙った。
+
+### Research Facility Interaction
+施設のあらゆるボタン・パネルには、押した瞬間・開いた瞬間に必ず反応がある。処理の結果を待たず、触れた瞬間にまず施設側が「受け取った」と返す。これは個々の機能を作り込んだのではなく、施設全体（ゲーム全体）に共通の反応様式として後から行き渡らせたもの。
+
+### Audio Language
+施設の音は14種の役割（移動/選択/確定/取消/通知/発見/プロトコル/物語/記憶/研究/警告/エラー/環境/終幕）に分類され、それぞれ専用の音色を持つ。プレイヤーは音の高さや音色だけで「今、施設が何に反応したか」を意識せず理解できるようになる。
+
+### State Based UX
+研究施設の状態（今いる領域、研究の深度、施設の安定度、ARIAの人格の成熟度、未知領域への到達、物語の進行）は、UIの色調・光の強さ・アニメーションの速さへ静かに反映される。施設が不安定になれば環境音は沈み、光は強く揺れる。派手な演出を足すのではなく、常にそこにある画面が施設の"今の状態"を映す鏡になるという設計。
+
+### Interaction Feedback
+ボタンを押す・パネルが開く・アイコンが静かに息づく——これらは全て「施設側からの返答」として統一される。長押しや切り替え操作にもそれぞれ固有の手応えがあり、プレイヤーは常に「自分の入力が施設に届いている」という確信を持てる。
+
+### Presentation Quality
+どんな端末でも心地よく施設を操作できるよう、演出の量（High/Normal/Minimal）を選べる。演出を絞っても、施設が反応していること自体は常に保証される（音・レスポンスは質を落とさない、視覚的な華やかさだけを段階的に絞る設計）。

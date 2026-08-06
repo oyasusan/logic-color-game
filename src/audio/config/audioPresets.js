@@ -103,6 +103,136 @@
       filterType: 'highpass', filterFreq: 1200, filterQ: 0.8,
       lfoRate: 0, lfoDepth: 0, lfoTarget: null,
       gain: 0.045, pan: 0, reverbSend: 0.05, delaySend: 0
+    },
+
+    // ---- Research Facility Interaction Pass: Audio Language（14カテゴリ専用音色）。
+    // 既存'ui'プリセットを流用せず、カテゴリごとに波形/フィルタ/エンベロープを変えることで
+    // 「押した瞬間に何が起きたか」を音色だけで区別できるようにする。UISynth.js自体は
+    // 無変更（波形/フィルタまでpreset経由で完全に差し替え可能な既存設計をそのまま使う）。
+    lang_navigation: {
+      waveform: 'square', attack: 0.002, decay: 0.04, sustain: 0.0, release: 0.04,
+      filterType: 'lowpass', filterFreq: 2600, filterQ: 0.6,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.07, pan: 0, reverbSend: 0.03, delaySend: 0
+    },
+    lang_selection: {
+      waveform: 'square', attack: 0.002, decay: 0.05, sustain: 0.0, release: 0.05,
+      filterType: 'lowpass', filterFreq: 3400, filterQ: 0.8,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.08, pan: 0, reverbSend: 0.04, delaySend: 0
+    },
+    lang_confirm: {
+      waveform: 'triangle', attack: 0.003, decay: 0.09, sustain: 0.0, release: 0.09,
+      filterType: 'lowpass', filterFreq: 3000, filterQ: 0.6,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.09, pan: 0, reverbSend: 0.08, delaySend: 0
+    },
+    lang_cancel: {
+      waveform: 'square', attack: 0.002, decay: 0.06, sustain: 0.0, release: 0.05,
+      filterType: 'lowpass', filterFreq: 1400, filterQ: 0.6,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.07, pan: 0, reverbSend: 0.05, delaySend: 0
+    },
+    lang_popup: {
+      waveform: 'triangle', attack: 0.004, decay: 0.08, sustain: 0.0, release: 0.08,
+      filterType: 'lowpass', filterFreq: 2200, filterQ: 0.7,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.07, pan: 0, reverbSend: 0.1, delaySend: 0.05
+    },
+    lang_discovery: {
+      waveform: 'triangle', attack: 0.005, decay: 0.18, sustain: 0.0, release: 0.2,
+      filterType: 'highpass', filterFreq: 500, filterQ: 0.5,
+      lfoRate: 9, lfoDepth: 120, lfoTarget: 'filter', // 高速LFOでキラキラした揺らぎを表現
+      gain: 0.1, pan: 0, reverbSend: 0.25, delaySend: 0.1
+    },
+    lang_protocol: {
+      waveform: 'sawtooth', attack: 0.003, decay: 0.12, sustain: 0.0, release: 0.1,
+      filterType: 'bandpass', filterFreq: 1200, filterQ: 2.2,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.08, pan: 0, reverbSend: 0.1, delaySend: 0.08
+    },
+    lang_story: {
+      waveform: 'triangle', attack: 0.01, decay: 0.14, sustain: 0.1, release: 0.2,
+      filterType: 'lowpass', filterFreq: 1800, filterQ: 0.7,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.07, pan: 0, reverbSend: 0.2, delaySend: 0.05
+    },
+    lang_memory: {
+      waveform: 'sine', attack: 0.02, decay: 0.16, sustain: 0.1, release: 0.24,
+      filterType: 'lowpass', filterFreq: 1600, filterQ: 0.5,
+      lfoRate: 0.5, lfoDepth: 20, lfoTarget: 'filter',
+      gain: 0.07, pan: 0, reverbSend: 0.3, delaySend: 0.1
+    },
+    lang_research: {
+      waveform: 'triangle', attack: 0.006, decay: 0.2, sustain: 0.0, release: 0.2,
+      filterType: 'highpass', filterFreq: 700, filterQ: 0.5,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.09, pan: 0, reverbSend: 0.15, delaySend: 0.1
+    },
+    lang_warning: {
+      waveform: 'sawtooth', attack: 0.002, decay: 0.14, sustain: 0.0, release: 0.1,
+      filterType: 'lowpass', filterFreq: 900, filterQ: 1.4,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.09, pan: 0, reverbSend: 0.05, delaySend: 0
+    },
+    lang_error: {
+      waveform: 'sawtooth', attack: 0.002, decay: 0.22, sustain: 0.0, release: 0.15,
+      filterType: 'lowpass', filterFreq: 500, filterQ: 1.8,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.1, pan: 0, reverbSend: 0.05, delaySend: 0
+    },
+    lang_environment: {
+      waveform: 'sine', attack: 0.008, decay: 0.1, sustain: 0.0, release: 0.15,
+      filterType: 'bandpass', filterFreq: 900, filterQ: 1.2,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.06, pan: 0, reverbSend: 0.2, delaySend: 0.15
+    },
+    lang_ending: {
+      waveform: 'triangle', attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.4,
+      filterType: 'lowpass', filterFreq: 2400, filterQ: 0.5,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.11, pan: 0, reverbSend: 0.3, delaySend: 0.15
+    },
+
+    // ---- Popup Feedback専用の6カテゴリ（Audio Languageの14種と同じ`lang_*`命名・
+    // 同じplayCategorySfx()経路。Popup Feedbackの要求リスト12種のうちWarning/Error/
+    // Discovery/Story/Memory/Protocolは上記14種を再利用し、ここではPopup特有の
+    // 残り6種のみを追加する） ----
+    lang_information: {
+      waveform: 'sine', attack: 0.006, decay: 0.09, sustain: 0.0, release: 0.12,
+      filterType: 'lowpass', filterFreq: 2000, filterQ: 0.5,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.06, pan: 0, reverbSend: 0.12, delaySend: 0.05
+    },
+    lang_success: {
+      waveform: 'triangle', attack: 0.004, decay: 0.12, sustain: 0.05, release: 0.15,
+      filterType: 'lowpass', filterFreq: 2800, filterQ: 0.6,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.09, pan: 0, reverbSend: 0.15, delaySend: 0.08
+    },
+    lang_achievement: {
+      waveform: 'triangle', attack: 0.006, decay: 0.24, sustain: 0.15, release: 0.3,
+      filterType: 'highpass', filterFreq: 400, filterQ: 0.4,
+      lfoRate: 7, lfoDepth: 90, lfoTarget: 'filter',
+      gain: 0.1, pan: 0, reverbSend: 0.28, delaySend: 0.12
+    },
+    lang_relationship: {
+      waveform: 'sine', attack: 0.015, decay: 0.15, sustain: 0.1, release: 0.22,
+      filterType: 'lowpass', filterFreq: 1500, filterQ: 0.5,
+      lfoRate: 0.3, lfoDepth: 15, lfoTarget: 'filter',
+      gain: 0.06, pan: 0, reverbSend: 0.25, delaySend: 0.08
+    },
+    lang_continue: {
+      waveform: 'triangle', attack: 0.005, decay: 0.1, sustain: 0.0, release: 0.14,
+      filterType: 'lowpass', filterFreq: 2200, filterQ: 0.6,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.08, pan: 0, reverbSend: 0.1, delaySend: 0.05
+    },
+    lang_layerClear: {
+      waveform: 'triangle', attack: 0.005, decay: 0.2, sustain: 0.1, release: 0.25,
+      filterType: 'lowpass', filterFreq: 3000, filterQ: 0.6,
+      lfoRate: 0, lfoDepth: 0, lfoTarget: null,
+      gain: 0.1, pan: 0, reverbSend: 0.18, delaySend: 0.1
     }
   };
 

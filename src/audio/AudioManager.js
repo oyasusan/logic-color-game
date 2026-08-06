@@ -17,7 +17,14 @@
   'use strict';
 
   const G = global.LogicColor = global.LogicColor || {};
-  const { AudioPresets, AudioEvents } = G;
+  const { AudioPresets, AudioEvents, AudioLanguage } = G;
+
+  // 「Research Facility Interaction Pass」Priority Audio連携: 優先度が低いほど
+  // 短いCooldownで連打が間引かれ、優先度が高いカテゴリが鳴った直後は一定時間、
+  // より優先度の低いカテゴリの発音を抑制する（Duckまではせず、単純に鳴らさない）。
+  const CATEGORY_COOLDOWN_MS = { low: 45, normal: 60, high: 90, critical: 120 };
+  const CATEGORY_PRIORITY_RANK = { low: 0, normal: 1, high: 2, critical: 3 };
+  const SUPPRESS_WINDOW_MS = 220; // 高優先度カテゴリ発音直後、これより低い優先度を抑制する時間
 
   const STORAGE_KEY = 'logicColor.audio.v1';
   const DEFAULT_VOLUMES = { bgm: 0.35, ui: 0.6, dialogue: 0.5, environment: 0.4 };
@@ -43,6 +50,8 @@
       this._layerBuses = null; // { drone, pad, pulse, arpeggio, texture }: GainNode（Synth接続先）
       this._synths = null;     // { drone, pad, pulse, arpeggio, texture, ambient, ui }
       this._environmentVoices = new Map(); // id -> {source, filter, gain, lfo}
+      this._categoryLastPlayedAt = new Map(); // Research Facility Interaction Pass: category -> timestamp(ms)（Cooldown用）
+      this._lastCategoryPriorityAt = { rank: -1, time: 0 }; // 直近に鳴ったカテゴリの優先度と時刻（Priority間引き用）
       this._built = false;
       this._bindUnlock();
     }
@@ -324,6 +333,44 @@
       const busGain = this._settings.enabled ? this.getVolume('ui') : 0;
       if (busGain <= 0) return;
       this._synths.arpeggio.trigger(880, AudioPresets.getById('bell'), this._now(), 1);
+    }
+
+    /**
+     * 「Research Facility Interaction Pass」Research Facility Audio Language。
+     * 14カテゴリ（audioLanguage.js）専用の音色でSEを鳴らす、Button/Popup Feedback共通の
+     * 唯一の入口。AudioTimelineManager（Timeline経由の演出音）とは意図的に独立させている
+     * （ボタン押下のような高頻度・低レイテンシが求められる単発UI音に、Priority Queueや
+     * 複数ステップ管理を持つTimelineの重い仕組みを使うのは責務過剰と判断したため。
+     * 代わりにここでは「同一カテゴリの連打を間引くCooldown」と「高優先度カテゴリの直後は
+     * 低優先度カテゴリを鳴らさないPriority抑制」という軽量な2機構のみを持つ）。
+     * @param {string} category audioLanguage.jsのカテゴリid
+     * @returns {boolean} 実際に鳴らせればtrue（Cooldown/Priority/ミュートで鳴らさなかった場合false）
+     */
+    playCategorySfx(category) {
+      const def = AudioLanguage ? AudioLanguage.getById(category) : null;
+      if (!def) return false;
+      const now = Date.now();
+      const rank = CATEGORY_PRIORITY_RANK[def.priority] != null ? CATEGORY_PRIORITY_RANK[def.priority] : 1;
+
+      // Cooldown: 同一カテゴリの連打を間引く
+      const lastAt = this._categoryLastPlayedAt.get(category) || 0;
+      const cooldown = CATEGORY_COOLDOWN_MS[def.priority] || 50;
+      if (now - lastAt < cooldown) return false;
+
+      // Priority: 直前に自分より高い優先度のカテゴリが鳴っていたら、一定時間は道を譲る
+      if (now - this._lastCategoryPriorityAt.time < SUPPRESS_WINDOW_MS && this._lastCategoryPriorityAt.rank > rank) {
+        return false;
+      }
+
+      this._ensureContext();
+      if (!this._synths) return false;
+      const busGain = this._settings.enabled ? this.getVolume('ui') : 0;
+      if (busGain <= 0) return false;
+
+      this._categoryLastPlayedAt.set(category, now);
+      this._lastCategoryPriorityAt = { rank, time: now };
+      this._synths.ui.trigger(def.freq, AudioPresets.getById(def.preset), this._now(), 1);
+      return true;
     }
 
     /** ---------------- Research Console Ambient ---------------- */

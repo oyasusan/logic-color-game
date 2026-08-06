@@ -31,7 +31,14 @@
       this.engine = null;
       this.el = null;
       this._timer = null;
-      if (this.enabled) this._build();
+      this._presentation = null; // Research Facility Interaction Pass: bindPresentation()参照
+      this._fps = 0;
+      this._fpsFrameCount = 0;
+      this._fpsWindowStart = 0;
+      if (this.enabled) {
+        this._build();
+        this._startFpsSampling(); // デバッグパネル表示時のみの専用rAFループ（通常プレイには一切追加しない）
+      }
     }
 
     _build() {
@@ -53,6 +60,11 @@
         <div class="debug-row"><span class="debug-key">PRIORITY</span><span id="adbgTimelinePriority">-</span></div>
         <div class="debug-row"><span class="debug-key">REMAINING</span><span id="adbgTimelineRemaining">-</span></div>
         <div class="debug-row"><span class="debug-key">QUEUE</span><span id="adbgTimelineQueue">-</span></div>
+        <div class="debug-divider">PRESENTATION</div>
+        <div class="debug-row"><span class="debug-key">ZONE THEME</span><span id="adbgZoneTheme">-</span></div>
+        <div class="debug-row"><span class="debug-key">QUALITY</span><span id="adbgPresentationQuality">-</span></div>
+        <div class="debug-row"><span class="debug-key">ANIM</span><span id="adbgAnimCount">-</span></div>
+        <div class="debug-row"><span class="debug-key">FPS</span><span id="adbgFps">-</span></div>
       `;
       document.body.appendChild(panel);
       this.el = panel;
@@ -65,6 +77,30 @@
       clearInterval(this._timer);
       this._timer = setInterval(() => this._render(), UPDATE_INTERVAL_MS);
       this._render();
+    }
+
+    /**
+     * 「Research Facility Interaction Pass」Debug拡張。endless.js/main.jsが
+     * InteractionFeedback/EnvironmentRenderer生成後に1度だけ呼ぶ（省略可、呼ばれなければ
+     * PRESENTATIONセクションは"-"のまま）。
+     * @param {{getZoneThemeName?:Function, getPresentationQuality?:Function, getAnimationCount?:Function}} deps
+     */
+    bindPresentation(deps) {
+      this._presentation = deps || null;
+    }
+
+    /** @private ?debug=true時のみ動く専用rAFループ。FPS計測だけを目的とし、他の描画には一切関与しない */
+    _startFpsSampling() {
+      const sample = now => {
+        this._fpsFrameCount++;
+        if (now - this._fpsWindowStart >= 500) {
+          this._fps = Math.round((this._fpsFrameCount * 1000) / (now - this._fpsWindowStart));
+          this._fpsFrameCount = 0;
+          this._fpsWindowStart = now;
+        }
+        this._fpsRafHandle = global.requestAnimationFrame(sample);
+      };
+      this._fpsRafHandle = global.requestAnimationFrame(sample);
     }
 
     _render() {
@@ -92,6 +128,15 @@
         q('adbgTimelineRemaining').textContent = current ? `${current.remainingSteps} steps` : '-';
         q('adbgTimelineQueue').textContent = timelineSnap.queue.length ? timelineSnap.queue.join(',') : '-';
       }
+
+      // Research Facility Interaction Pass: PRESENTATION section
+      if (this._presentation) {
+        const p = this._presentation;
+        q('adbgZoneTheme').textContent = p.getZoneThemeName ? (p.getZoneThemeName() || '-') : '-';
+        q('adbgPresentationQuality').textContent = p.getPresentationQuality ? (p.getPresentationQuality() || '-').toUpperCase() : '-';
+        q('adbgAnimCount').textContent = p.getAnimationCount ? String(p.getAnimationCount()) : '-';
+      }
+      q('adbgFps').textContent = String(this._fps);
     }
   }
 

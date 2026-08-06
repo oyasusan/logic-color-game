@@ -33,6 +33,15 @@
     --purple: #b26bff;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+    /* Research Facility Interaction Pass: State Based UX（stateBasedUX.jsが更新する。
+       ここでは既定値のみを持ち、実際の値はJS側がdocumentElementへ都度setPropertyする） */
+    --ui-tone: var(--blue);
+    --button-tone: var(--blue);
+    --popup-tone: var(--blue);
+    --progress-color: var(--blue);
+    --glow-strength: 1;
+    --anim-speed: 1;
   }
 
   * {
@@ -937,6 +946,9 @@
   .dialogue-next-indicator.hidden { display: none; }
   @keyframes dialogueNextBlink { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
+  /* Research Facility Interaction Pass: Dialogue Polish「終了時の軽いFade」 */
+  .dialogue-overlay.dialogue-fade-out { opacity: 0; pointer-events: none; transition: opacity 150ms ease; }
+
   #clearTitle {
     font-size: 22px;
     font-weight: 800;
@@ -1589,6 +1601,11 @@
     accent-color: var(--blue);
   }
   .audio-settings-value { font-size: 12px; color: var(--text-dim); min-width: 36px; text-align: right; }
+
+  /* Research Facility Interaction Pass: Accessibility「Presentation」設定 */
+  .presentation-quality-segment { display: flex; gap: 4px; }
+  .presentation-quality-btn { padding: 6px 10px; font-size: 11px; }
+  .presentation-quality-btn.active { border-color: var(--button-tone, var(--blue)); color: var(--button-tone, var(--blue)); }
 
   .endless-result-label {
     font-size: 12px;
@@ -2597,6 +2614,19 @@
   .neurallab-stat-label { font-size: 11px; letter-spacing: 1px; color: var(--text-dim); }
   .neurallab-stat-value { font-size: 17px; font-weight: 800; color: var(--gold); }
 
+  /* Continue機能バグ修正: Research Suspend(Signal Anchor)状態パネル */
+  .neurallab-suspend-panel {
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--blue);
+    margin-bottom: 14px;
+  }
+  .neurallab-suspend-title { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--blue); margin-bottom: 6px; }
+  .neurallab-suspend-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+  .neurallab-suspend-key { color: var(--text-dim); }
+  .neurallab-suspend-value { color: var(--text); font-weight: 700; }
+
   .neurallab-section-title {
     margin: 16px 0 8px;
     font-size: 14px;
@@ -3202,9 +3232,90 @@
     .board-cell.signal-inject,
     .hint-chip.chip-burst,
     .clear-card,
-    .level-up-card {
+    .level-up-card,
+    .fx-press,
+    .idle-breathe,
+    .popup-fx-shake,
+    .popup-fx-bounce {
       animation: none !important;
     }
+  }
+
+  /* ============ Research Facility Interaction Pass ============
+     Button/Popup Feedback用の汎用ユーティリティクラス（interactionFeedback.js/
+     popupFeedback.jsがJSでクラスの付け外しのみ行う。Canvas/DOM追加は無し）。
+     `--anim-speed`/`--glow-strength`はstateBasedUX.jsが状態に応じて更新する。 */
+
+  .primary-btn, .ghost-btn, .icon-btn, .lab-card, .story-tab-btn, .rm-nav-btn,
+  .archive-tab-btn, .story-choice-btn, .reward-choice-option, .mutation-choice-option,
+  .map-node-card, .map-env-detail-toggle {
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  /* Button Feedback: Press（pointerdown直後に即座に付与、処理待ちしない） */
+  .fx-press { animation: fxPress calc(140ms / var(--anim-speed, 1)) ease-out; }
+  @keyframes fxPress {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(0.94); }
+    100% { transform: scale(1); }
+  }
+
+  /* Button Feedback: Hover（PCのみJS側でクラス付与） */
+  .fx-hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28); }
+
+  /* Button Feedback: 長押し中 */
+  .fx-held { outline: 2px solid var(--button-tone, var(--gold)); outline-offset: 2px; }
+
+  /* Button Feedback: Focus（キーボード操作時のみ、マウス/タッチのクリックでは出ない） */
+  .primary-btn:focus-visible, .ghost-btn:focus-visible, .icon-btn:focus-visible,
+  .lab-card:focus-visible, button:focus-visible {
+    outline: 2px solid var(--button-tone, var(--blue));
+    outline-offset: 2px;
+  }
+
+  /* Button Feedback: Disabled（既存の:disabled/.disabledに一律で適用） */
+  .primary-btn:disabled, .ghost-btn:disabled, .icon-btn:disabled,
+  .primary-btn.disabled, .ghost-btn.disabled, .icon-btn.disabled {
+    opacity: 0.4;
+    filter: grayscale(0.4);
+    pointer-events: none;
+  }
+
+  /* Idle Motion: 呼吸アニメーション。対象へこのクラスを付けるだけで良い汎用実装。
+     「Filter乱用禁止」のためfilter:drop-shadowは使わず、box-shadowは静的な値
+     （`--glow-strength`が変わった時だけJSが更新、毎フレームは動かない）に留め、
+     実際にアニメーションするのはopacityのみ（コンポジタだけで完結する軽量な性質） */
+  .idle-breathe {
+    animation: idleBreathe calc(2.6s / var(--anim-speed, 1)) ease-in-out infinite;
+    box-shadow: 0 0 calc(6px * var(--glow-strength, 1)) var(--ui-tone, var(--blue));
+  }
+  @keyframes idleBreathe {
+    0%, 100% { opacity: 0.8; }
+    50%      { opacity: 1; }
+  }
+  /* ARIA Icon（Research Console HUD）・Protocol値表示・Map Node Cardへ適用
+     （Current Layer=.rm-node.currentは既存のrmPulseアニメを既に持つため対象外） */
+  .rc-aria-badge.rc-aria-active,
+  #endlessProtocolValue,
+  .map-node-card {
+    animation: idleBreathe calc(2.6s / var(--anim-speed, 1)) ease-in-out infinite;
+  }
+
+  /* Popup Feedback: カテゴリ別の専用Animation。.overlay自体（中身のカードには既存の
+     clearCardInがあり、同じ要素にanimationを2つ書くと上書きされてしまうため）へ適用する */
+  .popup-fx-shake { animation: popupFxShake 0.42s ease-in-out; }
+  @keyframes popupFxShake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(5px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(3px); }
+  }
+  .popup-fx-bounce { animation: popupFxBounce 0.42s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes popupFxBounce {
+    0%   { transform: scale(0.9); }
+    60%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
   }
 </style>
 </head>
@@ -3261,6 +3372,18 @@
     <div class="audio-settings-row">
       <span class="audio-settings-label">RESEARCH CONSOLE AMBIENT</span>
       <button type="button" id="audioSettingsAmbientToggle" class="icon-btn">🔊</button>
+    </div>
+
+    <!-- Research Facility Interaction Pass: Accessibility「Presentation」設定。
+         既存の描画負荷設定(performanceModeBtn、high/normal/low)をそのまま流用し、
+         表示ラベルのみHigh/Normal/Minimalとする（保存先を分けない） -->
+    <div class="audio-settings-row audio-settings-presentation-row">
+      <span class="audio-settings-label">PRESENTATION</span>
+      <div id="presentationQualitySegment" class="presentation-quality-segment">
+        <button type="button" id="presentationQualityHighBtn" class="ghost-btn presentation-quality-btn" data-mode="high">HIGH</button>
+        <button type="button" id="presentationQualityNormalBtn" class="ghost-btn presentation-quality-btn" data-mode="normal">NORMAL</button>
+        <button type="button" id="presentationQualityMinimalBtn" class="ghost-btn presentation-quality-btn" data-mode="low">MINIMAL</button>
+      </div>
     </div>
   </section>
 
@@ -3780,6 +3903,14 @@
 
     <div class="neurallab-welcome">WELCOME BACK</div>
 
+    <!-- Research Suspend (Signal Anchor)。存在する場合のみ表示するResearch Status -->
+    <div id="neuralLabSuspendPanel" class="neurallab-suspend-panel hidden">
+      <div class="neurallab-suspend-title">📡 SIGNAL ANCHOR DETECTED</div>
+      <div class="neurallab-suspend-row"><span class="neurallab-suspend-key">CURRENT LAYER</span><span id="neuralLabSuspendLayer" class="neurallab-suspend-value">-</span></div>
+      <div class="neurallab-suspend-row"><span class="neurallab-suspend-key">SUSPEND TIME</span><span id="neuralLabSuspendTime" class="neurallab-suspend-value">-</span></div>
+      <div class="neurallab-suspend-row"><span class="neurallab-suspend-key">SIGNAL INTEGRITY</span><span id="neuralLabSuspendIntegrity" class="neurallab-suspend-value">-</span></div>
+    </div>
+
     <div class="neurallab-stats">
       <div class="neurallab-stat">
         <span class="neurallab-stat-label">Research Data</span>
@@ -3808,6 +3939,7 @@
 
     <div class="neurallab-nav">
       <button type="button" id="neuralLabExitBtn" class="ghost-btn">BACK TO TITLE</button>
+      <button type="button" id="neuralLabContinueBtn" class="primary-btn hidden">▶ CONTINUE RESEARCH</button>
       <button type="button" id="neuralLabStartRunBtn" class="primary-btn">START NEW RESEARCH</button>
     </div>
 
@@ -4410,6 +4542,9 @@
   <script src="src/audio/config/audioPresets.js"></script>
   <script src="src/audio/config/audioEvents.js"></script>
   <script src="src/audio/config/audioTimelines.js"></script>
+  <!-- Research Facility Interaction Pass: Audio Language（AudioManager.jsが参照するため、
+       audioPresets.jsの後・AudioManager.jsの前であればよい） -->
+  <script src="src/audio/config/audioLanguage.js"></script>
   <script src="src/audio/synth/DroneSynth.js"></script>
   <script src="src/audio/synth/PadSynth.js"></script>
   <script src="src/audio/synth/PulseSynth.js"></script>
@@ -4570,7 +4705,13 @@
   <script src="src/endless/adaptiveRecap.js"></script>
   <script src="src/endless/calibrationPuzzle.js"></script>
   <script src="src/endless/calibrationManager.js"></script>
+  <!-- Research Facility Interaction Pass: stateBasedUX.jsはendless.jsのトップレベル
+       destructureが参照するため、endless.js本体より前に読み込む必要がある -->
+  <script src="src/endless/stateBasedUX.js"></script>
   <script src="src/endless/endless.js"></script>
+  <!-- interactionFeedback.js/popupFeedback.jsはmain.jsが生成するため、その直前でよい -->
+  <script src="src/endless/interactionFeedback.js"></script>
+  <script src="src/endless/popupFeedback.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>
 </body>
