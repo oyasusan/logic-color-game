@@ -163,6 +163,25 @@
         dialogueText: document.getElementById('dialogueText'),
         dialogueNextIndicator: document.getElementById('dialogueNextIndicator'),
 
+        // Cognitive Re-Synchronization System: 状態通知の自動送り
+        statusSequenceOverlay: document.getElementById('statusSequenceOverlay'),
+        statusSequenceText: document.getElementById('statusSequenceText'),
+
+        // Cognitive Re-Synchronization System: Signal Integrity
+        signalIntegrityOverlay: document.getElementById('signalIntegrityOverlay'),
+        signalIntegrityValue: document.getElementById('signalIntegrityValue'),
+        signalIntegrityDriftLabel: document.getElementById('signalIntegrityDriftLabel'),
+        signalIntegrityDriftDesc: document.getElementById('signalIntegrityDriftDesc'),
+        signalIntegrityContinueBtn: document.getElementById('signalIntegrityContinueBtn'),
+
+        // Cognitive Re-Synchronization System: Calibration Card
+        calibrationCardOverlay: document.getElementById('calibrationCardOverlay'),
+        calibrationCardIcon: document.getElementById('calibrationCardIcon'),
+        calibrationCardTitle: document.getElementById('calibrationCardTitle'),
+        calibrationCardLines: document.getElementById('calibrationCardLines'),
+        calibrationCardContinueBtn: document.getElementById('calibrationCardContinueBtn'),
+        calibrationCardSkipBtn: document.getElementById('calibrationCardSkipBtn'),
+
         toast: document.getElementById('toast')
       };
 
@@ -199,6 +218,23 @@
       if (this.el.nodeResultContinueBtn) {
         this.el.nodeResultContinueBtn.addEventListener('click', () => {
           if (this._nodeResultContinue) this._nodeResultContinue();
+        });
+      }
+
+      // Cognitive Re-Synchronization System
+      if (this.el.signalIntegrityContinueBtn) {
+        this.el.signalIntegrityContinueBtn.addEventListener('click', () => {
+          if (this._signalIntegrityContinue) this._signalIntegrityContinue();
+        });
+      }
+      if (this.el.calibrationCardContinueBtn) {
+        this.el.calibrationCardContinueBtn.addEventListener('click', () => {
+          if (this._calibrationCardContinue) this._calibrationCardContinue();
+        });
+      }
+      if (this.el.calibrationCardSkipBtn) {
+        this.el.calibrationCardSkipBtn.addEventListener('click', () => {
+          if (this._calibrationCardSkip) this._calibrationCardSkip();
         });
       }
 
@@ -850,6 +886,95 @@
       clearInterval(this._dialogueTypeTimer);
       if (this.el.dialogueOverlay) this.el.dialogueOverlay.classList.add('hidden');
       this._dialogueTapHandler = null;
+    }
+
+    /**
+     * Cognitive Re-Synchronization System: 短い状態通知を1行ずつ自動送りで表示する
+     * （Research Suspend「Saving Research.../Installing Signal Anchor.../Research
+     * Suspended」、Continue「Restoring Signal...」「Synchronization Complete」で共用）。
+     * 読む必要がある文章ではなく単発のシステムステータス行のみを想定しているため、
+     * environmentScan.js Phase1と同じ「自動遷移・ボタン無し」の設計（フィードバック
+     * 「情報系オーバーレイは自動消滅させない」の対象外＝短い一行トースト相当）。
+     * @param {string[]} lines
+     * @param {Function} [onComplete]
+     * @param {number} [stepMs=700] 1行あたりの表示時間
+     */
+    showStatusSequence(lines, onComplete, stepMs) {
+      if (!this.el.statusSequenceOverlay || !lines || !lines.length) { if (onComplete) onComplete(); return; }
+      clearTimeout(this._statusSequenceTimer);
+      const interval = stepMs || 700;
+      this.el.statusSequenceOverlay.classList.remove('hidden');
+      let index = 0;
+      const showNext = () => {
+        this.el.statusSequenceText.textContent = lines[index];
+        index++;
+        if (index < lines.length) {
+          this._statusSequenceTimer = setTimeout(showNext, interval);
+        } else {
+          this._statusSequenceTimer = setTimeout(() => {
+            this.el.statusSequenceOverlay.classList.add('hidden');
+            if (onComplete) onComplete();
+          }, interval);
+        }
+      };
+      showNext();
+    }
+
+    /**
+     * Cognitive Re-Synchronization System: Signal Integrity表示。パーセンテージと
+     * Cognitive Driftのラベル/説明文を表示し、「続ける」で次へ進む（読む必要がある
+     * 内容のため自動では消えない）。
+     * @param {{integrity:number, driftLabel:string, driftDesc:string, onContinue?:Function}} opts
+     */
+    showSignalIntegrity({ integrity, driftLabel, driftDesc, onContinue }) {
+      if (!this.el.signalIntegrityOverlay) { if (onContinue) onContinue(); return; }
+      this.el.signalIntegrityValue.textContent = `${integrity}%`;
+      this.el.signalIntegrityDriftLabel.textContent = driftLabel || '';
+      this.el.signalIntegrityDriftDesc.textContent = driftDesc || '';
+      this.el.signalIntegrityOverlay.classList.remove('hidden');
+      this._signalIntegrityContinue = () => {
+        this.hideSignalIntegrity();
+        if (onContinue) onContinue();
+      };
+    }
+
+    hideSignalIntegrity() {
+      if (this.el.signalIntegrityOverlay) this.el.signalIntegrityOverlay.classList.add('hidden');
+    }
+
+    /**
+     * Cognitive Re-Synchronization System: Adaptive Calibrationの各カード
+     * （Research Summary/Memory Review/Relationship Review/Protocol Review/
+     * Operation Review/Logic Review）を表示する汎用オーバーレイ。Story Recapのみ
+     * ARIAのセリフとして既存のshowDialogue()を使うため対象外。
+     * @param {{icon:string, title:string, lines:string[], onContinue?:Function,
+     *   skippable?:boolean, onSkip?:Function}} opts
+     */
+    showCalibrationCard({ icon, title, lines, onContinue, skippable, onSkip }) {
+      if (!this.el.calibrationCardOverlay) { if (onContinue) onContinue(); return; }
+      this.el.calibrationCardIcon.textContent = icon || '';
+      this.el.calibrationCardTitle.textContent = title || '';
+      this.el.calibrationCardLines.innerHTML = (lines || [])
+        .map(line => `<div class="calibration-card-line">${line}</div>`)
+        .join('');
+      if (this.el.calibrationCardSkipBtn) {
+        this.el.calibrationCardSkipBtn.classList.toggle('hidden', !skippable);
+      }
+      this.el.calibrationCardOverlay.classList.remove('hidden');
+      this._calibrationCardContinue = () => {
+        this.hideCalibrationCard();
+        if (onContinue) onContinue();
+      };
+      // Continueとは異なり、Skipは呼び出し側（calibrationManager._skipAll()）が
+      // confirm()で確認を挟んでからhideCalibrationCard()を呼ぶ設計のため、ここでは
+      // 無条件にhideしない（キャンセル時にカードが消えてしまうのを防ぐため）
+      this._calibrationCardSkip = () => {
+        if (onSkip) onSkip();
+      };
+    }
+
+    hideCalibrationCard() {
+      if (this.el.calibrationCardOverlay) this.el.calibrationCardOverlay.classList.add('hidden');
     }
   }
 

@@ -1314,6 +1314,34 @@
       this.save();
     }
 
+    /**
+     * 「Cognitive Re-Synchronization System」: Signal Anchor。
+     * データの実体はContinue Snapshot（nextLayer/environment/protocol/mapVisitedNodes/
+     * timestamp）と完全に同じであり、新しいフィールドは持たない（Chapter/Relationship/
+     * Memory/Protocol解放状況は元からstoryData/metaData側に常時保存済みのため、
+     * スナップショットへ複製する必要が無い）。「最後のLayerへ設置される目印」という
+     * 演出上の名前をコード上でも明確にするため、意味の変わらない薄いエイリアスとして
+     * 用意した（getContinueSnapshot/saveContinueSnapshotの呼び出し元は今までどおり
+     * そのまま利用できる）。
+     */
+    getSignalAnchor() {
+      return this.getContinueSnapshot();
+    }
+
+    saveSignalAnchor(snapshot) {
+      this.saveContinueSnapshot(snapshot);
+    }
+
+    /**
+     * Research Suspend（Exit時演出）の最後に必ず呼び、Signal Integrity減衰の起点となる
+     * `lastPlayed`を確実に「今」へ更新する。addPlayTime()経由でも通常は更新されるが、
+     * 経過時間0ms等のエッジケースで更新が発生しない場合の保険として独立させた。
+     */
+    touchLastPlayed() {
+      this.data.metaData.lastPlayed = Date.now();
+      this.save();
+    }
+
     /** ---------------- STEP40-2: Meta Data / Story Progress / Collection ---------------- */
 
     /**

@@ -181,6 +181,11 @@
         this.storyMode.exitScenario();
         return;
       }
+      // Cognitive Re-Synchronization System: Mini Puzzle表示中のBACK
+      if (this.mode === 'calibration' && this.endless && this.endless.calibrationManager) {
+        this.endless.calibrationManager.handleMiniPuzzleBack();
+        return;
+      }
       this.showStageSelect();
     }
 
@@ -258,9 +263,17 @@
         this._handleDailyClear();
       } else if (this.mode === 'story') {
         this._handleStoryClear();
+      } else if (this.mode === 'calibration') {
+        this._handleCalibrationClear();
       } else {
         this._handleStageClear();
       }
+    }
+
+    /** Cognitive Re-Synchronization System: Mini Puzzleクリア時。星評価等は行わず、
+     *  calibrationManager側のCalibrationカードキュー進行へそのまま委ねる */
+    _handleCalibrationClear() {
+      if (this.endless && this.endless.calibrationManager) this.endless.calibrationManager.handleMiniPuzzleClear();
     }
 
     /** STEP32: Story Scenario Framework。Puzzle/Boss Nodeクリア時、通常のCLEARオーバーレイ

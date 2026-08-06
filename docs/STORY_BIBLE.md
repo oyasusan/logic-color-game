@@ -499,3 +499,27 @@ Analyze/Upgrade/Complete/Discovery/Protocol/Warning/Error/Layer Start/Layer Comp
 
 ### Research Facility Event Timeline（STEP43.6追加要件で追加）
 Layer開始/クリア・Discovery・Protocol取得・Memory取得・Relationship変化・実績解除・図鑑コンプリート・Story/Dialogue・Ending・Continue・Popup通知・環境変化・研究ランクアップなど、研究施設内で起きるほぼ全てのイベントがTimelineとして扱われる（うちlayerComplete/memoryObtain/endingの3つは上記のとおり複数ステップの演出として手作りされており、残りは既存のSE・Music反応をそのままTimeline化した単純な1ステップとして自動的に構成される）。優先度の高いTimeline（Memory取得やEndingなど）が進行中に発生すると、優先度の低いTimelineは自身の設定に応じてキャンセル・一時停止・音量Duckのいずれかで道を譲り、高優先度のTimelineが完了または中断されると元の演出へ自動的に復帰する。
+
+---
+
+## 16. Cognitive Re-Synchronization System（STEP44で追加）
+
+長期間ENDLESS RESEARCHを離れていたプレイヤーが、世界観・ストーリー・操作・思考方法を自然に思い出せるようにするための復帰演出システム。**ゲームルール・パズル判定・スコア計算には一切影響しない**。「コンティニュー」という即物的な操作ではなく、Researcher-01（プレイヤーキャラクター）が研究施設と再同期する一連の手続きとして描く。
+
+### Research Suspend
+ENDLESS RESEARCH中にRUNを離れる（GAME画面の「‹ BACK」、またはResearch Mapの「メニュー」）際、既に中断可能な状態（Signal Anchorが存在する状態）であれば「Saving Research...」→「Installing Signal Anchor...」→「Research Suspended」という短い状態通知が流れる。これは長い読み物ではなく、施設側が状態を保存していることを示す簡潔なシステムログという位置づけ。
+
+### Signal Anchor
+最後に到達したLayer・選択中のProtocol/Environment・Research Mapの進行状況を指す、施設側が設置する目印。実体は既存のContinue Snapshotそのもの（新しい保存領域を追加したわけではない）で、「最後のLayerへ設置される」という演出上の意味づけを与えている。次回のCONTINUEはこのSignal Anchorから再開する。
+
+### Signal Integrity
+最後にプレイした時刻からの経過時間に応じて低下していく、Signal Anchorとの同期強度（%）。24時間以内は100%、3日で95%、1週間で85%、2週間で75%、それ以上経過すると下限の60%で安定する（60%を下回ることはない＝復帰そのものが不可能になることは無い）。CONTINUE時、Restoring Signalの直後に必ず表示される。
+
+### Cognitive Drift
+Signal Integrityの低下によって生じる同期のずれ。**これはプレイヤー自身の理解力低下ではなく、Researcher-01（プレイヤーキャラクター）の施設同期率が低下しているという設定上の現象**として描かれる。Drift無し（Signal Integrity 95%以上）ならそのまま研究を再開できるが、Driftが進むほど、次項のCalibration Programでより多くの項目を確認することになる。
+
+### Calibration Program
+CONTINUE時、Cognitive Driftの程度とプレイヤーの進行状況に応じて、以下から必要な項目だけが自動的に選ばれ、順番に提示される: Research Summary（図鑑進捗の集計）・Story Recap・Memory Review・Relationship Review・Protocol Review・Operation Review・Logic Review・Mini Puzzle。各項目はいつでもスキップできるが、スキップ時には「本当にスキップしますか」という推奨に反する旨の確認が入る。
+
+### Adaptive Recap System
+Story RecapはARIAの声で語られる、その時点の進行状況（現在のChapter・直近に復元したMemory Fragment）に応じて毎回組み立て直される短い要約。Memory/Relationship/Protocol Reviewも同様に、その時点でセーブ済みの実データ（取得済みMemory Fragment・各キャラクターとの関係値・解放済みProtocol）から動的に生成され、あらかじめ書かれた固定文章ではない。Mini Puzzleは通常Layerより明確に簡単な問題（3×3〜4×4）で、操作方法とパズルの考え方だけを思い出させることを目的とし、正誤判定以外はスコア・ライフ等の既存RUN進行には一切影響しない。

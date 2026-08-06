@@ -2687,4 +2687,38 @@ STEP43.6本編に4つの機能を追加した。**ゲームルール・問題生
 
 **動作確認（jsdom + Mock AudioContext）**: Timeline専用テスト44項目（データ整合性、基本再生順序[SE→Popup→Rank→SE→MusicReaction→Callbackの相対順序とタイミング]、Priority連携[duck時の共存確認・cancel時の即時停止確認]、Queue[同一id競合時のQueue化・先着完了後の自動再生]、Skip[残りcallbackの即時実行]、Pause/Resume[一時停止中は後続ステップが発火しないこと・再開後に発火すること]、notifyEvent/cancelOn、Voiceリーク再検証、実RUN統合、Save/Continue互換）を3回連続実行し全PASS。STEP43.6本編の既存49項目・追加要件の既存30項目・STEP43の既存32項目も回帰無し全PASS確認済み（既存の既知flake「並列jsdom実行時の`document`未定義」「Map Nodeランダム選択」が各1回発生したが、いずれも再実行で解消しコード起因ではないことを確認した）。
 
+## STEP44: Cognitive Re-Synchronization System
+
+長期間ENDLESS RESEARCHを離れていたプレイヤーが、世界観・ストーリー・操作・思考方法を自然に思い出せるようにする復帰演出システムを追加した。**ゲームルール・パズル判定・スコア計算には一切影響しない**。「コンティニュー」という即物的な操作ではなく、Researcher-01が研究施設と再同期する手続きとして描く。
+
+**要求仕様に無く、こちらで設計した主な判断**:
+- **Signal Anchorは新しい保存領域を追加せず、既存のContinue Snapshot（STEP40-1〜40-2、`endlessSave.js`の`runData.continueSnapshot`）をそのまま使う「意味づけのエイリアス」として実装した**: 要求仕様が保存を求める項目（Current Layer/Story/Environment/Protocol/Relationship/Progress）のうち、Story/Relationship/Progressは元々`storyData`/`metaData`側に常時保存され続けている値であり、Continue Snapshotへ複製する必要が無い。`endlessSave.js`に`getSignalAnchor()`/`saveSignalAnchor()`という薄いエイリアスAPIのみ追加し、既存の`getContinueSnapshot()`/`saveContinueSnapshot()`をそのまま呼ぶ設計にした（`highestDepth`＝`endlessBestDepth`と同じ、重複データを持たない既存方針の踏襲）
+- **Signal Integrityの5段階は要求仕様が示した5つのデータ点（24時間100%/3日95%/1週間85%/2週間75%/1か月以上60%）へそのまま1:1対応させ、間の値は補間せず「その閾値を超えたら次の段階」という離散段差で実装した**: `worldState.js`のWorld Stability（80/50/20の離散バンド）と同じ設計言語に揃えた。「2週間〜1か月」の間に指定が無かった中間値は独自に作らず、14日を超えたら即座に下限60%へ落ちる単純な仕様にした
+- **Cognitive Driftの5段階（NONE/MINOR/MODERATE/ADVANCED/SEVERE）もSignal Integrityの5 Tierへ1:1対応させ、Signal Integrity画面とCognitive Drift判定を1つの画面へ統合した**: 要求仕様のフロー図は矢印で2ステップに分けているが、ドリフト段階はIntegrity%から一意に決まる値のため、2画面に分けて同じ情報を2回タップさせるより、1枚のカードにパーセンテージとドリフトラベル/説明文を並べたほうがCONTINUEのたびの摩擦が少ないと判断した
+- **Adaptive Calibrationのカード組み合わせ表（Tier→カード種別）は要求仕様に無かったため、Signal Integrity Tierが重くなるほどカード種別が増える設計にした**: NONE=カード無し、MINOR=Story Recapのみ、MODERATE=+Memory Review+Operation Review、ADVANCED=+Research Summary+Relationship Review+Protocol Review、SEVERE=要求仕様が挙げた8種類（Research Summary/Story Recap/Memory Review/Relationship Review/Protocol Review/Operation Review/Logic Review/Mini Puzzle）全てが揃う。「プレイヤー進行状況から決定」の要件は、内容が空になるカード（Memory未取得/Protocol未解放時など）を自動でキューから取り除く形で対応した
+- **Story Recap/Memory Review/Relationship Review/Protocol Review/Research Summaryはすべて、あらかじめ書かれた固定文章ではなく、その時点のセーブ済み実データ（`storyManager`/`memoryManager`/`relationshipManager`/`save.getUnlockedProtocols()`、Research Summaryは既存の`_buildResearchCodexSummary()`をそのまま再利用）から都度動的に組み立てる設計にした**。特にStory RecapはARIAの声で語られる想定のため、既存の`DialogueManager`（一度読んだら二度と表示しない既読管理付き）は経由せず、`ui.showDialogue()`を直接呼ぶ簡易版の行送りロジックをcalibrationManager.js内に持たせた（動的内容は「既読」の概念に馴染まないため）
+- **Mini Puzzleは新しい生成ロジックを持たず、既存の`puzzleManager.getGeneratedPuzzle(size, 'easy', seed)`をそのまま呼ぶ薄いラッパー（`calibrationPuzzle.js`）にした**。難易度（盤面サイズ）だけをドリフトの重さで変える（SEVEREで4×4、それ以外3×3）。クリア後は既存の`main.js`の`_handleClear()`に`mode==='calibration'`という新しい分岐を1つ追加しただけで、星評価・EXP等の既存クリア処理には一切合流させていない（Story Modeの`_handleStoryClear()`と同じ設計）
+- **Research SuspendのExit演出は、既存の「意味のある中断状態が既に存在するか」（`save.hasContinueSnapshot()`）をゲートにした**。フレッシュRUNでdepth===0のままBACKを押しただけの場合（何も中断していない）にまで毎回この演出を強制すると、単なる誤タップの体験を損なうと判断したため
+- **Skipボタンのクリック時、`ui.showCalibrationCard()`側では即座にオーバーレイをhideしない設計にした**（実装中にテストで発見・修正）: 当初はContinueボタンと同じく即座にhideしてから`onSkip`を呼んでいたため、「本当にスキップしますか」の確認をキャンセルしてもカードが消えてしまう不具合があった。Skip確定（`confirm()`がtrueを返した後）まで`hideCalibrationCard()`を呼ばないよう、hideの責務をcalibrationManager.js側（`_skipAll()`）へ移した
+- **Audio演出の専用SE5種（Restoring Signal/Signal Lock/Memory Restore/Calibration/Synchronization Complete）は、新しいTimelineを`audioTimelines.js`へ追加せず、`audioEvents.js`のGAME_EVENTSへ1エントリずつ追加するだけに留めた**: `AudioTimelineManager._resolveDef()`が既に「GAME_EVENTSにあれば単純な1ステップTimelineとして自動合成する」フォールバックを持っており（STEP43.6の設計）、単発SEしか求められていない今回はこれで十分だった。Suspend（Exit）側は要求仕様の5種がいずれもContinue側の演出だったため、新規SEを追加していない
+
+**新規ファイル**:
+- `src/endless/signalIntegrity.js`: Signal Integrity/Cognitive Driftの5 Tier定義と`getTier(lastPlayedMs, nowMs)`（状態を持たない純粋関数）
+- `src/endless/adaptiveRecap.js`: Research Summary/Story Recap/Memory Review/Relationship Review/Protocol Review/Operation Review/Logic Reviewの各カード内容を、現在のセーブ済み実データから組み立てる読み取り専用ビルダー
+- `src/endless/calibrationPuzzle.js`: 既存Generatorを流用したMini Puzzle生成の薄いラッパー
+- `src/endless/calibrationManager.js`: Calibrationフロー全体（Restoring Signal→Signal Integrity→Calibrationカードキュー→Synchronization Complete）を統括するCoordinator
+
+**既存ファイルの変更**:
+- `endlessSave.js`: `getSignalAnchor()`/`saveSignalAnchor()`（Continue Snapshotの薄いエイリアス）・`touchLastPlayed()`（Signal Integrity減衰の起点を明示的に更新）を追加
+- `endless.js`: `exitRun()`にResearch Suspendシーケンス（`save.hasContinueSnapshot()`がtrueの時のみ）を追加。`continueRun()`をcalibrationManager経由に差し替え、旧`continueRun()`本体は`_afterCalibration(snapshot)`として温存。`calibrationManager`の生成・`onMiniPuzzleRequest`フックの配線・Mini Puzzle読み込み用`_startCalibrationPuzzle(puzzle)`を追加
+- `ui.js`: `showStatusSequence()`（Suspend/Restoring Signal/Synchronization Complete共用の状態通知自動送り）・`showSignalIntegrity()`/`hideSignalIntegrity()`・`showCalibrationCard()`/`hideCalibrationCard()`を追加
+- `main.js`: `handleGameBack()`/`_handleClear()`に`mode==='calibration'`の分岐を追加（`calibrationManager.handleMiniPuzzleBack()`/`handleMiniPuzzleClear()`へ委譲、既存のStage/Tutorial/Daily/Story分岐とは独立）
+- `audio/config/audioEvents.js`: GAME_EVENTSへ専用SE5種のエントリ、UI_SFXへ対応する周波数定義を追加
+- `index.html`: `#statusSequenceOverlay`/`#signalIntegrityOverlay`/`#calibrationCardOverlay`の3オーバーレイDOM・CSS、新規スクリプトタグ4つを追加
+- `docs/STORY_BIBLE.md`: 16章「Cognitive Re-Synchronization System」を新設（Research Suspend/Signal Anchor/Signal Integrity/Cognitive Drift/Calibration Program/Adaptive Recap Systemの6節）
+
+**動作確認（jsdom）**: `python3 -m http.server`経由で実HTML/実JSを読み込む統合テスト46項目を3回連続実行し全PASS。Signal Integrity/Drift算出の境界値10項目、Research Suspend（演出表示・lastPlayed更新・スナップショット無し時のスキップ）6項目、Continue tier=NONE（カード無しでLayer復帰まで直行）5項目、Continue tier=SEVERE（全8種のCalibrationカード＋実際にMini Puzzleへ解答してクリアする＋Signal Anchorどおりのdepthへ復帰）20項目、Skipフロー（確認ダイアログのYES/NO両方の分岐）4項目、既存Stage/Title機能への無影響2項目を検証した。実装中にテストで2件の実装バグを発見・修正した（`memoryManager.getCollectedMemories()`がid配列ではなくMemory定義オブジェクトの配列を返す仕様だったためのMemory Review表示不具合、Skip確認キャンセル時にカードが消えてしまう不具合）。テスト用フック（`main.js`の`__TEST_HOOK_app`）は検証後に削除済み（`git diff`で無変更を確認済み）。
+
+**未実装/既知の制約**: 実ブラウザでのStatus Sequence/Signal Integrity/Calibrationカードの実機視覚・専用SE5種の聴感は未確認。Operation Review/Logic Reviewの文面は進行状況に依存しない固定テキストとした（要求仕様が「操作方法/考え方の再確認」とのみ求めており、Memory/Relationship/Protocol Reviewのような動的差し替えの対象とは判断しなかったため）。Mini Puzzleの盤面サイズ（3×3/4×4）・カード組み合わせ表・数値（確認ダイアログの文言含む）はいずれも要求仕様に指定が無かったため設計した値であり、実プレイでの体感を見て調整が必要になる可能性がある。
+
 **未実装/既知の制約**: 実ブラウザでのPopup表示・Duck時の実際の聴感（音量が滑らかに下がって戻るか）は未確認。`collection`/`researchRankUp`/汎用`popup`の3イベントはデータ定義のみでこの回では実際のゲームフックに配線していない（次回、図鑑コンプリート演出や研究ランクアップ演出を新設する際に配線する想定）。

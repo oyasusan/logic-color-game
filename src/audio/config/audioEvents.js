@@ -40,7 +40,15 @@
     collection:          { sfx: 'discovery', musicReaction: { type: 'none' } },
     environmentChange:   { sfx: 'analyze', musicReaction: { type: 'none' } }, // Bell/Theme切替自体はsetWorldEnvironment側が担当
     researchRankUp:      { sfx: 'complete', musicReaction: { type: 'densityBoost', layer: 'pad', amount: 0.2, durationSec: 3 } },
-    popup:               { sfx: null, musicReaction: { type: 'none' } } // 汎用のPopup通知（内容は呼び出し側のcontextに委ねる）
+    popup:               { sfx: null, musicReaction: { type: 'none' } }, // 汎用のPopup通知（内容は呼び出し側のcontextに委ねる）
+    // 「Cognitive Re-Synchronization System」Audio演出セクションの専用SE5種
+    // （calibrationManager.js参照。いずれも短い単発SEのみでmusicReactionは持たせない
+    // ＝BGMの演出フローには干渉しない）
+    restoringSignal:      { sfx: 'restoringSignal', musicReaction: { type: 'none' } },
+    signalLock:           { sfx: 'signalLock', musicReaction: { type: 'none' } },
+    memoryRestore:        { sfx: 'memoryRestore', musicReaction: { type: 'none' } },
+    calibration:          { sfx: 'calibration', musicReaction: { type: 'none' } },
+    synchronizationComplete: { sfx: 'synchronizationComplete', musicReaction: { type: 'none' } }
   };
 
   // UI Sound 9種（要求仕様どおりの名称）。freqはaudioPresets.js'ui'プリセットへ渡す音程
@@ -68,7 +76,15 @@
     complete:         { freq: 1174.66, duration: 0.22 },
     discovery:        { freq: 932.33, duration: 0.18 },
     error:            { freq: 174.61, duration: 0.2 },
-    continue:         { freq: 493.88, duration: 0.1 }
+    continue:         { freq: 493.88, duration: 0.1 },
+    // 「Cognitive Re-Synchronization System」Audio演出セクションの専用SE5種。
+    // 低音から高音へ上げていくことで「同期が徐々に回復していく」聴感上の流れを表現した
+    // （Restoring Signal→Signal Lock/Memory Restore→Calibration→Synchronization Complete）
+    restoringSignal:         { freq: 349.23, duration: 0.18 },
+    signalLock:              { freq: 587.33, duration: 0.14 },
+    memoryRestore:           { freq: 622.25, duration: 0.16 },
+    calibration:             { freq: 466.16, duration: 0.12 },
+    synchronizationComplete: { freq: 1318.51, duration: 0.26 }
   };
 
   G.AudioEvents = { GAME_EVENTS, UI_SFX };

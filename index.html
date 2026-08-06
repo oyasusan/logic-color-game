@@ -892,6 +892,36 @@
   }
   .story-choice-btn { width: 100%; padding: 10px 16px; }
 
+  /* Cognitive Re-Synchronization System: 短い状態通知の自動送り表示
+     （Research Suspend/Restoring Signal/Synchronization Complete） */
+  .status-sequence-card {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 220px; min-height: 60px;
+  }
+  .status-sequence-text {
+    font-size: 15px; font-weight: 700; letter-spacing: 1px; color: var(--text);
+    text-align: center;
+  }
+
+  /* Cognitive Re-Synchronization System: Signal Integrity表示 */
+  .signal-integrity-value {
+    font-size: 32px; font-weight: 800; letter-spacing: 1px; color: var(--gold);
+  }
+  .signal-integrity-drift-label {
+    font-size: 13px; font-weight: 800; letter-spacing: 2px; color: var(--text-dim);
+  }
+
+  /* Cognitive Re-Synchronization System: Calibrationカード（Recap/Review系の汎用表示） */
+  .calibration-card { max-width: 92vw; }
+  .calibration-card-lines {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 42vh; overflow-y: auto; width: 100%;
+  }
+  .calibration-card-line {
+    font-size: 13.5px; color: var(--text); line-height: 1.5; text-align: left;
+  }
+  .calibration-skip-btn { margin-top: 4px; font-size: 12px; opacity: 0.75; }
+
   /* STEP32-2: Dialogue System */
   .dialogue-overlay { cursor: pointer; }
   .dialogue-card {
@@ -4303,6 +4333,40 @@
     </div>
   </div>
 
+  <!-- ============ COGNITIVE RE-SYNCHRONIZATION SYSTEM: STATUS SEQUENCE
+       (Research Suspend「Saving Research.../Installing Signal Anchor.../Research Suspended」、
+       Continue「Restoring Signal...」「Synchronization Complete」で共用) ============ -->
+  <div id="statusSequenceOverlay" class="overlay hidden">
+    <div class="clear-card status-sequence-card">
+      <div id="statusSequenceText" class="status-sequence-text">Saving Research...</div>
+    </div>
+  </div>
+
+  <!-- ============ COGNITIVE RE-SYNCHRONIZATION SYSTEM: SIGNAL INTEGRITY ============ -->
+  <div id="signalIntegrityOverlay" class="overlay hidden">
+    <div class="clear-card node-result-card">
+      <span class="node-result-icon">📡</span>
+      <div class="node-result-title">SIGNAL INTEGRITY</div>
+      <div id="signalIntegrityValue" class="signal-integrity-value">100%</div>
+      <div id="signalIntegrityDriftLabel" class="signal-integrity-drift-label"></div>
+      <div id="signalIntegrityDriftDesc" class="node-result-message"></div>
+      <button type="button" id="signalIntegrityContinueBtn" class="primary-btn">つづける</button>
+    </div>
+  </div>
+
+  <!-- ============ COGNITIVE RE-SYNCHRONIZATION SYSTEM: CALIBRATION CARD
+       (Research Summary/Memory Review/Relationship Review/Protocol Review/
+       Operation Review/Logic Reviewの汎用表示。Story Recapのみ既存Dialogue UIを使う) ============ -->
+  <div id="calibrationCardOverlay" class="overlay hidden">
+    <div class="clear-card node-result-card calibration-card">
+      <span id="calibrationCardIcon" class="node-result-icon"></span>
+      <div id="calibrationCardTitle" class="node-result-title"></div>
+      <div id="calibrationCardLines" class="calibration-card-lines"></div>
+      <button type="button" id="calibrationCardContinueBtn" class="primary-btn">つづける</button>
+      <button type="button" id="calibrationCardSkipBtn" class="ghost-btn calibration-skip-btn">CALIBRATIONをスキップ（非推奨）</button>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <!-- STEP42: Dynamic Research Event System。#toastとは独立した非モーダルバナー
@@ -4499,6 +4563,13 @@
   <script src="src/endless/researchGrade.js"></script>
   <script src="src/endless/databaseCompletion.js"></script>
   <script src="src/endless/researchReportUI.js"></script>
+  <!-- Cognitive Re-Synchronization System（storyManager/memoryManager/relationshipManager/
+       characterData/memoryData/protocolUnlockに依存するため、それらの読み込み後・
+       endless.jsの直前に読み込む） -->
+  <script src="src/endless/signalIntegrity.js"></script>
+  <script src="src/endless/adaptiveRecap.js"></script>
+  <script src="src/endless/calibrationPuzzle.js"></script>
+  <script src="src/endless/calibrationManager.js"></script>
   <script src="src/endless/endless.js"></script>
   <script src="src/ui.js"></script>
   <script src="src/main.js"></script>

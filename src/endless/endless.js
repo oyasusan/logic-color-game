@@ -70,7 +70,8 @@
     ResearchConsoleHud,
     ResearchEventManager, ResearchEventBanner,
     FacilityRestorationManager, ResearchGrade, DatabaseCompletion, ResearchReportUI,
-    AudioManager, AdaptiveMusicEngine, FeedbackManager
+    AudioManager, AdaptiveMusicEngine, FeedbackManager,
+    CalibrationManager, Game
   } = G;
 
   // ---- STEP30-4: World Stability System。Stability変化量（要求仕様セクション3どおり） ----
@@ -255,6 +256,16 @@
         save: this.save, researchDatabase: this.researchDatabase, memoryManager: this.memoryManager
       });
       this.researchReportUI = new ResearchReportUI();
+
+      // ---- Cognitive Re-Synchronization System: CONTINUE時のAdaptive Calibration ----
+      this.calibrationManager = new CalibrationManager({
+        ui, save: this.save,
+        storyManager: this.storyManager, memoryManager: this.memoryManager, relationshipManager: this.relationshipManager,
+        puzzleManager, feedbackManager: this.feedbackManager,
+        buildResearchSummary: () => this._buildResearchCodexSummary()
+      });
+      this.calibrationManager.onMiniPuzzleRequest = puzzle => this._startCalibrationPuzzle(puzzle);
+
       this._memoriesThisRun = [];       // RUNスコープ、永続化しない
       this._protocolsUnlockedThisRun = []; // RUNスコープ、永続化しない
       this._runTimeline = [];           // RUNスコープ、永続化しない
@@ -758,6 +769,12 @@
     exitRun() {
       clearTimeout(this._advanceTimer);
       this._flushPlayTime();
+      // Cognitive Re-Synchronization System: Research Suspend。中断先として復帰可能な
+      // スナップショット（Signal Anchor）が既にある場合のみ、Exit演出を挟む。
+      // 何も進んでいない状態（フレッシュRUNのdepth===0でMAPへ一度も戻っていない等）で
+      // 毎回この演出を強制すると、単に間違えてBACKを押しただけの場合にも煩雑なため、
+      // 「意味のある中断状態が既に存在するか」をそのままゲートに使う
+      const hasAnchor = this.save.hasContinueSnapshot();
       this._runStartTimestamp = null;
       this.round.stop();
       this.upgradeManager.reset();
@@ -767,9 +784,24 @@
       this._renderUpgrades();
       this._renderRiskChainBadge();
       this._clearEvolutionThemeVisuals(); // STEP41-3: Stage/Tutorial/Daily Puzzleへ見た目を残さない
-      this.app.mode = null;
-      if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
-      this.showModeSelect();
+      const finishExit = () => {
+        this.app.mode = null;
+        if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
+        this.showModeSelect();
+      };
+      if (hasAnchor) {
+        // Signal Anchor自体（nextLayer/environment/protocol/mapVisitedNodes）は
+        // 既存のcheckpoint機構（_checkpointRun/_checkpointHub）が直前のMap復帰/Hub到達
+        // 時点で保存済み。ここでは「今installした」という演出上の体裁と、Signal Integrity
+        // 減衰の起点となるlastPlayedの正確な更新だけを行う（Audio演出セクションが要求する
+        // 専用SE5種はいずれもContinue側の演出のため、Suspend側に新規SEは追加していない）
+        this.ui.showStatusSequence(
+          ['Saving Research...', 'Installing Signal Anchor...', 'Research Suspended'],
+          () => { this.save.touchLastPlayed(); finishExit(); }
+        );
+      } else {
+        finishExit();
+      }
     }
 
     /** ---------------- RUN開始・進行 ---------------- */
@@ -825,6 +857,19 @@
       const snapshot = this.save.getContinueSnapshot();
       if (!snapshot) return;
       clearTimeout(this._advanceTimer);
+      // Cognitive Re-Synchronization System: 実際のLayer復帰処理(_afterCalibration)は
+      // Calibrationフロー（Restoring Signal→Signal Integrity→必要ならCalibrationカード）
+      // が完了してから呼ぶ。calibrationManagerが無い（未初期化）場合のみ、従来どおり
+      // 即座に復帰する
+      if (this.calibrationManager) {
+        this.calibrationManager.start(() => this._afterCalibration(snapshot));
+      } else {
+        this._afterCalibration(snapshot);
+      }
+    }
+
+    /** Calibration完了（Skipも含む）後に呼ばれる、旧continueRun()本体だった実際のLayer復帰処理 */
+    _afterCalibration(snapshot) {
       if (snapshot.inHub) {
         this._showNeuralLab(false);
         return;
@@ -837,6 +882,24 @@
       this._continueVisitedNodes = (snapshot.mapVisitedNodes || []).slice();
       if (this.feedbackManager) this.feedbackManager.trigger('continueEvent'); // STEP43.6追加要件: Audio Timeline System
       this._initializeRun();
+    }
+
+    /**
+     * Cognitive Re-Synchronization System: Mini Puzzle。calibrationManagerからの
+     * リクエストを受け、既存のGAME画面（#screen-game、Stage/Tutorial/Daily Puzzleと
+     * 共用）へ最小構成で1問読み込む。RUNではないためEndless HUD（Life/Score等）は
+     * 表示しない。main.js側は`app.mode==='calibration'`をStory Modeと同様に
+     * 独立した分岐として扱う（handleGameBack/_handleClear参照）。
+     */
+    _startCalibrationPuzzle(puzzle) {
+      this.app.mode = 'calibration';
+      this.app.game = new Game(puzzle);
+      if (this.el.endlessHud) this.el.endlessHud.classList.add('hidden');
+      this.ui.renderColorLegend(puzzle.allowedColors);
+      this.ui.buildBoard(this.app.game);
+      this.ui.renderGameHeader({ label: 'SIGNAL CALIBRATION', starsText: '' });
+      this.ui.showTutorialBanner('操作と論理の再確認です。1問クリアしてください。');
+      this.ui.showScreen('game');
     }
 
     /** Protocol Select画面でのカード選択（protocolSelect.onSelect経由）。続けてEnvironment Detectionを表示する */
